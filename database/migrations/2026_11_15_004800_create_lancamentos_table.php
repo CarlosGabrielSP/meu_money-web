@@ -13,7 +13,7 @@ return new class extends Migration
     {
         Schema::create('lancamentos', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('user_id')->constrained()->cascadeOnDelete();
+            $table->foreignId('user_id')->index()->constrained()->cascadeOnDelete();
             $table->string('descricao');
             $table->enum('tipo', ['receita', 'despesa']);
             $table->bigInteger('valor');

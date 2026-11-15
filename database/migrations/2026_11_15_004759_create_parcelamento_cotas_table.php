@@ -14,10 +14,10 @@ return new class extends Migration
         Schema::create('parcelamento_cotas', function (Blueprint $table) {
             $table->id();
             $table->foreignId('parcelamento_id')->constrained()->cascadeOnDelete();
-            $table->foreignId('user_id')->constrained()->cascadeOnDelete();
+            $table->foreignId('user_id')->index()->constrained()->cascadeOnDelete();
             $table->bigInteger('valor')->nullable();
             $table->decimal('percentual', 5, 2)->nullable();
-            $table->foreignId('grupo_id')->nullable()->constrained()->nullOnDelete();
+            $table->foreignId('grupo_id')->index()->nullable()->constrained()->nullOnDelete();
             $table->timestamps();
 
             $table->unique(['parcelamento_id', 'user_id']);

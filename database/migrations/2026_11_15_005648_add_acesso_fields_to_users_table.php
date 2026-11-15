@@ -15,7 +15,7 @@ return new class extends Migration
             $table->boolean('is_admin')->default(false)->after('email');
             $table->timestamp('desativado_em')->nullable()->after('is_admin');
             $table->string('google_id')->nullable()->unique()->after('desativado_em');
-            $table->foreignId('ultima_carteira_id')->nullable()->after('google_id')->constrained('carteiras')->nullOnDelete();
+            $table->foreignId('ultima_carteira_id')->nullable()->index()->after('google_id')->constrained('carteiras')->nullOnDelete();
             $table->string('password')->nullable()->change();
         });
     }
@@ -26,9 +26,10 @@ return new class extends Migration
     public function down(): void
     {
         Schema::table('users', function (Blueprint $table) {
-            $table->dropConstrainedForeignId('ultima_carteira_id');
+            $table->dropForeign(['ultima_carteira_id']);
+            $table->dropIndex(['ultima_carteira_id']);
             $table->dropUnique(['google_id']);
-            $table->dropColumn(['is_admin', 'desativado_em', 'google_id']);
+            $table->dropColumn(['is_admin', 'desativado_em', 'google_id', 'ultima_carteira_id']);
             $table->string('password')->nullable(false)->change();
         });
     }

@@ -14,7 +14,7 @@ return new class extends Migration
         Schema::create('contatos', function (Blueprint $table) {
             $table->id();
             $table->foreignId('solicitante_id')->constrained('users')->cascadeOnDelete();
-            $table->foreignId('convidado_id')->constrained('users')->cascadeOnDelete();
+            $table->foreignId('convidado_id')->index()->constrained('users')->cascadeOnDelete();
             $table->enum('status', ['pendente', 'aceito', 'recusado'])->default('pendente');
             $table->timestamp('respondido_em')->nullable();
             $table->timestamps();

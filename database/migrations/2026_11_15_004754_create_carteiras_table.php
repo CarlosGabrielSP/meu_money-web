@@ -13,7 +13,7 @@ return new class extends Migration
     {
         Schema::create('carteiras', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('user_id')->constrained()->cascadeOnDelete();
+            $table->foreignId('user_id')->index()->constrained()->cascadeOnDelete();
             $table->string('nome', 100);
             $table->boolean('padrao')->default(false);
             $table->string('cor', 20)->default('blue');

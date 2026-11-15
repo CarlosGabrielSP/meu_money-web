@@ -13,8 +13,8 @@ return new class extends Migration
     {
         Schema::create('grupos', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('user_id')->constrained()->cascadeOnDelete();
-            $table->foreignId('carteira_id')->constrained()->cascadeOnDelete();
+            $table->foreignId('user_id')->index()->constrained()->cascadeOnDelete();
+            $table->foreignId('carteira_id')->index()->constrained()->cascadeOnDelete();
             $table->string('nome', 100);
             $table->enum('tipo', ['receita', 'despesa']);
             $table->timestamps();

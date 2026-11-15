@@ -13,9 +13,9 @@ return new class extends Migration
     {
         Schema::create('parcelamentos', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('user_id')->constrained()->cascadeOnDelete();
-            $table->foreignId('carteira_id')->constrained()->restrictOnDelete();
-            $table->foreignId('categoria_id')->constrained()->restrictOnDelete();
+            $table->foreignId('user_id')->index()->constrained()->cascadeOnDelete();
+            $table->foreignId('carteira_id')->index()->constrained()->restrictOnDelete();
+            $table->foreignId('categoria_id')->index()->constrained()->restrictOnDelete();
             $table->string('descricao');
             $table->enum('tipo', ['receita', 'despesa']);
             $table->bigInteger('valor_parcela');
@@ -24,7 +24,7 @@ return new class extends Migration
             $table->date('data_inicio');
             $table->unsignedTinyInteger('dia_vencimento');
             $table->enum('modo_rateio', ['iguais', 'percentual', 'fixo'])->nullable();
-            $table->foreignId('grupo_id')->nullable()->constrained()->nullOnDelete();
+            $table->foreignId('grupo_id')->index()->nullable()->constrained()->nullOnDelete();
             $table->date('gerado_ate');
             $table->date('encerrado_em')->nullable();
             $table->timestamps();

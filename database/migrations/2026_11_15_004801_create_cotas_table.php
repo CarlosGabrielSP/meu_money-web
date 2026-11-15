@@ -14,14 +14,14 @@ return new class extends Migration
         Schema::create('cotas', function (Blueprint $table) {
             $table->id();
             $table->foreignId('lancamento_id')->constrained()->cascadeOnDelete();
-            $table->foreignId('user_id')->constrained()->cascadeOnDelete();
-            $table->foreignId('carteira_id')->constrained()->restrictOnDelete();
-            $table->foreignId('categoria_id')->constrained()->restrictOnDelete();
+            $table->foreignId('user_id')->index()->constrained()->cascadeOnDelete();
+            $table->foreignId('carteira_id')->index()->constrained()->restrictOnDelete();
+            $table->foreignId('categoria_id')->index()->constrained()->restrictOnDelete();
             $table->bigInteger('valor');
             $table->decimal('percentual', 5, 2)->nullable();
             $table->boolean('executado')->default(false);
             $table->timestamp('executado_em')->nullable();
-            $table->foreignId('grupo_id')->nullable()->constrained()->nullOnDelete();
+            $table->foreignId('grupo_id')->index()->nullable()->constrained()->nullOnDelete();
             $table->timestamp('vista_em')->nullable();
             $table->timestamps();
 
