@@ -7,6 +7,7 @@ use App\Actions\Inicio\ListarLancamentosDoMes;
 use App\Http\Requests\InicioRequest;
 use App\Models\Carteira;
 use App\Models\Categoria;
+use App\Models\Grupo;
 use App\Models\User;
 use Carbon\CarbonImmutable;
 use Inertia\Inertia;
@@ -50,6 +51,11 @@ class InicioController extends Controller
                 ->orderBy('name')
                 ->get(['id', 'name'])
                 ->map(fn (User $contato): array => ['id' => $contato->id, 'nome' => $contato->name]),
+            'grupos' => $carteira->grupos()
+                ->where('user_id', $user->id)
+                ->orderBy('nome')
+                ->get(['id', 'nome', 'tipo'])
+                ->map(fn (Grupo $grupo): array => ['id' => $grupo->id, 'nome' => $grupo->nome, 'tipo' => $grupo->tipo->value]),
             'mes' => $mes->format('Y-m'),
             'hoje' => $hoje->toDateString(),
             'filtros' => $filtros,

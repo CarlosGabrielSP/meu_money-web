@@ -179,8 +179,8 @@ it('CA-083.2 CA-083.3 shows indicators and highlights overdue pending shares', f
 it('CA-083.5 returns empty sections for a month without entries', function () {
     $this->actingAs($this->user)->get(route('home', ['mes' => '2030-03']))
         ->assertInertia(fn (Assert $page) => $page
-            ->where('lancamentos.receita', ['avista' => [], 'parceladas' => [], 'recorrentes' => []])
-            ->where('lancamentos.despesa', ['avista' => [], 'parceladas' => [], 'recorrentes' => []]));
+            ->where('lancamentos.receita', ['avista' => [], 'parceladas' => [], 'recorrentes' => [], 'grupos' => []])
+            ->where('lancamentos.despesa', ['avista' => [], 'parceladas' => [], 'recorrentes' => [], 'grupos' => []]));
 });
 
 it('CA-084.2 CA-084.3 combines category, status and shared filters and echoes them', function () {

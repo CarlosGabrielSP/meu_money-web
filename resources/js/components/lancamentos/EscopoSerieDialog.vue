@@ -15,7 +15,7 @@ import type { EscopoSerie } from '@/types';
 const aberto = defineModel<boolean>('open', { required: true });
 
 const props = defineProps<{
-    acao: 'editar' | 'excluir' | 'sair';
+    acao: 'editar' | 'excluir' | 'sair' | 'desagrupar';
     erro?: string;
     processando?: boolean;
 }>();
@@ -36,6 +36,7 @@ const titulos = {
     editar: 'Alterar quais parcelas?',
     excluir: 'Excluir quais parcelas?',
     sair: 'Sair da divisão em quais parcelas?',
+    desagrupar: 'Desagrupar quais parcelas?',
 };
 
 const opcoes: { valor: EscopoSerie; titulo: string }[] = [
@@ -51,7 +52,13 @@ const opcoes: { valor: EscopoSerie; titulo: string }[] = [
             <DialogHeader>
                 <DialogTitle>{{ titulos[props.acao] }}</DialogTitle>
                 <DialogDescription>
-                    Parcelas já executadas não mudam nas opções em massa.
+                    <template v-if="props.acao === 'desagrupar'">
+                        Nas opções em massa, saem as parcelas do mesmo grupo e
+                        as futuras deixam de entrar nele.
+                    </template>
+                    <template v-else>
+                        Parcelas já executadas não mudam nas opções em massa.
+                    </template>
                 </DialogDescription>
             </DialogHeader>
             <fieldset class="grid gap-2">
@@ -75,9 +82,12 @@ const opcoes: { valor: EscopoSerie; titulo: string }[] = [
                     @click="emit('confirmar', escopo)"
                 >
                     {{
-                        { editar: 'Salvar', excluir: 'Excluir', sair: 'Sair' }[
-                            props.acao
-                        ]
+                        {
+                            editar: 'Salvar',
+                            excluir: 'Excluir',
+                            sair: 'Sair',
+                            desagrupar: 'Desagrupar',
+                        }[props.acao]
                     }}
                 </Button>
             </DialogFooter>

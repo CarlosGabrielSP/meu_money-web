@@ -5,6 +5,7 @@ use App\Http\Controllers\CarteiraController;
 use App\Http\Controllers\CategoriaController;
 use App\Http\Controllers\ContatoController;
 use App\Http\Controllers\CotaController;
+use App\Http\Controllers\GrupoController;
 use App\Http\Controllers\InicioController;
 use App\Http\Controllers\LancamentoAnexoController;
 use App\Http\Controllers\LancamentoController;
@@ -23,6 +24,11 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::patch('cotas/{cota}/executado', [CotaController::class, 'alternarExecutado'])->name('cotas.executado');
     Route::put('cotas/{cota}', [CotaController::class, 'update'])->name('cotas.update');
     Route::delete('cotas/{cota}', [CotaController::class, 'destroy'])->name('cotas.destroy');
+    Route::post('grupos/agrupar', [GrupoController::class, 'agrupar'])->name('grupos.agrupar');
+    Route::post('grupos/desagrupar', [GrupoController::class, 'desagrupar'])->name('grupos.desagrupar');
+    Route::patch('grupos/{grupo}/executado', [GrupoController::class, 'executar'])->name('grupos.executado');
+    Route::patch('grupos/{grupo}', [GrupoController::class, 'update'])->name('grupos.update');
+    Route::delete('grupos/{grupo}', [GrupoController::class, 'destroy'])->name('grupos.destroy');
     Route::get('recebidas', [RecebidaController::class, 'index'])->name('recebidas.index');
 
     Route::resource('carteiras', CarteiraController::class)->only(['index', 'store', 'update', 'destroy']);

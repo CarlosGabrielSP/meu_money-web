@@ -1,8 +1,17 @@
 <script setup lang="ts">
 import { Head, router } from '@inertiajs/vue3';
-import { ChevronLeft, ChevronRight, ListFilter, Plus } from '@lucide/vue';
+import {
+    ChevronLeft,
+    ChevronRight,
+    ListChecks,
+    ListFilter,
+    Plus,
+} from '@lucide/vue';
 import { computed, onMounted, ref, watch } from 'vue';
 import CarteiraIcone from '@/components/carteiras/CarteiraIcone.vue';
+import AgruparDialog from '@/components/lancamentos/AgruparDialog.vue';
+import EscopoSerieDialog from '@/components/lancamentos/EscopoSerieDialog.vue';
+import GrupoItem from '@/components/lancamentos/GrupoItem.vue';
 import LancamentoFormulario from '@/components/lancamentos/LancamentoFormulario.vue';
 import LancamentoItem from '@/components/lancamentos/LancamentoItem.vue';
 import ParticipacaoFormulario from '@/components/lancamentos/ParticipacaoFormulario.vue';
@@ -11,10 +20,13 @@ import { useNovoLancamento } from '@/composables/useNovoLancamento';
 import { deslocarMes, nomeDoMes } from '@/lib/datas';
 import { formatarMoeda } from '@/lib/dinheiro';
 import { home } from '@/routes';
+import { desagrupar } from '@/routes/grupos';
 import type {
     CarteiraResumo,
     CategoriaOpcao,
     ContatoOpcao,
+    EscopoSerie,
+    GrupoOpcao,
     ItemLancamento,
     LancamentoEdicao,
     SerieDaParcela,
@@ -36,6 +48,7 @@ const props = defineProps<{
     carteiras: CarteiraResumo[];
     categorias: CategoriaOpcao[];
     contatos: ContatoOpcao[];
+    grupos: GrupoOpcao[];
     mes: string;
     hoje: string;
     filtros: Filtros;
@@ -59,7 +72,10 @@ const secoes: { tipo: TipoLancamento; titulo: string }[] = [
     { tipo: 'despesa', titulo: 'Despesas' },
 ];
 
-const subsecoes: { chave: keyof Subsecoes; titulo: string }[] = [
+const subsecoes: {
+    chave: Exclude<keyof Subsecoes, 'grupos'>;
+    titulo: string;
+}[] = [
     { chave: 'avista', titulo: 'À vista' },
     { chave: 'parceladas', titulo: 'Parceladas' },
     { chave: 'recorrentes', titulo: 'Recorrentes' },
@@ -93,7 +109,8 @@ const dataPadrao = computed(() =>
 const quantidade = (subsecoesDoTipo: Subsecoes): number =>
     subsecoesDoTipo.avista.length +
     subsecoesDoTipo.parceladas.length +
-    subsecoesDoTipo.recorrentes.length;
+    subsecoesDoTipo.recorrentes.length +
+    subsecoesDoTipo.grupos.length;
 
 const secoesVisiveis = computed(() =>
     secoes.filter(
@@ -169,6 +186,93 @@ function editar(item: ItemLancamento, tipo: TipoLancamento): void {
         participacaoAberta.value = true;
     }
 }
+
+/**
+ * Selection for "Agrupar / Desagrupar" (RN-125): only items with a share of the user.
+ */
+const selecionando = ref(false);
+const selecao = ref(
+    new Map<number, { item: ItemLancamento; tipo: TipoLancamento }>(),
+);
+const agrupando = ref(false);
+const escopoDesagrupar = ref(false);
+const desagrupando = ref(false);
+
+const idsSelecionados = computed(() => new Set(selecao.value.keys()));
+
+const selecionados = computed(() => [...selecao.value.values()]);
+
+const tipoDaSelecao = computed<TipoLancamento | null>(() => {
+    const tipos = new Set(selecionados.value.map(({ tipo }) => tipo));
+
+    return tipos.size === 1 ? [...tipos][0] : null;
+});
+
+const temParcelaSelecionada = computed(() =>
+    selecionados.value.some(({ item }) => item.serie !== null),
+);
+
+const temAgrupado = computed(() =>
+    selecionados.value.some(({ item }) => item.grupoId !== null),
+);
+
+function selecionar(item: ItemLancamento, tipo: TipoLancamento): void {
+    if (item.cotaId === null) {
+        return;
+    }
+
+    selecionando.value = true;
+
+    if (selecao.value.has(item.cotaId)) {
+        selecao.value.delete(item.cotaId);
+    } else {
+        selecao.value.set(item.cotaId, { item, tipo });
+    }
+}
+
+function encerrarSelecao(): void {
+    selecionando.value = false;
+    selecao.value.clear();
+}
+
+function pedirDesagrupar(): void {
+    const parcelaAgrupada = selecionados.value.some(
+        ({ item }) => item.serie !== null && item.grupoId !== null,
+    );
+
+    if (parcelaAgrupada) {
+        escopoDesagrupar.value = true;
+    } else {
+        confirmarDesagrupar('esta');
+    }
+}
+
+function confirmarDesagrupar(escopo: EscopoSerie): void {
+    router.post(
+        desagrupar.url(),
+        {
+            cotas: selecionados.value
+                .filter(({ item }) => item.grupoId !== null)
+                .map(({ item }) => item.cotaId),
+            escopo,
+        },
+        {
+            preserveScroll: true,
+            preserveState: true,
+            onStart: () => (desagrupando.value = true),
+            onFinish: () => (desagrupando.value = false),
+            onSuccess: () => {
+                escopoDesagrupar.value = false;
+                encerrarSelecao();
+            },
+        },
+    );
+}
+
+watch(
+    () => [props.carteira.id, props.mes, JSON.stringify(props.filtros)],
+    encerrarSelecao,
+);
 
 const { pedidos } = useNovoLancamento();
 
@@ -340,6 +444,15 @@ onMounted(() => {
                 >
                     Limpar filtros
                 </Button>
+                <Button
+                    v-if="!selecionando && secoesVisiveis.length > 0"
+                    variant="outline"
+                    size="sm"
+                    class="ml-auto"
+                    @click="selecionando = true"
+                >
+                    <ListChecks /> Selecionar
+                </Button>
             </div>
 
             <div
@@ -466,14 +579,85 @@ onMounted(() => {
                                     ]"
                                     :key="item.chave"
                                     :item="item"
+                                    :selecionando="selecionando"
+                                    :selecionado="
+                                        item.cotaId !== null &&
+                                        idsSelecionados.has(item.cotaId)
+                                    "
                                     @editar="editar($event, secao.tipo)"
+                                    @selecionar="selecionar($event, secao.tipo)"
                                 />
                             </ul>
                         </div>
                     </template>
+                    <div
+                        v-if="lancamentos[secao.tipo].grupos.length > 0"
+                        class="grid gap-1"
+                    >
+                        <h3 class="text-xs text-muted-foreground">Grupos</h3>
+                        <ul class="divide-y rounded-lg border">
+                            <GrupoItem
+                                v-for="grupo in lancamentos[secao.tipo].grupos"
+                                :key="grupo.chave"
+                                :grupo="grupo"
+                                :selecionando="selecionando"
+                                :selecionados="idsSelecionados"
+                                @editar="editar($event, secao.tipo)"
+                                @selecionar="selecionar($event, secao.tipo)"
+                            />
+                        </ul>
+                    </div>
                 </section>
             </div>
         </div>
+
+        <div
+            v-if="selecionando"
+            class="sticky bottom-20 z-10 mx-4 mb-4 flex flex-wrap items-center gap-2 rounded-lg border bg-background p-3 shadow-lg md:bottom-4"
+            role="toolbar"
+            aria-label="Ações da seleção"
+        >
+            <span class="text-sm">
+                {{ selecao.size }}
+                {{ selecao.size === 1 ? 'selecionado' : 'selecionados' }}
+            </span>
+            <div class="ml-auto flex gap-2">
+                <Button
+                    size="sm"
+                    :disabled="selecao.size === 0"
+                    @click="agrupando = true"
+                >
+                    Agrupar
+                </Button>
+                <Button
+                    size="sm"
+                    variant="outline"
+                    :disabled="!temAgrupado || desagrupando"
+                    @click="pedirDesagrupar"
+                >
+                    Desagrupar
+                </Button>
+                <Button size="sm" variant="ghost" @click="encerrarSelecao">
+                    Cancelar
+                </Button>
+            </div>
+        </div>
+
+        <AgruparDialog
+            v-model:open="agrupando"
+            :cotas="[...idsSelecionados]"
+            :tipo="tipoDaSelecao"
+            :tem-parcela="temParcelaSelecionada"
+            :grupos="grupos"
+            @concluido="encerrarSelecao"
+        />
+
+        <EscopoSerieDialog
+            v-model:open="escopoDesagrupar"
+            acao="desagrupar"
+            :processando="desagrupando"
+            @confirmar="confirmarDesagrupar"
+        />
 
         <LancamentoFormulario
             v-model:open="formularioAberto"

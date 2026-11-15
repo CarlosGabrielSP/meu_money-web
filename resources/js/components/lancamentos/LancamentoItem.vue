@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { router } from '@inertiajs/vue3';
 import { Paperclip, Repeat, Users } from '@lucide/vue';
+import { computed, onBeforeUnmount } from 'vue';
 import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
 import { diaEMes } from '@/lib/datas';
@@ -10,11 +11,61 @@ import type { ItemLancamento } from '@/types';
 
 const props = defineProps<{
     item: ItemLancamento;
+    selecionando?: boolean;
+    selecionado?: boolean;
 }>();
 
 const emit = defineEmits<{
     editar: [item: ItemLancamento];
+    selecionar: [item: ItemLancamento];
 }>();
+
+const selecionavel = computed(() => props.item.cotaId !== null);
+let temporizador: ReturnType<typeof setTimeout> | null = null;
+let pressionouLongo = false;
+
+/**
+ * Press and hold on mobile starts the selection (screens and flows, "Agrupar").
+ */
+function iniciarPressao(evento: PointerEvent): void {
+    pressionouLongo = false;
+
+    if (evento.pointerType !== 'touch' || !selecionavel.value) {
+        return;
+    }
+
+    temporizador = setTimeout(() => {
+        pressionouLongo = true;
+        emit('selecionar', props.item);
+    }, 500);
+}
+
+function cancelarPressao(): void {
+    if (temporizador !== null) {
+        clearTimeout(temporizador);
+        temporizador = null;
+    }
+}
+
+onBeforeUnmount(cancelarPressao);
+
+function clicar(): void {
+    if (pressionouLongo) {
+        pressionouLongo = false;
+
+        return;
+    }
+
+    if (props.selecionando) {
+        if (selecionavel.value) {
+            emit('selecionar', props.item);
+        }
+
+        return;
+    }
+
+    emit('editar', props.item);
+}
 
 function alternar(marcado: boolean): void {
     if (props.item.cotaId === null) {
@@ -32,9 +83,22 @@ function alternar(marcado: boolean): void {
 <template>
     <li
         class="flex items-center gap-3 px-3 py-2"
-        :class="{ 'bg-destructive/5': item.vencido }"
+        :class="{
+            'bg-destructive/5': item.vencido && !selecionado,
+            'bg-primary/10': selecionado,
+        }"
     >
-        <span v-if="item.cotaId === null" class="size-4 shrink-0" />
+        <template v-if="selecionando">
+            <span v-if="!selecionavel" class="size-4 shrink-0" />
+            <Checkbox
+                v-else
+                class="rounded-full"
+                :model-value="selecionado"
+                :aria-label="`Selecionar: ${item.descricao}`"
+                @update:model-value="emit('selecionar', item)"
+            />
+        </template>
+        <span v-else-if="item.cotaId === null" class="size-4 shrink-0" />
         <Checkbox
             v-else
             :model-value="item.executado"
@@ -44,8 +108,17 @@ function alternar(marcado: boolean): void {
         <button
             type="button"
             class="flex min-w-0 flex-1 items-center gap-3 text-left"
-            :disabled="item.edicao === null && item.participacao === null"
-            @click="emit('editar', item)"
+            :disabled="
+                selecionando
+                    ? !selecionavel
+                    : item.edicao === null && item.participacao === null
+            "
+            @click="clicar"
+            @pointerdown="iniciarPressao"
+            @pointerup="cancelarPressao"
+            @pointerleave="cancelarPressao"
+            @pointercancel="cancelarPressao"
+            @contextmenu="selecionavel && $event.preventDefault()"
         >
             <span class="w-11 shrink-0 text-sm text-muted-foreground">
                 {{ diaEMes(item.data) }}

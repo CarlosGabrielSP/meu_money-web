@@ -28,7 +28,9 @@ class EditarParcelas
      * category, wallet, due day and split to the pending installments of the scope and to the model
      * (RN-053, RN-054, RN-084), never to executed ones (RN-049); date, note, status and attachment stay
      * on the open installment (RN-138). Type and periodicity never change (RN-055). An installment with
-     * a participant share already executed keeps its amount and split (RN-085, CA-072.5).
+     * a participant share already executed keeps its amount and split (RN-085, CA-072.5). Shares
+     * and the model moved to another wallet leave their group (RN-130); participants keep the group
+     * of their model share (RN-127).
      *
      * @param  array{tipo: TipoLancamento, descricao: string, valor: int, data: string, categoria_id: int, carteira_id: int, observacao: string|null, executado: bool|null, rateio?: array{modo: ModoRateio, participantes: list<array{user_id: int, percentual: string|null, valor: int|null}>}|null}  $dados
      *
@@ -76,8 +78,10 @@ class EditarParcelas
             function (Lancamento $aberta) use ($serie, $escopo, $dados, $diaVencimento): void {
                 $diaAnterior = $serie->dia_vencimento;
                 $rateio = $dados['rateio'] ?? null;
+                $gruposDoModelo = $serie->cotas()->pluck('grupo_id', 'user_id');
 
                 $serie->update([
+                    'grupo_id' => $serie->carteira_id === $dados['carteira_id'] ? $serie->grupo_id : null,
                     'descricao' => $dados['descricao'],
                     'valor_parcela' => $dados['valor'],
                     'categoria_id' => $dados['categoria_id'],
@@ -88,7 +92,7 @@ class EditarParcelas
                 $serie->cotas()->delete();
 
                 foreach ($rateio['participantes'] ?? [] as $participante) {
-                    $serie->cotas()->create($participante);
+                    $serie->cotas()->create([...$participante, 'grupo_id' => $gruposDoModelo[$participante['user_id']] ?? null]);
                 }
 
                 $pendentes = $serie->lancamentos()
@@ -99,6 +103,9 @@ class EditarParcelas
                     ->get();
 
                 Lancamento::query()->whereKey($pendentes->modelKeys())->update(['descricao' => $dados['descricao']]);
+                Cota::query()->whereIn('lancamento_id', $pendentes->modelKeys())->where('user_id', $serie->user_id)
+                    ->where('carteira_id', '!=', $dados['carteira_id'])
+                    ->update(['grupo_id' => null]);
                 Cota::query()->whereIn('lancamento_id', $pendentes->modelKeys())->where('user_id', $serie->user_id)->update([
                     'categoria_id' => $dados['categoria_id'],
                     'carteira_id' => $dados['carteira_id'],

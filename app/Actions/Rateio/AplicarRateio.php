@@ -21,7 +21,8 @@ class AplicarRateio
      * author's share follows the form (RN-077); a new participant's share goes to their default wallet
      * with the author's category when global, else "Outros", the initial status by date and not seen
      * yet (RN-076, RN-082, RN-013, RN-114). Existing participant shares keep wallet, category, status
-     * and seen date (RN-080). Participants left out lose their share (CA-072.3).
+     * and seen date (RN-080). Participants left out lose their share (CA-072.3). An author share moved
+     * to another wallet leaves its group (RN-130).
      *
      * When a participant already executed a share, amounts and split cannot change (RN-089); internal
      * recalculations of a brand new series skip that check.
@@ -60,6 +61,11 @@ class AplicarRateio
 
             if ($userId === $autorId) {
                 $cota ??= new Cota(['user_id' => $autorId, 'vista_em' => $agora]);
+
+                if ($cota->exists && $cota->carteira_id !== $autor['carteira_id']) {
+                    $cota->grupo_id = null;
+                }
+
                 $cota->fill(['carteira_id' => $autor['carteira_id'], 'categoria_id' => $autor['categoria_id']]);
                 $this->aplicarStatus($cota, $autor['executado'] ?? ($cota->exists ? $cota->executado : $executadoPorData), $agora);
             } elseif ($cota === null) {

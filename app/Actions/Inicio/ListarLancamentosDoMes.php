@@ -5,6 +5,7 @@ namespace App\Actions\Inicio;
 use App\Models\Carteira;
 use App\Models\Categoria;
 use App\Models\Cota;
+use App\Models\Grupo;
 use App\Models\Lancamento;
 use App\Models\Parcelamento;
 use App\Models\User;
@@ -19,8 +20,11 @@ class ListarLancamentosDoMes
      * plus entries the user authored in this wallet without a share of their own (RN-145).
      *
      * The author gets edit data with the split (RF-072); a participant gets the data of their own
-     * share, the total and the author (RF-071). Groups (RN-093 last subsection) are part of phase 7.
-     * Recurring installments show only their number (RN-050).
+     * share, the total and the author (RF-071). Recurring installments show only their number (RN-050).
+     *
+     * Grouped shares leave the other subsections and form one row per group in "Grupos", with the
+     * visible items, their sum and the aggregated status; with a filter that hides some of the
+     * group's items in the month the row is marked as filtered (RN-122 to RN-124, RN-129).
      *
      * @param  array{tipo: string|null, categoria: int|null, status: string|null, compartilhado: string|null}  $filtros
      * @return array{receita: array<string, list<array<string, mixed>>>, despesa: array<string, list<array<string, mixed>>>}
@@ -30,7 +34,7 @@ class ListarLancamentosDoMes
         $secoes = [];
 
         foreach (['receita', 'despesa'] as $tipo) {
-            $secoes[$tipo] = ['avista' => [], 'parceladas' => [], 'recorrentes' => []];
+            $secoes[$tipo] = ['avista' => [], 'parceladas' => [], 'recorrentes' => [], 'grupos' => []];
         }
 
         $inicio = $mes->startOfMonth()->toDateString();
@@ -55,7 +59,7 @@ class ListarLancamentosDoMes
             ->when($filtros['compartilhado'], fn ($query, string $compartilhado) => $compartilhado === 'sim'
                 ? $query->whereNotNull('lancamentos.modo_rateio')
                 : $query->whereNull('lancamentos.modo_rateio'))
-            ->with(['categoria:id,nome', ...array_map(fn (string $relacao): string => "lancamento.{$relacao}", $relacoes)])
+            ->with(['categoria:id,nome', 'grupo:id,nome', ...array_map(fn (string $relacao): string => "lancamento.{$relacao}", $relacoes)])
             ->get();
 
         $semCota = $filtros['categoria'] !== null || $filtros['status'] !== null || $filtros['compartilhado'] === 'nao'
@@ -76,7 +80,16 @@ class ListarLancamentosDoMes
             ->concat($semCota->map(fn (Lancamento $lancamento): array => [$lancamento, null]))
             ->sortBy(fn (array $par): array => [$par[0]->data->toDateString(), $par[0]->created_at?->toDateTimeString(), $par[0]->id]);
 
+        $grupos = [];
+
         foreach ($itens as [$lancamento, $cota]) {
+            if ($cota?->grupo !== null) {
+                $grupos[$lancamento->tipo->value][$cota->grupo->id]['grupo'] = $cota->grupo;
+                $grupos[$lancamento->tipo->value][$cota->grupo->id]['itens'][] = $this->item($user, $lancamento, $cota, $hoje, $categoriasVisiveis);
+
+                continue;
+            }
+
             $serie = $lancamento->parcelamento_id !== null ? $lancamento->parcelamento : null;
             $subsecao = match (true) {
                 $serie === null => 'avista',
@@ -87,7 +100,54 @@ class ListarLancamentosDoMes
             $secoes[$lancamento->tipo->value][$subsecao][] = $this->item($user, $lancamento, $cota, $hoje, $categoriasVisiveis);
         }
 
+        $filtrosQueOcultamItens = array_filter([$filtros['categoria'], $filtros['status'], $filtros['compartilhado']], fn (mixed $valor): bool => $valor !== null);
+        $totaisNoMes = $grupos === [] || $filtrosQueOcultamItens === []
+            ? null
+            : Cota::query()
+                ->join('lancamentos', 'lancamentos.id', '=', 'cotas.lancamento_id')
+                ->where('cotas.user_id', $user->id)
+                ->where('cotas.carteira_id', $carteira->id)
+                ->whereNotNull('cotas.grupo_id')
+                ->where('lancamentos.data', '>=', $inicio)
+                ->where('lancamentos.data', '<', $fim)
+                ->groupBy('cotas.grupo_id')
+                ->selectRaw('cotas.grupo_id, count(*) as total')
+                ->pluck('total', 'grupo_id');
+
+        foreach ($grupos as $tipo => $doTipo) {
+            foreach ($doTipo as $linha) {
+                $secoes[$tipo]['grupos'][] = $this->grupo($linha['grupo'], $linha['itens'], $totaisNoMes);
+            }
+        }
+
         return $secoes;
+    }
+
+    /**
+     * One row of the "Grupos" subsection (RN-122, RN-129).
+     *
+     * @param  list<array<string, mixed>>  $itens
+     * @param  Collection<int, mixed>|null  $totaisNoMes  shares of each group in the month without filters, when a filter is active
+     * @return array<string, mixed>
+     */
+    private function grupo(Grupo $grupo, array $itens, ?Collection $totaisNoMes): array
+    {
+        $executados = count(array_filter($itens, fn (array $item): bool => $item['executado'] === true));
+
+        return [
+            'chave' => "g{$grupo->id}",
+            'id' => $grupo->id,
+            'nome' => $grupo->nome,
+            'quantidade' => count($itens),
+            'valor' => array_sum(array_column($itens, 'valor')),
+            'status' => match ($executados) {
+                0 => 'pendente',
+                count($itens) => 'executado',
+                default => 'parcial',
+            },
+            'filtrado' => $totaisNoMes !== null && (int) $totaisNoMes->get($grupo->id, 0) > count($itens),
+            'itens' => $itens,
+        ];
     }
 
     /**
@@ -102,6 +162,7 @@ class ListarLancamentosDoMes
         return [
             'chave' => $cota === null ? "l{$lancamento->id}" : "c{$cota->id}",
             'cotaId' => $cota?->id,
+            'grupoId' => $cota?->grupo_id,
             'lancamentoId' => $lancamento->id,
             'data' => $lancamento->data->toDateString(),
             'descricao' => $lancamento->descricao,

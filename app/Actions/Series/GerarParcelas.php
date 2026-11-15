@@ -6,6 +6,7 @@ use App\Actions\Rateio\CalcularCotas;
 use App\Models\Carteira;
 use App\Models\Categoria;
 use App\Models\Cota;
+use App\Models\Grupo;
 use App\Models\Lancamento;
 use App\Models\Parcelamento;
 use App\Models\ParcelamentoCota;
@@ -22,7 +23,8 @@ class GerarParcelas
      *
      * A shared series replicates its model split on each installment (RN-084, CA-052.5): the
      * author's share uses the series wallet and category, participants get their default wallet and
-     * the category by RN-082, not seen yet (RN-114).
+     * the category by RN-082, not seen yet (RN-114). Shares are born in the group of the model:
+     * the series group for the author, the model share group for a participant (RN-126, RN-148).
      *
      * Rows are inserted in bulk; dates use the model storage format so queries compare them alike.
      *
@@ -57,10 +59,12 @@ class GerarParcelas
             ];
         }
 
-        $modelo = $serie->modo_rateio === null ? [] : array_values($serie->cotas()->orderBy('id')->get(['user_id', 'percentual', 'valor'])
+        $cotasDoModelo = $serie->modo_rateio === null ? collect() : $serie->cotas()->orderBy('id')->get(['user_id', 'percentual', 'valor', 'grupo_id']);
+        $modelo = array_values($cotasDoModelo
             ->map(fn (ParcelamentoCota $cota): array => ['user_id' => $cota->user_id, 'percentual' => $cota->percentual, 'valor' => $cota->valor])
             ->all());
         $carteiras = Carteira::query()->whereIn('user_id', array_column($modelo, 'user_id'))->where('padrao', true)->pluck('id', 'user_id');
+        $grupos = $this->gruposDosParticipantes($serie, $cotasDoModelo->pluck('grupo_id', 'user_id')->all(), $carteiras->all());
         $categoriaParticipante = $modelo === [] ? null : $this->categoriaDoParticipante($serie);
 
         foreach (array_chunk($novas, 200, preserve_keys: true) as $lote) {
@@ -95,6 +99,7 @@ class GerarParcelas
                         'user_id' => $userId,
                         'carteira_id' => $doAutor ? $serie->carteira_id : $carteiras[$userId],
                         'categoria_id' => $doAutor ? $serie->categoria_id : $categoriaParticipante,
+                        'grupo_id' => $doAutor ? $serie->grupo_id : ($grupos[$userId] ?? null),
                         'valor' => $cota['valor'],
                         'percentual' => $cota['percentual'],
                         'executado' => $parcela['executado'],
@@ -110,6 +115,27 @@ class GerarParcelas
         }
 
         $serie->save();
+    }
+
+    /**
+     * Group of each participant's new share: the one on their model share, only when it belongs to
+     * the wallet the share is born in (RN-126, RN-148).
+     *
+     * @param  array<int, int|null>  $porUsuario  group id of the model share by user id
+     * @param  array<int, int>  $carteiras  default wallet id by user id
+     * @return array<int, int>
+     */
+    private function gruposDosParticipantes(Parcelamento $serie, array $porUsuario, array $carteiras): array
+    {
+        $porUsuario = array_filter($porUsuario, fn (?int $grupoId, int $userId): bool => $grupoId !== null && $userId !== $serie->user_id, ARRAY_FILTER_USE_BOTH);
+
+        if ($porUsuario === []) {
+            return [];
+        }
+
+        $carteiraDoGrupo = Grupo::query()->whereKey(array_values($porUsuario))->pluck('carteira_id', 'id');
+
+        return array_filter($porUsuario, fn (int $grupoId, int $userId): bool => ($carteiraDoGrupo[$grupoId] ?? null) === ($carteiras[$userId] ?? null), ARRAY_FILTER_USE_BOTH);
     }
 
     /**

@@ -70,6 +70,7 @@ export type EscopoSerie = 'esta' | 'proximas' | 'todas';
 export type ItemLancamento = {
     chave: string;
     cotaId: number | null;
+    grupoId: number | null;
     lancamentoId: number;
     data: string;
     descricao: string;
@@ -88,8 +89,28 @@ export type ItemLancamento = {
     participacao: Participacao | null;
 };
 
+export type StatusGrupo = 'executado' | 'parcial' | 'pendente';
+
+export type GrupoLinha = {
+    chave: string;
+    id: number;
+    nome: string;
+    quantidade: number;
+    valor: number;
+    status: StatusGrupo;
+    filtrado: boolean;
+    itens: ItemLancamento[];
+};
+
+export type GrupoOpcao = {
+    id: number;
+    nome: string;
+    tipo: TipoLancamento;
+};
+
 export type Subsecoes = {
     avista: ItemLancamento[];
     parceladas: ItemLancamento[];
     recorrentes: ItemLancamento[];
+    grupos: GrupoLinha[];
 };

@@ -29,9 +29,7 @@ class SairDoRateioRequest extends FormRequest
 
     public function escopo(): EscopoSerie
     {
-        $escopo = $this->validated('escopo');
-
-        return $escopo === null ? EscopoSerie::Esta : EscopoSerie::from($escopo);
+        return $this->enum('escopo', EscopoSerie::class) ?? EscopoSerie::Esta;
     }
 
     /**

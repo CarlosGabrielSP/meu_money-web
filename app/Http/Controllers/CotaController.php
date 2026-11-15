@@ -31,14 +31,17 @@ class CotaController extends Controller
     }
 
     /**
-     * A participant changes wallet, category and status of their own share (RF-071, RN-080).
+     * A participant changes wallet, category and status of their own share (RF-071, RN-080). A share
+     * moved to another wallet leaves its group (RN-130).
      */
     public function update(AtualizarCotaRequest $request, Cota $cota): RedirectResponse
     {
         $executado = $request->boolean('executado');
+        $carteiraId = (int) $request->validated('carteira_id');
 
         $cota->forceFill([
-            'carteira_id' => (int) $request->validated('carteira_id'),
+            'grupo_id' => $carteiraId === $cota->carteira_id ? $cota->grupo_id : null,
+            'carteira_id' => $carteiraId,
             'categoria_id' => (int) $request->validated('categoria_id'),
             'executado' => $executado,
             'executado_em' => $executado ? ($cota->executado ? $cota->executado_em : now()) : null,
