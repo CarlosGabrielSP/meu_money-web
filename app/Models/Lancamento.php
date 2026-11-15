@@ -27,11 +27,10 @@ use Illuminate\Support\Carbon;
  * @property string|null $anexo_nome
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
+ *
+ * Attachment and series fields are set by the server only, never mass assigned.
  */
-#[Fillable([
-    'descricao', 'tipo', 'valor', 'data', 'modo_rateio', 'parcelamento_id', 'numero_parcela',
-    'observacao', 'anexo_caminho', 'anexo_nome',
-])]
+#[Fillable(['descricao', 'tipo', 'valor', 'data', 'modo_rateio', 'observacao'])]
 class Lancamento extends Model
 {
     /** @use HasFactory<LancamentoFactory> */

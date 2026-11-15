@@ -40,7 +40,7 @@ test('password can be updated', function () {
     expect(Hash::check('new-password', $user->refresh()->password))->toBeTrue();
 });
 
-test('correct password must be provided to update password', function () {
+test('CA-008.3 correct password must be provided to update password', function () {
     $user = User::factory()->create();
 
     $response = $this

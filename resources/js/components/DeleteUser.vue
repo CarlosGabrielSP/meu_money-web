@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { Form } from '@inertiajs/vue3';
-import { useTemplateRef } from 'vue';
+import { Form, usePage } from '@inertiajs/vue3';
+import { computed, useTemplateRef } from 'vue';
 import ProfileController from '@/actions/App/Http/Controllers/Settings/ProfileController';
 import Heading from '@/components/Heading.vue';
 import InputError from '@/components/InputError.vue';
@@ -16,8 +16,11 @@ import {
     DialogTitle,
     DialogTrigger,
 } from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 
+const page = usePage();
+const temSenha = computed(() => page.props.auth.temSenha);
 const passwordInput = useTemplateRef('passwordInput');
 </script>
 
@@ -25,22 +28,20 @@ const passwordInput = useTemplateRef('passwordInput');
     <div class="space-y-6">
         <Heading
             variant="small"
-            title="Delete account"
-            description="Delete your account and all of its resources"
+            title="Excluir conta"
+            description="Exclua sua conta e todos os seus dados"
         />
         <div
             class="space-y-4 rounded-lg border border-red-100 bg-red-50 p-4 dark:border-red-200/10 dark:bg-red-700/10"
         >
             <div class="relative space-y-0.5 text-red-600 dark:text-red-100">
-                <p class="font-medium">Warning</p>
-                <p class="text-sm">
-                    Please proceed with caution, this cannot be undone.
-                </p>
+                <p class="font-medium">Atenção</p>
+                <p class="text-sm">Esta ação não pode ser desfeita.</p>
             </div>
             <Dialog>
                 <DialogTrigger as-child>
                     <Button variant="destructive" data-test="delete-user-button"
-                        >Delete account</Button
+                        >Excluir conta</Button
                     >
                 </DialogTrigger>
                 <DialogContent>
@@ -56,29 +57,43 @@ const passwordInput = useTemplateRef('passwordInput');
                     >
                         <DialogHeader class="space-y-3">
                             <DialogTitle
-                                >Are you sure you want to delete your
-                                account?</DialogTitle
+                                >Tem certeza que deseja excluir sua
+                                conta?</DialogTitle
                             >
                             <DialogDescription>
-                                Once your account is deleted, all of its
-                                resources and data will also be permanently
-                                deleted. Please enter your password to confirm
-                                you would like to permanently delete your
-                                account.
+                                Todos os seus dados serão excluídos
+                                definitivamente.
+                                {{
+                                    temSenha
+                                        ? 'Digite sua senha para confirmar.'
+                                        : 'Digite seu e-mail para confirmar.'
+                                }}
                             </DialogDescription>
                         </DialogHeader>
 
-                        <div class="grid gap-2">
-                            <Label for="password" class="sr-only"
-                                >Password</Label
-                            >
+                        <div v-if="temSenha" class="grid gap-2">
+                            <Label for="password" class="sr-only">Senha</Label>
                             <PasswordInput
                                 id="password"
                                 name="password"
                                 ref="passwordInput"
-                                placeholder="Password"
+                                placeholder="Senha"
                             />
                             <InputError :message="errors.password" />
+                        </div>
+
+                        <div v-else class="grid gap-2">
+                            <Label for="confirmacao_email" class="sr-only"
+                                >Seu e-mail</Label
+                            >
+                            <Input
+                                id="confirmacao_email"
+                                name="confirmacao_email"
+                                type="email"
+                                autocomplete="off"
+                                placeholder="Seu e-mail"
+                            />
+                            <InputError :message="errors.confirmacao_email" />
                         </div>
 
                         <DialogFooter class="gap-2">
@@ -92,7 +107,7 @@ const passwordInput = useTemplateRef('passwordInput');
                                         }
                                     "
                                 >
-                                    Cancel
+                                    Cancelar
                                 </Button>
                             </DialogClose>
 
@@ -102,7 +117,7 @@ const passwordInput = useTemplateRef('passwordInput');
                                 :disabled="processing"
                                 data-test="confirm-delete-user-button"
                             >
-                                Delete account
+                                Excluir conta
                             </Button>
                         </DialogFooter>
                     </Form>

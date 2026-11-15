@@ -4,6 +4,7 @@ namespace App\Actions\Fortify;
 
 use App\Concerns\PasswordValidationRules;
 use App\Models\User;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Validator;
 use Laravel\Fortify\Contracts\ResetsUserPasswords;
 
@@ -13,6 +14,9 @@ class ResetUserPassword implements ResetsUserPasswords
 
     /**
      * Validate and reset the user's forgotten password.
+     *
+     * The emailed link proves ownership of the address, so it also verifies the email and
+     * signs an active user in (RN-103, CA-003.1).
      *
      * @param  array<string, string>  $input
      */
@@ -24,6 +28,11 @@ class ResetUserPassword implements ResetsUserPasswords
 
         $user->forceFill([
             'password' => $input['password'],
+            'email_verified_at' => $user->email_verified_at ?? now(),
         ])->save();
+
+        if ($user->desativado_em === null) {
+            Auth::guard('web')->login($user);
+        }
     }
 }

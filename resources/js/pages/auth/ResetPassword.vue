@@ -1,34 +1,51 @@
 <script setup lang="ts">
-import { Form, Head } from '@inertiajs/vue3';
-import { ref } from 'vue';
+import { Form, Head, setLayoutProps } from '@inertiajs/vue3';
+import { computed, ref } from 'vue';
 import InputError from '@/components/InputError.vue';
 import PasswordInput from '@/components/PasswordInput.vue';
+import TextLink from '@/components/TextLink.vue';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Spinner } from '@/components/ui/spinner';
-import { update } from '@/routes/password';
-
-defineOptions({
-    layout: {
-        title: 'Reset password',
-        description: 'Please enter your new password below',
-    },
-});
+import { request, update } from '@/routes/password';
 
 const props = defineProps<{
     token: string;
     email: string;
     passwordRules: string;
+    tokenValido: boolean;
+    temSenha: boolean;
 }>();
+
+const titulo = computed(() =>
+    props.temSenha ? 'Redefinir senha' : 'Definir senha',
+);
+
+setLayoutProps({
+    title: titulo.value,
+    description: props.tokenValido
+        ? 'Informe sua nova senha'
+        : 'Este link é inválido ou expirou',
+});
 
 const inputEmail = ref(props.email);
 </script>
 
 <template>
-    <Head title="Reset password" />
+    <Head :title="titulo" />
+
+    <div v-if="!tokenValido" class="space-y-6 text-center">
+        <p class="text-sm text-red-600" data-test="link-invalido">
+            Este link para definir a senha é inválido ou expirou.
+        </p>
+        <TextLink :href="request()" data-test="pedir-novo-link">
+            Pedir um novo link
+        </TextLink>
+    </div>
 
     <Form
+        v-else
         v-bind="update.form()"
         :transform="(data) => ({ ...data, token, email })"
         :reset-on-success="['password', 'password_confirmation']"
@@ -36,7 +53,7 @@ const inputEmail = ref(props.email);
     >
         <div class="grid gap-6">
             <div class="grid gap-2">
-                <Label for="email">Email</Label>
+                <Label for="email">E-mail</Label>
                 <Input
                     id="email"
                     type="email"
@@ -47,30 +64,33 @@ const inputEmail = ref(props.email);
                     readonly
                 />
                 <InputError :message="errors.email" class="mt-2" />
+                <TextLink v-if="errors.email" :href="request()" class="text-sm">
+                    Pedir um novo link
+                </TextLink>
             </div>
 
             <div class="grid gap-2">
-                <Label for="password">Password</Label>
+                <Label for="password">Senha</Label>
                 <PasswordInput
                     id="password"
                     name="password"
                     autocomplete="new-password"
                     class="mt-1 block w-full"
                     autofocus
-                    placeholder="Password"
+                    placeholder="Senha"
                     :passwordrules="passwordRules"
                 />
                 <InputError :message="errors.password" />
             </div>
 
             <div class="grid gap-2">
-                <Label for="password_confirmation"> Confirm password </Label>
+                <Label for="password_confirmation">Confirmar senha</Label>
                 <PasswordInput
                     id="password_confirmation"
                     name="password_confirmation"
                     autocomplete="new-password"
                     class="mt-1 block w-full"
-                    placeholder="Confirm password"
+                    placeholder="Confirmar senha"
                     :passwordrules="passwordRules"
                 />
                 <InputError :message="errors.password_confirmation" />
@@ -83,7 +103,7 @@ const inputEmail = ref(props.email);
                 data-test="reset-password-button"
             >
                 <Spinner v-if="processing" />
-                Reset password
+                {{ titulo }}
             </Button>
         </div>
     </Form>
