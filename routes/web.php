@@ -1,12 +1,19 @@
 <?php
 
 use App\Http\Controllers\Auth\GoogleController;
+use App\Http\Controllers\CarteiraController;
+use App\Http\Controllers\CategoriaController;
 use Illuminate\Support\Facades\Route;
 
 Route::inertia('/', 'Welcome')->name('home');
 
 Route::middleware(['auth', 'verified'])->group(function () {
     Route::inertia('dashboard', 'Dashboard')->name('dashboard');
+
+    Route::resource('carteiras', CarteiraController::class)->only(['index', 'store', 'update', 'destroy']);
+    Route::post('carteiras/{carteira}/padrao', [CarteiraController::class, 'definirPadrao'])->name('carteiras.padrao');
+
+    Route::resource('categorias', CategoriaController::class)->only(['index', 'store', 'update', 'destroy']);
 });
 
 Route::middleware('guest')->group(function () {

@@ -1,0 +1,63 @@
+import type { LucideIcon } from '@lucide/vue';
+import {
+    Baby,
+    Banknote,
+    Briefcase,
+    Building2,
+    Car,
+    Coins,
+    CreditCard,
+    Gamepad2,
+    Gift,
+    GraduationCap,
+    Heart,
+    House,
+    Landmark,
+    PawPrint,
+    PiggyBank,
+    Plane,
+    ShoppingCart,
+    Smartphone,
+    Utensils,
+    Wallet,
+} from '@lucide/vue';
+
+/** Wallet icons (RN-009); keys match App\Enums\IconeCarteira. */
+export const iconesCarteira: Record<string, LucideIcon> = {
+    wallet: Wallet,
+    landmark: Landmark,
+    'credit-card': CreditCard,
+    'piggy-bank': PiggyBank,
+    banknote: Banknote,
+    coins: Coins,
+    'building-2': Building2,
+    house: House,
+    car: Car,
+    briefcase: Briefcase,
+    'graduation-cap': GraduationCap,
+    heart: Heart,
+    plane: Plane,
+    'shopping-cart': ShoppingCart,
+    utensils: Utensils,
+    gift: Gift,
+    smartphone: Smartphone,
+    'gamepad-2': Gamepad2,
+    baby: Baby,
+    'paw-print': PawPrint,
+};
+
+/** Wallet colors (RN-009); keys match App\Enums\CorCarteira. Full class names keep Tailwind able to see them. */
+export const coresCarteira: Record<string, string> = {
+    slate: 'bg-slate-500',
+    red: 'bg-red-500',
+    orange: 'bg-orange-500',
+    amber: 'bg-amber-500',
+    green: 'bg-green-500',
+    emerald: 'bg-emerald-500',
+    teal: 'bg-teal-500',
+    cyan: 'bg-cyan-500',
+    blue: 'bg-blue-500',
+    indigo: 'bg-indigo-500',
+    violet: 'bg-violet-500',
+    pink: 'bg-pink-500',
+};

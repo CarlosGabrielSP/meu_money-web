@@ -57,6 +57,14 @@ class Carteira extends Model
     }
 
     /**
+     * @return HasMany<Parcelamento, $this>
+     */
+    public function parcelamentos(): HasMany
+    {
+        return $this->hasMany(Parcelamento::class);
+    }
+
+    /**
      * @return HasMany<Grupo, $this>
      */
     public function grupos(): HasMany

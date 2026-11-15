@@ -56,6 +56,17 @@ class Categoria extends Model
     }
 
     /**
+     * Restrict the query to system categories and those owned by the user (RN-030, RN-031).
+     *
+     * @param  Builder<self>  $query
+     */
+    #[Scope]
+    protected function visiveisPara(Builder $query, User $user): void
+    {
+        $query->where(fn (Builder $query) => $query->whereNull('user_id')->orWhere('user_id', $user->id));
+    }
+
+    /**
      * Whether this category belongs to the system instead of a user (RN-030).
      */
     public function isGlobal(): bool
