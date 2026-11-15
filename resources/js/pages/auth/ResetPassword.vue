@@ -36,7 +36,10 @@ const inputEmail = ref(props.email);
     <Head :title="titulo" />
 
     <div v-if="!tokenValido" class="space-y-6 text-center">
-        <p class="text-sm text-red-600" data-test="link-invalido">
+        <p
+            class="text-sm text-red-600 dark:text-red-400"
+            data-test="link-invalido"
+        >
             Este link para definir a senha é inválido ou expirou.
         </p>
         <TextLink :href="request()" data-test="pedir-novo-link">

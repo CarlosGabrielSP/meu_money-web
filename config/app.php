@@ -123,4 +123,20 @@ return [
         'store' => env('APP_MAINTENANCE_STORE', 'database'),
     ],
 
+    /*
+    |--------------------------------------------------------------------------
+    | Seeded Administrator
+    |--------------------------------------------------------------------------
+    |
+    | Name and email of the local administrator created by the DatabaseSeeder
+    | through the same flow as `usuario:admin` (RF-001). When either is empty,
+    | no administrator is seeded.
+    |
+    */
+
+    'seed_admin' => [
+        'name' => env('SEED_ADMIN_NAME'),
+        'email' => env('SEED_ADMIN_EMAIL'),
+    ],
+
 ];

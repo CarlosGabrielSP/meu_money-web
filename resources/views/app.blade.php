@@ -4,6 +4,9 @@
         <meta charset="utf-8">
         <meta name="viewport" content="width=device-width, initial-scale=1">
 
+        {{-- Browser bar color; the inline script and updateTheme() in useAppearance keep it in sync with the chosen appearance (RNF-002) --}}
+        <meta name="theme-color" content="{{ ($appearance ?? 'system') == 'dark' ? '#0a0a0a' : '#ffffff' }}">
+
         {{-- Inline script to detect system dark mode preference and apply it immediately --}}
         <script>
             (function() {
@@ -14,6 +17,7 @@
 
                     if (prefersDark) {
                         document.documentElement.classList.add('dark');
+                        document.querySelector('meta[name="theme-color"]')?.setAttribute('content', '#0a0a0a');
                     }
                 }
             })();
@@ -33,6 +37,10 @@
         <link rel="icon" href="/favicon.ico" sizes="any">
         <link rel="icon" href="/favicon.svg" type="image/svg+xml">
         <link rel="apple-touch-icon" href="/apple-touch-icon.png">
+        <link rel="manifest" href="/manifest.webmanifest">
+        <meta name="mobile-web-app-capable" content="yes">
+        <meta name="apple-mobile-web-app-capable" content="yes">
+        <meta name="apple-mobile-web-app-title" content="{{ config('app.name') }}">
 
         @fonts
 

@@ -15,19 +15,15 @@ export function updateTheme(value: Appearance): void {
         return;
     }
 
-    if (value === 'system') {
-        const mediaQueryList = window.matchMedia(
-            '(prefers-color-scheme: dark)',
-        );
-        const systemTheme = mediaQueryList.matches ? 'dark' : 'light';
+    const isDark =
+        value === 'system'
+            ? window.matchMedia('(prefers-color-scheme: dark)').matches
+            : value === 'dark';
 
-        document.documentElement.classList.toggle(
-            'dark',
-            systemTheme === 'dark',
-        );
-    } else {
-        document.documentElement.classList.toggle('dark', value === 'dark');
-    }
+    document.documentElement.classList.toggle('dark', isDark);
+    document
+        .querySelector('meta[name="theme-color"]')
+        ?.setAttribute('content', isDark ? '#0a0a0a' : '#ffffff');
 }
 
 const setCookie = (name: string, value: string, days = 365) => {
