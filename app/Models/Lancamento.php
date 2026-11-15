@@ -7,6 +7,8 @@ use App\Enums\TipoLancamento;
 use Carbon\CarbonImmutable;
 use Database\Factories\LancamentoFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
+use Illuminate\Database\Eloquent\Attributes\Scope;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -77,15 +79,24 @@ class Lancamento extends Model
     }
 
     /**
-     * Why the simple entry form cannot change this entry, or null when it can.
-     * Installments follow the series rules (RF-053, RF-054) and shared entries the sharing rules (RN-079).
+     * Why the entry form cannot change this entry, or null when it can.
+     * Shared entries follow the sharing rules of phase 7 (RN-079).
      */
     public function motivoEdicaoIndisponivel(): ?string
     {
-        return match (true) {
-            $this->parcelamento_id !== null => 'Parcela de série é alterada pelas regras da série, ainda não disponíveis.',
-            $this->modo_rateio !== null => 'A edição de lançamento compartilhado ainda não está disponível.',
-            default => null,
-        };
+        return $this->modo_rateio !== null ? 'A edição de lançamento compartilhado ainda não está disponível.' : null;
+    }
+
+    /**
+     * Entries whose author's share is still pending (RN-049, RN-056).
+     *
+     * @param  Builder<self>  $query
+     */
+    #[Scope]
+    protected function pendentesDoAutor(Builder $query): void
+    {
+        $query->whereHas('cotas', fn (Builder $cotas) => $cotas
+            ->whereColumn('cotas.user_id', 'lancamentos.user_id')
+            ->where('executado', false));
     }
 }

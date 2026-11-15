@@ -3,6 +3,8 @@ import { router, useForm, usePage } from '@inertiajs/vue3';
 import { computed, ref, watch } from 'vue';
 import LancamentoController from '@/actions/App/Http/Controllers/LancamentoController';
 import InputError from '@/components/InputError.vue';
+import EscopoSerieDialog from '@/components/lancamentos/EscopoSerieDialog.vue';
+import SerieAcoes from '@/components/lancamentos/SerieAcoes.vue';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import {
@@ -31,6 +33,7 @@ import {
 import type {
     CarteiraResumo,
     CategoriaOpcao,
+    EscopoSerie,
     LancamentoEdicao,
     TipoLancamento,
 } from '@/types';
@@ -57,14 +60,46 @@ type Campos = {
     observacao: string;
     executado: boolean | null;
     anexo: File | null;
+    repetir: boolean;
+    repeticao: 'parcelado' | 'recorrente';
+    periodicidade: string;
+    total_parcelas: number;
+    modo_valor: 'total' | 'parcela';
+    dia_vencimento: number | null;
+    escopo: EscopoSerie | null;
 };
+
+const periodicidades = [
+    { valor: 'mensal', titulo: 'Mensal' },
+    { valor: 'bimestral', titulo: 'Bimestral' },
+    { valor: 'trimestral', titulo: 'Trimestral' },
+    { valor: 'semestral', titulo: 'Semestral' },
+    { valor: 'anual', titulo: 'Anual' },
+];
 
 const form = useForm<Campos>(camposIniciais());
 const confirmandoExclusao = ref(false);
+const escolhendoEscopo = ref<'editar' | 'excluir' | null>(null);
 const page = usePage();
 const anexoInput = ref<HTMLInputElement | null>(null);
 
 const editando = computed(() => props.lancamentoId !== null);
+const serie = computed(() => props.edicao?.serie ?? null);
+
+/**
+ * New entries and simple entries may repeat (RF-050, RF-051, RF-057); installments may not (CA-057.3).
+ */
+const podeRepetir = computed(() => serie.value === null);
+
+const rotuloValor = computed(() => {
+    if (!form.repetir) {
+        return 'Valor (R$)';
+    }
+
+    return form.repeticao === 'parcelado' && form.modo_valor === 'total'
+        ? 'Valor total (R$)'
+        : 'Valor da parcela (R$)';
+});
 
 const categoriasDoTipo = computed(() =>
     props.categorias.filter(
@@ -92,6 +127,13 @@ function camposIniciais(): Campos {
         observacao: edicao?.observacao ?? '',
         executado: edicao?.executado ?? null,
         anexo: null,
+        repetir: false,
+        repeticao: 'parcelado',
+        periodicidade: 'mensal',
+        total_parcelas: 2,
+        modo_valor: 'total',
+        dia_vencimento: edicao?.serie?.diaVencimento ?? null,
+        escopo: null,
     };
 }
 
@@ -118,9 +160,34 @@ watch(
 
 /**
  * "data" is reserved by useForm, so the date travels under its own name only on submit.
+ * Repetition fields go only when "Repetir" is on, and series never send a status (RN-013).
  */
-function paraEnvio({ dataLancamento, ...campos }: Campos) {
-    return { ...campos, data: dataLancamento };
+function paraEnvio({
+    dataLancamento,
+    repetir,
+    repeticao,
+    periodicidade,
+    total_parcelas,
+    modo_valor,
+    dia_vencimento,
+    escopo,
+    ...campos
+}: Campos) {
+    return {
+        ...campos,
+        data: dataLancamento,
+        ...(repetir
+            ? {
+                  executado: editando.value ? campos.executado : null,
+                  repeticao,
+                  periodicidade,
+                  ...(repeticao === 'parcelado'
+                      ? { total_parcelas, modo_valor }
+                      : {}),
+              }
+            : {}),
+        ...(serie.value ? { dia_vencimento, escopo } : {}),
+    };
 }
 
 const erros = computed(() => form.errors as Record<string, string | undefined>);
@@ -130,10 +197,24 @@ function escolherAnexo(event: Event): void {
 }
 
 function salvar(adicionarOutro: boolean): void {
+    if (serie.value && form.escopo === null) {
+        escolhendoEscopo.value = 'editar';
+
+        return;
+    }
+
     const opcoes = {
         preserveScroll: true,
         preserveState: true,
+        onFinish: () => {
+            form.escopo = null;
+        },
+        onError: () => {
+            escolhendoEscopo.value = null;
+        },
         onSuccess: () => {
+            escolhendoEscopo.value = null;
+
             if (!adicionarOutro) {
                 aberto.value = false;
 
@@ -170,18 +251,40 @@ function salvar(adicionarOutro: boolean): void {
     );
 }
 
-function excluir(): void {
+function pedirExclusao(): void {
+    if (serie.value) {
+        escolhendoEscopo.value = 'excluir';
+    } else {
+        confirmandoExclusao.value = true;
+    }
+}
+
+function excluir(escopo: EscopoSerie | null = null): void {
     if (props.lancamentoId === null) {
         return;
     }
 
     router.delete(LancamentoController.destroy.url(props.lancamentoId), {
+        data: escopo ? { escopo } : {},
         preserveScroll: true,
+        preserveState: true,
         onSuccess: () => {
             confirmandoExclusao.value = false;
+            escolhendoEscopo.value = null;
             aberto.value = false;
         },
     });
+}
+
+function confirmarEscopo(escopo: EscopoSerie): void {
+    if (escolhendoEscopo.value === 'excluir') {
+        excluir(escopo);
+
+        return;
+    }
+
+    form.escopo = escopo;
+    salvar(false);
 }
 
 function removerAnexo(): void {
@@ -221,6 +324,7 @@ function removerAnexo(): void {
                                 v-model="form.tipo"
                                 type="radio"
                                 value="despesa"
+                                :disabled="serie !== null"
                             />
                             Despesa
                         </label>
@@ -229,11 +333,19 @@ function removerAnexo(): void {
                                 v-model="form.tipo"
                                 type="radio"
                                 value="receita"
+                                :disabled="serie !== null"
                             />
                             Receita
                         </label>
                     </fieldset>
                     <InputError :message="form.errors.tipo" />
+
+                    <SerieAcoes
+                        v-if="serie"
+                        :serie="serie"
+                        :hoje="hoje"
+                        @concluido="aberto = false"
+                    />
 
                     <div class="grid gap-2">
                         <Label for="descricao">Descrição</Label>
@@ -248,7 +360,7 @@ function removerAnexo(): void {
 
                     <div class="grid grid-cols-2 gap-4">
                         <div class="grid gap-2">
-                            <Label for="valor">Valor (R$)</Label>
+                            <Label for="valor">{{ rotuloValor }}</Label>
                             <Input
                                 id="valor"
                                 :model-value="form.valor"
@@ -311,7 +423,126 @@ function removerAnexo(): void {
                         <InputError :message="form.errors.carteira_id" />
                     </div>
 
-                    <label class="flex items-center gap-2">
+                    <div v-if="serie" class="grid gap-2">
+                        <Label for="dia_vencimento">Dia de vencimento</Label>
+                        <Input
+                            id="dia_vencimento"
+                            :model-value="form.dia_vencimento ?? undefined"
+                            @update:model-value="
+                                form.dia_vencimento = Number($event) || null
+                            "
+                            type="number"
+                            min="1"
+                            max="31"
+                        />
+                        <p class="text-xs text-muted-foreground">
+                            Muda só nas opções "esta e as próximas" e "todas".
+                        </p>
+                        <InputError :message="erros.dia_vencimento" />
+                    </div>
+
+                    <div
+                        v-if="podeRepetir"
+                        class="grid gap-3 rounded-md border p-3"
+                    >
+                        <label class="flex items-center gap-2 font-medium">
+                            <Checkbox
+                                :model-value="form.repetir"
+                                @update:model-value="
+                                    form.repetir = $event === true
+                                "
+                            />
+                            Repetir
+                        </label>
+                        <template v-if="form.repetir">
+                            <fieldset class="flex gap-4">
+                                <legend class="sr-only">Forma</legend>
+                                <label class="flex items-center gap-2">
+                                    <input
+                                        v-model="form.repeticao"
+                                        type="radio"
+                                        value="parcelado"
+                                    />
+                                    Parcelado
+                                </label>
+                                <label class="flex items-center gap-2">
+                                    <input
+                                        v-model="form.repeticao"
+                                        type="radio"
+                                        value="recorrente"
+                                    />
+                                    Recorrente
+                                </label>
+                            </fieldset>
+                            <InputError :message="erros.repeticao" />
+                            <div class="grid grid-cols-2 gap-4">
+                                <div class="grid gap-2">
+                                    <Label for="periodicidade"
+                                        >Periodicidade</Label
+                                    >
+                                    <select
+                                        id="periodicidade"
+                                        v-model="form.periodicidade"
+                                        class="h-9 rounded-md border bg-transparent px-3 text-sm"
+                                    >
+                                        <option
+                                            v-for="periodicidade in periodicidades"
+                                            :key="periodicidade.valor"
+                                            :value="periodicidade.valor"
+                                        >
+                                            {{ periodicidade.titulo }}
+                                        </option>
+                                    </select>
+                                    <InputError
+                                        :message="erros.periodicidade"
+                                    />
+                                </div>
+                                <div
+                                    v-if="form.repeticao === 'parcelado'"
+                                    class="grid gap-2"
+                                >
+                                    <Label for="total_parcelas"
+                                        >Nº de parcelas</Label
+                                    >
+                                    <Input
+                                        id="total_parcelas"
+                                        v-model.number="form.total_parcelas"
+                                        type="number"
+                                        min="2"
+                                        max="360"
+                                    />
+                                    <InputError
+                                        :message="erros.total_parcelas"
+                                    />
+                                </div>
+                            </div>
+                            <fieldset
+                                v-if="form.repeticao === 'parcelado'"
+                                class="flex gap-4"
+                            >
+                                <legend class="sr-only">Valor informado</legend>
+                                <label class="flex items-center gap-2">
+                                    <input
+                                        v-model="form.modo_valor"
+                                        type="radio"
+                                        value="total"
+                                    />
+                                    Valor total
+                                </label>
+                                <label class="flex items-center gap-2">
+                                    <input
+                                        v-model="form.modo_valor"
+                                        type="radio"
+                                        value="parcela"
+                                    />
+                                    Valor da parcela
+                                </label>
+                            </fieldset>
+                            <InputError :message="erros.modo_valor" />
+                        </template>
+                    </div>
+
+                    <label v-if="!form.repetir" class="flex items-center gap-2">
                         <Checkbox
                             :model-value="executadoExibido"
                             @update:model-value="
@@ -389,7 +620,7 @@ function removerAnexo(): void {
                             type="button"
                             variant="destructive"
                             class="ml-auto"
-                            @click="confirmandoExclusao = true"
+                            @click="pedirExclusao"
                         >
                             Excluir
                         </Button>
@@ -408,11 +639,20 @@ function removerAnexo(): void {
                 </DialogHeader>
                 <InputError :message="page.props.errors.lancamento" />
                 <DialogFooter>
-                    <Button variant="destructive" @click="excluir"
+                    <Button variant="destructive" @click="excluir()"
                         >Excluir</Button
                     >
                 </DialogFooter>
             </DialogContent>
         </Dialog>
+
+        <EscopoSerieDialog
+            :open="escolhendoEscopo !== null"
+            :acao="escolhendoEscopo ?? 'editar'"
+            :erro="erros.escopo ?? page.props.errors.lancamento"
+            :processando="form.processing"
+            @update:open="!$event && (escolhendoEscopo = null)"
+            @confirmar="confirmarEscopo"
+        />
     </div>
 </template>

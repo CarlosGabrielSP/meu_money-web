@@ -12,8 +12,8 @@ class ListarLancamentosDoMes
     /**
      * The user's shares of one wallet and month, split by type and subsection (RN-093, RN-094, RN-116).
      *
-     * Groups (RN-093 last subsection) are part of phase 8. Shared entries and installments are not
-     * editable here until their own forms exist (phases 4 and 7).
+     * Groups (RN-093 last subsection) are part of phase 8. Shared entries are not editable here until
+     * the sharing rules exist (phase 7). Recurring installments show only their number (RN-050).
      *
      * @param  array{tipo: string|null, categoria: int|null, status: string|null, compartilhado: string|null}  $filtros
      * @return array{receita: array<string, list<array<string, mixed>>>, despesa: array<string, list<array<string, mixed>>>}
@@ -39,7 +39,7 @@ class ListarLancamentosDoMes
             ->when($filtros['compartilhado'], fn ($query, string $compartilhado) => $compartilhado === 'sim'
                 ? $query->whereNotNull('lancamentos.modo_rateio')
                 : $query->whereNull('lancamentos.modo_rateio'))
-            ->with(['lancamento.parcelamento:id,total_parcelas', 'categoria:id,nome'])
+            ->with(['lancamento.parcelamento:id,total_parcelas,dia_vencimento,encerrado_em', 'categoria:id,nome'])
             ->orderBy('lancamentos.data')
             ->orderBy('lancamentos.created_at')
             ->orderBy('lancamentos.id')
@@ -64,7 +64,11 @@ class ListarLancamentosDoMes
                 'valor' => $cota->valor,
                 'executado' => $cota->executado,
                 'vencido' => ! $cota->executado && $lancamento->data->lessThan($hoje),
-                'parcela' => $serie !== null && ! $serie->isRecorrente() ? "{$lancamento->numero_parcela}/{$serie->total_parcelas}" : null,
+                'parcela' => match (true) {
+                    $serie === null => null,
+                    $serie->isRecorrente() => (string) $lancamento->numero_parcela,
+                    default => "{$lancamento->numero_parcela}/{$serie->total_parcelas}",
+                },
                 'recorrente' => $serie?->isRecorrente() ?? false,
                 'compartilhado' => $lancamento->modo_rateio !== null,
                 'temAnexo' => $lancamento->anexo_caminho !== null,
@@ -78,6 +82,14 @@ class ListarLancamentosDoMes
                     'observacao' => $lancamento->observacao,
                     'executado' => $cota->executado,
                     'anexoNome' => $lancamento->anexo_nome,
+                    'serie' => $serie === null ? null : [
+                        'id' => $serie->id,
+                        'recorrente' => $serie->isRecorrente(),
+                        'numero' => $lancamento->numero_parcela,
+                        'total' => $serie->total_parcelas,
+                        'diaVencimento' => $serie->dia_vencimento,
+                        'encerradaEm' => $serie->encerrado_em?->toDateString(),
+                    ],
                 ] : null,
             ];
         }

@@ -7,6 +7,7 @@ use App\Http\Controllers\CotaController;
 use App\Http\Controllers\InicioController;
 use App\Http\Controllers\LancamentoAnexoController;
 use App\Http\Controllers\LancamentoController;
+use App\Http\Controllers\ParcelamentoController;
 use Illuminate\Support\Facades\Route;
 
 Route::middleware(['auth', 'verified'])->group(function () {
@@ -15,6 +16,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::resource('lancamentos', LancamentoController::class)->only(['store', 'update', 'destroy']);
     Route::get('lancamentos/{lancamento}/anexo', [LancamentoAnexoController::class, 'show'])->name('lancamentos.anexo.show');
     Route::delete('lancamentos/{lancamento}/anexo', [LancamentoAnexoController::class, 'destroy'])->name('lancamentos.anexo.destroy');
+    Route::post('parcelamentos/{parcelamento}/encerrar', [ParcelamentoController::class, 'encerrar'])->name('parcelamentos.encerrar');
+    Route::patch('parcelamentos/{parcelamento}/total', [ParcelamentoController::class, 'alterarTotal'])->name('parcelamentos.total');
     Route::patch('cotas/{cota}/executado', [CotaController::class, 'alternarExecutado'])->name('cotas.executado');
 
     Route::resource('carteiras', CarteiraController::class)->only(['index', 'store', 'update', 'destroy']);

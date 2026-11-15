@@ -2,6 +2,8 @@
 
 namespace App\Http\Requests\Lancamentos;
 
+use App\Enums\EscopoSerie;
+use App\Enums\Periodicidade;
 use App\Enums\TipoLancamento;
 use App\Models\Carteira;
 use App\Models\Categoria;
@@ -49,9 +51,9 @@ class SalvarLancamentoRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'tipo' => ['required', Rule::enum(TipoLancamento::class)],
+            'tipo' => ['required', Rule::enum(TipoLancamento::class), $this->tipoDaSerie(...)],
             'descricao' => ['required', 'string', 'max:255'],
-            'valor' => ['required', 'integer', 'min:1', 'max:'.self::VALOR_MAXIMO],
+            'valor' => ['required', 'integer', 'min:1', 'max:'.self::VALOR_MAXIMO, $this->totalDivisivel(...)],
             'data' => ['required', 'date_format:Y-m-d'],
             'categoria_id' => ['required', 'integer', $this->categoriaCompativel(...)],
             'carteira_id' => [
@@ -62,7 +64,48 @@ class SalvarLancamentoRequest extends FormRequest
             'observacao' => ['nullable', 'string', 'max:1000'],
             'executado' => ['nullable', 'boolean'],
             'anexo' => ['nullable', 'file', 'mimes:pdf,jpg,jpeg,png,webp', 'max:5120'],
+            'repeticao' => ['nullable', Rule::in(['parcelado', 'recorrente']), $this->podeRepetir(...)],
+            'periodicidade' => ['nullable', 'required_with:repeticao', Rule::enum(Periodicidade::class)],
+            'total_parcelas' => ['nullable', 'required_if:repeticao,parcelado', 'prohibited_if:repeticao,recorrente', 'integer', 'min:2', 'max:360'],
+            'modo_valor' => ['nullable', 'required_if:repeticao,parcelado', 'prohibited_if:repeticao,recorrente', Rule::in(['total', 'parcela'])],
+            'escopo' => [Rule::requiredIf(fn (): bool => $this->parcela()), 'nullable', Rule::enum(EscopoSerie::class)],
+            'dia_vencimento' => ['nullable', 'integer', 'between:1,31'],
         ];
+    }
+
+    /**
+     * A total split into installments needs at least one cent per installment (RN-042, RN-051).
+     */
+    private function totalDivisivel(string $attribute, mixed $value, Closure $fail): void
+    {
+        $total = $this->input('total_parcelas');
+
+        if ($this->input('repeticao') === 'parcelado' && $this->input('modo_valor') === 'total'
+            && is_numeric($total) && is_int($value) && $value < (int) $total) {
+            $fail('O valor total precisa ter pelo menos R$ 0,01 por parcela.');
+        }
+    }
+
+    /**
+     * An installment keeps the type of its series (RN-055, CA-053.5).
+     */
+    private function tipoDaSerie(string $attribute, mixed $value, Closure $fail): void
+    {
+        $serie = $this->lancamento()?->parcelamento;
+
+        if ($serie !== null && $serie->tipo->value !== $value) {
+            $fail('O tipo de uma série não pode ser alterado.');
+        }
+    }
+
+    /**
+     * Only a simple entry becomes a series; an installment cannot be converted again (CA-057.3).
+     */
+    private function podeRepetir(string $attribute, mixed $value, Closure $fail): void
+    {
+        if ($value !== null && $this->parcela()) {
+            $fail('Este lançamento já faz parte de uma série.');
+        }
     }
 
     /**
@@ -104,6 +147,48 @@ class SalvarLancamentoRequest extends FormRequest
         ];
     }
 
+    /**
+     * Repetition chosen in the form, or null for a simple entry (RF-050, RF-051, RF-057).
+     *
+     * @return array{recorrente: bool, periodicidade: Periodicidade, total_parcelas: int|null, valor_total: bool}|null
+     */
+    public function repeticao(): ?array
+    {
+        $repeticao = $this->validated('repeticao');
+
+        if ($repeticao === null) {
+            return null;
+        }
+
+        $total = $this->validated('total_parcelas');
+
+        return [
+            'recorrente' => $repeticao === 'recorrente',
+            'periodicidade' => Periodicidade::from($this->validated('periodicidade')),
+            'total_parcelas' => $total === null ? null : (int) $total,
+            'valor_total' => $this->validated('modo_valor') === 'total',
+        ];
+    }
+
+    public function escopo(): ?EscopoSerie
+    {
+        $escopo = $this->validated('escopo');
+
+        return $escopo === null ? null : EscopoSerie::from($escopo);
+    }
+
+    public function diaVencimento(): ?int
+    {
+        $dia = $this->validated('dia_vencimento');
+
+        return $dia === null ? null : (int) $dia;
+    }
+
+    public function parcela(): bool
+    {
+        return $this->lancamento()?->parcelamento_id !== null;
+    }
+
     public function anexo(): ?UploadedFile
     {
         $anexo = $this->file('anexo');
@@ -123,6 +208,11 @@ class SalvarLancamentoRequest extends FormRequest
             'carteira_id.exists' => 'Selecione uma carteira válida.',
             'anexo.mimes' => 'O anexo deve ser PDF, JPG, PNG ou WEBP.',
             'anexo.max' => 'O anexo deve ter no máximo 5 MB.',
+            'total_parcelas.min' => 'A série deve ter pelo menos 2 parcelas.',
+            'total_parcelas.max' => 'A série pode ter no máximo 360 parcelas.',
+            'total_parcelas.prohibited_if' => 'Série recorrente não tem total de parcelas.',
+            'modo_valor.prohibited_if' => 'Série recorrente aceita só o valor da parcela.',
+            'escopo.required' => 'Escolha quais parcelas alterar.',
         ];
     }
 
@@ -136,6 +226,10 @@ class SalvarLancamentoRequest extends FormRequest
             'categoria_id' => 'categoria',
             'carteira_id' => 'carteira',
             'observacao' => 'observação',
+            'repeticao' => 'repetição',
+            'total_parcelas' => 'número de parcelas',
+            'modo_valor' => 'tipo de valor',
+            'dia_vencimento' => 'dia de vencimento',
         ];
     }
 

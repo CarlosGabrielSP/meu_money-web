@@ -4,6 +4,7 @@ use App\Models\Carteira;
 use App\Models\Categoria;
 use App\Models\Cota;
 use App\Models\Lancamento;
+use App\Models\Parcelamento;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
@@ -66,4 +67,41 @@ function lancamentoComCota(User $user, Carteira $carteira, Categoria $categoria,
     ]);
 
     return $criado;
+}
+
+/**
+ * Form data of a new series (RF-050, RF-051).
+ *
+ * @param  array<string, mixed>  $dados
+ * @return array<string, mixed>
+ */
+function dadosSerie(Carteira $carteira, Categoria $categoria, array $dados = []): array
+{
+    return [
+        'tipo' => 'despesa',
+        'descricao' => 'TV',
+        'valor' => '1.000,00',
+        'data' => '2026-12-05',
+        'categoria_id' => $categoria->id,
+        'carteira_id' => $carteira->id,
+        'repeticao' => 'parcelado',
+        'periodicidade' => 'mensal',
+        'total_parcelas' => 10,
+        'modo_valor' => 'total',
+        ...$dados,
+    ];
+}
+
+/**
+ * @return list<array{numero: int, data: string, valor: int, executado: bool}>
+ */
+function parcelasDaSerie(Parcelamento $serie): array
+{
+    return $serie->lancamentos()->with('cotas')->orderBy('numero_parcela')->get()
+        ->map(fn (Lancamento $parcela) => [
+            'numero' => $parcela->numero_parcela,
+            'data' => $parcela->data->toDateString(),
+            'valor' => $parcela->valor,
+            'executado' => $parcela->cotas->sole()->executado,
+        ])->all();
 }

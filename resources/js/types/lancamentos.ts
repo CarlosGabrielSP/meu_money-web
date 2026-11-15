@@ -23,7 +23,19 @@ export type LancamentoEdicao = {
     observacao: string | null;
     executado: boolean;
     anexoNome: string | null;
+    serie: SerieDaParcela | null;
 };
+
+export type SerieDaParcela = {
+    id: number;
+    recorrente: boolean;
+    numero: number;
+    total: number | null;
+    diaVencimento: number;
+    encerradaEm: string | null;
+};
+
+export type EscopoSerie = 'esta' | 'proximas' | 'todas';
 
 export type ItemLancamento = {
     cotaId: number;

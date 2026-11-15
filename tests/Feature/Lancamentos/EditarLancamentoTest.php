@@ -158,7 +158,7 @@ it('CA-043.1 blocks deleting a shared entry when a participant executed their sh
     expect($this->lancamento->fresh())->toBeNull();
 });
 
-it('refuses editing or deleting an installment through the simple form until series rules exist', function () {
+it('RN-048 asks for a scope to edit or delete an installment', function () {
     $serie = Parcelamento::factory()->for($this->user)->create(['carteira_id' => $this->carteira->id, 'categoria_id' => $this->despesa->id]);
     $this->lancamento->forceFill(['parcelamento_id' => $serie->id, 'numero_parcela' => 1])->save();
 
@@ -171,10 +171,10 @@ it('refuses editing or deleting an installment through the simple form until ser
             'categoria_id' => $this->despesa->id,
             'carteira_id' => $this->carteira->id,
         ])
-        ->assertSessionHasErrors('lancamento');
+        ->assertSessionHasErrors('escopo');
     $this->actingAs($this->user)
         ->delete(route('lancamentos.destroy', $this->lancamento))
-        ->assertSessionHasErrors('lancamento');
+        ->assertSessionHasErrors('escopo');
 
     expect($this->lancamento->fresh())->not->toBeNull()
         ->descricao->not->toBe('Outro nome');

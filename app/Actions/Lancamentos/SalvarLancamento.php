@@ -7,6 +7,7 @@ use App\Models\Cota;
 use App\Models\Lancamento;
 use App\Models\User;
 use Carbon\CarbonImmutable;
+use Closure;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
@@ -16,16 +17,18 @@ use Throwable;
 class SalvarLancamento
 {
     /**
-     * Create or update a simple entry and its single share of the author (RN-010 to RN-017, RN-027).
+     * Create or update an entry and its single share of the author (RN-010 to RN-017, RN-027).
      *
      * A new attachment replaces the previous one, whose file is removed only after the save commits (CA-044.2).
-     * Shared entries and installments are refused: they follow the sharing and series rules (RN-027, RN-079, RF-053).
+     * Shared entries are refused: they follow the sharing rules (RN-027, RN-079).
+     * $depois runs inside the same transaction with the saved entry (series creation, mass edits).
      *
+     * @param  (Closure(Lancamento): void)|null  $depois
      * @param  array{tipo: TipoLancamento, descricao: string, valor: int, data: string, categoria_id: int, carteira_id: int, observacao: string|null, executado: bool|null}  $dados
      *
      * @throws Throwable
      */
-    public function handle(User $autor, array $dados, ?UploadedFile $anexo = null, ?Lancamento $lancamento = null): Lancamento
+    public function handle(User $autor, array $dados, ?UploadedFile $anexo = null, ?Lancamento $lancamento = null, ?Closure $depois = null): Lancamento
     {
         $motivo = $lancamento?->motivoEdicaoIndisponivel();
 
@@ -38,7 +41,7 @@ class SalvarLancamento
         $novoAnexo = $anexo?->store("anexos/{$autor->id}", 'local');
 
         try {
-            DB::transaction(function () use ($autor, $dados, $anexo, $novoAnexo, $lancamento): void {
+            DB::transaction(function () use ($autor, $dados, $anexo, $novoAnexo, $lancamento, $depois): void {
                 $lancamento->user_id ??= $autor->id;
                 $lancamento->fill([
                     'tipo' => $dados['tipo'],
@@ -58,6 +61,10 @@ class SalvarLancamento
                 $lancamento->save();
 
                 $this->salvarCota($lancamento, $dados);
+
+                if ($depois !== null) {
+                    $depois($lancamento);
+                }
             });
         } catch (Throwable $exception) {
             if (is_string($novoAnexo)) {
