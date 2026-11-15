@@ -19,10 +19,19 @@ const { isCurrentUrl } = useCurrentUrl();
 
 <template>
     <SidebarGroup class="px-2 py-0">
-        <SidebarGroupLabel>Platform</SidebarGroupLabel>
+        <SidebarGroupLabel>Menu</SidebarGroupLabel>
         <SidebarMenu>
             <SidebarMenuItem v-for="item in items" :key="item.title">
                 <SidebarMenuButton
+                    v-if="item.disabled"
+                    disabled
+                    :tooltip="`${item.title} (em breve)`"
+                >
+                    <component :is="item.icon" />
+                    <span>{{ item.title }}</span>
+                </SidebarMenuButton>
+                <SidebarMenuButton
+                    v-else
                     as-child
                     :is-active="isCurrentUrl(item.href)"
                     :tooltip="item.title"

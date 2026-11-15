@@ -2,6 +2,8 @@
 
 namespace App\Enums;
 
+use Carbon\CarbonInterface;
+
 enum TipoLancamento: string
 {
     case Receita = 'receita';
@@ -16,5 +18,18 @@ enum TipoLancamento: string
             self::Receita => 1,
             self::Despesa => -1,
         };
+    }
+
+    /**
+     * Initial status of a share when the user does not choose one (RN-013, DEC-025):
+     * past dates are executed, future dates pending, and today only income is executed.
+     */
+    public function executadoPorPadrao(CarbonInterface $data, CarbonInterface $hoje): bool
+    {
+        if ($data->isSameDay($hoje)) {
+            return $this === self::Receita;
+        }
+
+        return $data->lessThan($hoje->copy()->startOfDay());
     }
 }

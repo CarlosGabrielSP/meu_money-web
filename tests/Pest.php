@@ -1,5 +1,10 @@
 <?php
 
+use App\Models\Carteira;
+use App\Models\Categoria;
+use App\Models\Cota;
+use App\Models\Lancamento;
+use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -44,7 +49,21 @@ expect()->extend('toBeOne', function () {
 |
 */
 
-function something()
+/**
+ * A simple entry of the user with its single share in the given wallet and category (DEC-017).
+ *
+ * @param  array<string, mixed>  $lancamento
+ * @param  array<string, mixed>  $cota
+ */
+function lancamentoComCota(User $user, Carteira $carteira, Categoria $categoria, array $lancamento = [], array $cota = []): Lancamento
 {
-    // ..
+    $criado = Lancamento::factory()->for($user)->create($lancamento);
+    Cota::factory()->for($criado)->create([
+        'carteira_id' => $carteira->id,
+        'categoria_id' => $categoria->id,
+        'executado_em' => ($cota['executado'] ?? false) ? now() : null,
+        ...$cota,
+    ]);
+
+    return $criado;
 }

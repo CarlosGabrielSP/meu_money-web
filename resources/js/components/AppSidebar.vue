@@ -1,16 +1,16 @@
 <script setup lang="ts">
 import { Link, usePage } from '@inertiajs/vue3';
 import {
-    BookOpen,
-    FolderGit2,
-    LayoutGrid,
+    House,
+    Inbox,
+    Settings,
     ShieldCheck,
     Tags,
+    Users,
     Wallet,
 } from '@lucide/vue';
 import { computed } from 'vue';
 import AppLogo from '@/components/AppLogo.vue';
-import NavFooter from '@/components/NavFooter.vue';
 import NavMain from '@/components/NavMain.vue';
 import NavUser from '@/components/NavUser.vue';
 import {
@@ -22,19 +22,20 @@ import {
     SidebarMenuButton,
     SidebarMenuItem,
 } from '@/components/ui/sidebar';
-import { dashboard } from '@/routes';
+import { home } from '@/routes';
 import { index as usuariosIndex } from '@/routes/admin/usuarios';
 import { index as carteirasIndex } from '@/routes/carteiras';
 import { index as categoriasIndex } from '@/routes/categorias';
+import { edit as perfilEdit } from '@/routes/profile';
 import type { NavItem } from '@/types';
 
 const page = usePage();
 
 const mainNavItems = computed<NavItem[]>(() => [
     {
-        title: 'Dashboard',
-        href: dashboard(),
-        icon: LayoutGrid,
+        title: 'Início',
+        href: home(),
+        icon: House,
     },
     {
         title: 'Carteiras',
@@ -46,6 +47,23 @@ const mainNavItems = computed<NavItem[]>(() => [
         href: categoriasIndex(),
         icon: Tags,
     },
+    {
+        title: 'Contatos',
+        href: home(),
+        icon: Users,
+        disabled: true,
+    },
+    {
+        title: 'Recebidas',
+        href: home(),
+        icon: Inbox,
+        disabled: true,
+    },
+    {
+        title: 'Configurações',
+        href: perfilEdit(),
+        icon: Settings,
+    },
     ...(page.props.auth.user.is_admin
         ? [
               {
@@ -56,19 +74,6 @@ const mainNavItems = computed<NavItem[]>(() => [
           ]
         : []),
 ]);
-
-const footerNavItems: NavItem[] = [
-    {
-        title: 'Repository',
-        href: 'https://github.com/laravel/vue-starter-kit',
-        icon: FolderGit2,
-    },
-    {
-        title: 'Documentation',
-        href: 'https://laravel.com/docs/starter-kits#vue',
-        icon: BookOpen,
-    },
-];
 </script>
 
 <template>
@@ -77,7 +82,7 @@ const footerNavItems: NavItem[] = [
             <SidebarMenu>
                 <SidebarMenuItem>
                     <SidebarMenuButton size="lg" as-child>
-                        <Link :href="dashboard()">
+                        <Link :href="home()">
                             <AppLogo />
                         </Link>
                     </SidebarMenuButton>
@@ -90,7 +95,6 @@ const footerNavItems: NavItem[] = [
         </SidebarContent>
 
         <SidebarFooter>
-            <NavFooter :items="footerNavItems" />
             <NavUser />
         </SidebarFooter>
     </Sidebar>

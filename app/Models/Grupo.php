@@ -3,13 +3,13 @@
 namespace App\Models;
 
 use App\Enums\TipoLancamento;
+use Carbon\CarbonImmutable;
 use Database\Factories\GrupoFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
-use Illuminate\Support\Carbon;
 
 /**
  * @property int $id
@@ -17,8 +17,8 @@ use Illuminate\Support\Carbon;
  * @property int $carteira_id
  * @property string $nome
  * @property TipoLancamento $tipo
- * @property Carbon|null $created_at
- * @property Carbon|null $updated_at
+ * @property CarbonImmutable|null $created_at
+ * @property CarbonImmutable|null $updated_at
  */
 #[Fillable(['nome', 'tipo'])]
 class Grupo extends Model

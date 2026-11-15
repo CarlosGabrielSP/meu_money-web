@@ -4,6 +4,7 @@ namespace App\Actions\Usuarios;
 
 use App\Models\User;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 
 class ExcluirConta
 {
@@ -14,6 +15,7 @@ class ExcluirConta
      *
      * Dependents are removed in an explicit order because wallets and categories are referenced
      * with RESTRICT by shares and series, and the database does not guarantee cascade order.
+     * Attachment files live under anexos/{user_id} and are removed after the commit.
      * Converting shares of shared entries (RN-113, CA-007.3, CA-007.4) is part of phase 6.
      */
     public function handle(User $user, string $campoErro = 'password'): void
@@ -32,5 +34,7 @@ class ExcluirConta
 
             $user->delete();
         });
+
+        Storage::disk('local')->deleteDirectory("anexos/{$user->id}");
     }
 }

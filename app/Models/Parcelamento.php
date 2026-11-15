@@ -5,13 +5,13 @@ namespace App\Models;
 use App\Enums\ModoRateio;
 use App\Enums\Periodicidade;
 use App\Enums\TipoLancamento;
+use Carbon\CarbonImmutable;
 use Database\Factories\ParcelamentoFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
-use Illuminate\Support\Carbon;
 
 /**
  * @property int $id
@@ -24,13 +24,13 @@ use Illuminate\Support\Carbon;
  * @property int $valor_parcela
  * @property int|null $total_parcelas
  * @property Periodicidade $periodicidade
- * @property Carbon $data_inicio
+ * @property CarbonImmutable $data_inicio
  * @property int $dia_vencimento
  * @property ModoRateio|null $modo_rateio
- * @property Carbon $gerado_ate
- * @property Carbon|null $encerrado_em
- * @property Carbon|null $created_at
- * @property Carbon|null $updated_at
+ * @property CarbonImmutable $gerado_ate
+ * @property CarbonImmutable|null $encerrado_em
+ * @property CarbonImmutable|null $created_at
+ * @property CarbonImmutable|null $updated_at
  */
 #[Fillable([
     'carteira_id', 'categoria_id', 'grupo_id', 'descricao', 'tipo', 'valor_parcela', 'total_parcelas',

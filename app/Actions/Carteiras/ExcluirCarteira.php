@@ -7,6 +7,7 @@ use App\Models\Cota;
 use App\Models\Lancamento;
 use App\Models\Parcelamento;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\ValidationException;
 
 class ExcluirCarteira
@@ -21,7 +22,7 @@ class ExcluirCarteira
      */
     public function handle(Carteira $carteira, ?Carteira $destino = null): void
     {
-        DB::transaction(function () use ($carteira, $destino): void {
+        $anexos = DB::transaction(function () use ($carteira, $destino): array {
             $padrao = Carteira::query()->whereKey($carteira->id)->lockForUpdate()->value('padrao');
 
             if ($padrao) {
@@ -30,14 +31,20 @@ class ExcluirCarteira
                 ]);
             }
 
+            $anexos = [];
+
             if ($destino !== null) {
                 $this->moverConteudo($carteira, $destino);
             } else {
-                $this->excluirConteudo($carteira);
+                $anexos = $this->excluirConteudo($carteira);
             }
 
             $carteira->delete();
+
+            return $anexos;
         });
+
+        Storage::disk('local')->delete($anexos);
     }
 
     private function moverConteudo(Carteira $carteira, Carteira $destino): void
@@ -48,9 +55,11 @@ class ExcluirCarteira
     }
 
     /**
+     * @return array<int, string> attachment files of the deleted entries, removed after the commit
+     *
      * @throws ValidationException
      */
-    private function excluirConteudo(Carteira $carteira): void
+    private function excluirConteudo(Carteira $carteira): array
     {
         $lancamentoIds = Cota::query()->where('carteira_id', $carteira->id)->pluck('lancamento_id');
 
@@ -63,11 +72,22 @@ class ExcluirCarteira
             ]);
         }
 
+        $anexos = Lancamento::query()
+            ->whereKey($lancamentoIds)
+            ->whereNotNull('anexo_caminho')
+            ->get(['id', 'anexo_caminho'])
+            ->map(fn (Lancamento $lancamento): ?string => $lancamento->anexo_caminho)
+            ->filter()
+            ->values()
+            ->all();
+
         Lancamento::query()->whereKey($lancamentoIds)->delete();
 
         $serieIds = $carteira->parcelamentos()->pluck('id');
 
         Lancamento::query()->whereIn('parcelamento_id', $serieIds)->update(['numero_parcela' => null]);
         Parcelamento::query()->whereKey($serieIds)->delete();
+
+        return $anexos;
     }
 }

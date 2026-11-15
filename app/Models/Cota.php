@@ -2,12 +2,12 @@
 
 namespace App\Models;
 
+use Carbon\CarbonImmutable;
 use Database\Factories\CotaFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
-use Illuminate\Support\Carbon;
 
 /**
  * @property int $id
@@ -19,10 +19,10 @@ use Illuminate\Support\Carbon;
  * @property int $valor
  * @property string|null $percentual
  * @property bool $executado
- * @property Carbon|null $executado_em
- * @property Carbon|null $vista_em
- * @property Carbon|null $created_at
- * @property Carbon|null $updated_at
+ * @property CarbonImmutable|null $executado_em
+ * @property CarbonImmutable|null $vista_em
+ * @property CarbonImmutable|null $created_at
+ * @property CarbonImmutable|null $updated_at
  */
 #[Fillable([
     'user_id', 'carteira_id', 'categoria_id', 'grupo_id', 'valor', 'percentual',

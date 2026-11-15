@@ -3,21 +3,21 @@
 namespace App\Models;
 
 use App\Enums\StatusContato;
+use Carbon\CarbonImmutable;
 use Database\Factories\ContatoFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
-use Illuminate\Support\Carbon;
 
 /**
  * @property int $id
  * @property int $solicitante_id
  * @property int $convidado_id
  * @property StatusContato $status
- * @property Carbon|null $respondido_em
- * @property Carbon|null $created_at
- * @property Carbon|null $updated_at
+ * @property CarbonImmutable|null $respondido_em
+ * @property CarbonImmutable|null $created_at
+ * @property CarbonImmutable|null $updated_at
  */
 #[Fillable(['status', 'respondido_em'])]
 class Contato extends Model
