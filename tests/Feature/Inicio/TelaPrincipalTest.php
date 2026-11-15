@@ -258,3 +258,7 @@ it('CA-083.2 sends series data for installments and the split for shared entries
             ->where('lancamentos.despesa.avista.0.edicao.rateio.modo', 'iguais')
             ->whereNot('lancamentos.despesa.avista.1.edicao', null));
 });
+
+it('RNF-020 sends guests to the login page', function () {
+    $this->get(route('home'))->assertRedirect(route('login'));
+});
