@@ -2,11 +2,13 @@
 
 namespace App\Models;
 
+use App\Enums\StatusContato;
 use Carbon\CarbonImmutable;
 use Database\Factories\UserFactory;
 use Illuminate\Contracts\Auth\MustVerifyEmail;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\Hidden;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -109,5 +111,24 @@ class User extends Authenticatable implements MustVerifyEmail
     public function ultimaCarteira(): BelongsTo
     {
         return $this->belongsTo(Carteira::class, 'ultima_carteira_id');
+    }
+
+    /**
+     * Active users with an accepted contact with this user, in either direction (RN-062). Sharing
+     * uses this query to offer and validate participants (RN-071); deactivated users are left out
+     * because new shares with them are blocked (RN-109).
+     *
+     * @return Builder<User>
+     */
+    public function consultaDeContatos(): Builder
+    {
+        $aceitos = Contato::query()->envolvendo($this)->where('status', StatusContato::Aceito);
+
+        return User::query()
+            ->where(fn (Builder $query) => $query
+                ->whereIn('id', (clone $aceitos)->select('solicitante_id'))
+                ->orWhereIn('id', (clone $aceitos)->select('convidado_id')))
+            ->whereKeyNot($this->id)
+            ->whereNull('desativado_em');
     }
 }

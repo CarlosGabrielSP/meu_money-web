@@ -4,6 +4,7 @@ import { House, Inbox, Menu, Plus, Users } from '@lucide/vue';
 import { useSidebar } from '@/components/ui/sidebar';
 import { useNovoLancamento } from '@/composables/useNovoLancamento';
 import { home } from '@/routes';
+import { index as contatosIndex } from '@/routes/contatos';
 
 const page = usePage();
 const { setOpenMobile } = useSidebar();
@@ -53,12 +54,18 @@ function adicionar(): void {
                 <Plus class="size-6" />
             </span>
         </button>
-        <span
-            class="flex flex-col items-center gap-0.5 py-2 text-xs opacity-50"
-            aria-disabled="true"
+        <Link
+            :href="contatosIndex()"
+            class="relative flex flex-col items-center gap-0.5 py-2 text-xs"
         >
             <Users class="size-5" /> Contatos
-        </span>
+            <span
+                v-if="page.props.contadores.convites > 0"
+                class="absolute top-1 right-1/4 rounded-full bg-primary px-1.5 text-[10px] text-primary-foreground"
+                :aria-label="`${page.props.contadores.convites} convites pendentes`"
+                >{{ page.props.contadores.convites }}</span
+            >
+        </Link>
         <button
             type="button"
             class="flex flex-col items-center gap-0.5 py-2 text-xs"

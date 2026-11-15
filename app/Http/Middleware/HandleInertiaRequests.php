@@ -2,6 +2,7 @@
 
 namespace App\Http\Middleware;
 
+use App\Models\Contato;
 use Illuminate\Http\Request;
 use Inertia\Middleware;
 
@@ -41,6 +42,9 @@ class HandleInertiaRequests extends Middleware
             'auth' => [
                 'user' => $request->user(),
                 'temSenha' => $request->user()?->password !== null,
+            ],
+            'contadores' => fn (): array => [
+                'convites' => $request->user() === null ? 0 : Contato::query()->pendentesRecebidos($request->user())->count(),
             ],
             'sidebarOpen' => ! $request->hasCookie('sidebar_state') || $request->cookie('sidebar_state') === 'true',
         ];

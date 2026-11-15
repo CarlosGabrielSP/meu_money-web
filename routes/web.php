@@ -3,6 +3,7 @@
 use App\Http\Controllers\Auth\GoogleController;
 use App\Http\Controllers\CarteiraController;
 use App\Http\Controllers\CategoriaController;
+use App\Http\Controllers\ContatoController;
 use App\Http\Controllers\CotaController;
 use App\Http\Controllers\InicioController;
 use App\Http\Controllers\LancamentoAnexoController;
@@ -24,6 +25,12 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::post('carteiras/{carteira}/padrao', [CarteiraController::class, 'definirPadrao'])->name('carteiras.padrao');
 
     Route::resource('categorias', CategoriaController::class)->only(['index', 'store', 'update', 'destroy']);
+
+    Route::get('contatos', [ContatoController::class, 'index'])->name('contatos.index');
+    Route::post('contatos', [ContatoController::class, 'store'])->name('contatos.store');
+    Route::post('contatos/{contato}/aceitar', [ContatoController::class, 'aceitar'])->name('contatos.aceitar');
+    Route::post('contatos/{contato}/recusar', [ContatoController::class, 'recusar'])->name('contatos.recusar');
+    Route::delete('contatos/{contato}', [ContatoController::class, 'destroy'])->name('contatos.destroy');
 });
 
 Route::middleware('guest')->group(function () {

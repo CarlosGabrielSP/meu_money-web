@@ -39,6 +39,12 @@ const { isCurrentUrl } = useCurrentUrl();
                     <Link :href="item.href">
                         <component :is="item.icon" />
                         <span>{{ item.title }}</span>
+                        <span
+                            v-if="item.contador"
+                            class="ml-auto rounded-full bg-primary px-1.5 text-xs text-primary-foreground"
+                            :aria-label="`${item.contador} pendentes`"
+                            >{{ item.contador }}</span
+                        >
                     </Link>
                 </SidebarMenuButton>
             </SidebarMenuItem>
