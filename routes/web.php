@@ -9,6 +9,7 @@ use App\Http\Controllers\InicioController;
 use App\Http\Controllers\LancamentoAnexoController;
 use App\Http\Controllers\LancamentoController;
 use App\Http\Controllers\ParcelamentoController;
+use App\Http\Controllers\RecebidaController;
 use Illuminate\Support\Facades\Route;
 
 Route::middleware(['auth', 'verified'])->group(function () {
@@ -20,6 +21,9 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::post('parcelamentos/{parcelamento}/encerrar', [ParcelamentoController::class, 'encerrar'])->name('parcelamentos.encerrar');
     Route::patch('parcelamentos/{parcelamento}/total', [ParcelamentoController::class, 'alterarTotal'])->name('parcelamentos.total');
     Route::patch('cotas/{cota}/executado', [CotaController::class, 'alternarExecutado'])->name('cotas.executado');
+    Route::put('cotas/{cota}', [CotaController::class, 'update'])->name('cotas.update');
+    Route::delete('cotas/{cota}', [CotaController::class, 'destroy'])->name('cotas.destroy');
+    Route::get('recebidas', [RecebidaController::class, 'index'])->name('recebidas.index');
 
     Route::resource('carteiras', CarteiraController::class)->only(['index', 'store', 'update', 'destroy']);
     Route::post('carteiras/{carteira}/padrao', [CarteiraController::class, 'definirPadrao'])->name('carteiras.padrao');

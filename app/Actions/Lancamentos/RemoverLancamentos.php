@@ -32,6 +32,7 @@ class RemoverLancamentos
         $cotas = Cota::query()
             ->whereIn('lancamento_id', $lancamentos->modelKeys())
             ->lockForUpdate()
+            ->with('user:id,name')
             ->get(['id', 'lancamento_id', 'user_id', 'executado']);
 
         if ($somentePendentes) {
@@ -44,13 +45,16 @@ class RemoverLancamentos
             $cotas = $cotas->reject(fn (Cota $cota): bool => in_array($cota->lancamento_id, $executados, true));
         }
 
-        $participanteExecutou = $cotas->contains(
-            fn (Cota $cota): bool => $cota->executado && $cota->user_id !== $autores[$cota->lancamento_id],
-        );
+        $executaram = $cotas
+            ->filter(fn (Cota $cota): bool => $cota->executado && $cota->user_id !== $autores[$cota->lancamento_id])
+            ->map(fn (Cota $cota): string => $cota->user->name)
+            ->unique();
 
-        if ($participanteExecutou) {
+        if ($executaram->isNotEmpty()) {
+            $nomes = $executaram->join(', ', ' e ');
+
             throw ValidationException::withMessages([
-                'lancamento' => 'Um participante já marcou a cota como executada. O lançamento não pode ser excluído.',
+                'lancamento' => "{$nomes} já marcou a cota como executada. O lançamento não pode ser excluído.",
             ]);
         }
 

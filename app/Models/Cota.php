@@ -5,6 +5,8 @@ namespace App\Models;
 use Carbon\CarbonImmutable;
 use Database\Factories\CotaFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
+use Illuminate\Database\Eloquent\Attributes\Scope;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -85,5 +87,17 @@ class Cota extends Model
     public function grupo(): BelongsTo
     {
         return $this->belongsTo(Grupo::class);
+    }
+
+    /**
+     * Shares of the user in entries authored by someone else (RN-114).
+     *
+     * @param  Builder<self>  $query
+     */
+    #[Scope]
+    protected function recebidasPor(Builder $query, User $user): void
+    {
+        $query->where('user_id', $user->id)
+            ->whereHas('lancamento', fn (Builder $lancamento) => $lancamento->where('user_id', '!=', $user->id));
     }
 }

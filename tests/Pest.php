@@ -105,3 +105,30 @@ function parcelasDaSerie(Parcelamento $serie): array
             'executado' => $parcela->cotas->sole()->executado,
         ])->all();
 }
+
+/**
+ * @param  list<array<string, mixed>>  $participantes
+ * @param  array<string, mixed>  $dados
+ * @return array<string, mixed>
+ */
+function dadosRateio(Carteira $carteira, Categoria $categoria, string $modo, array $participantes, array $dados = []): array
+{
+    return [
+        'tipo' => 'despesa',
+        'descricao' => 'Jantar',
+        'valor' => '100,00',
+        'data' => '2026-11-20',
+        'categoria_id' => $categoria->id,
+        'carteira_id' => $carteira->id,
+        'rateio' => ['modo' => $modo, 'participantes' => $participantes],
+        ...$dados,
+    ];
+}
+
+/**
+ * @return array<int, int> share amount by user id
+ */
+function valoresDasCotas(Lancamento $lancamento): array
+{
+    return $lancamento->cotas()->orderBy('id')->pluck('valor', 'user_id')->all();
+}

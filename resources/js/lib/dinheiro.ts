@@ -30,3 +30,12 @@ export function mascararValor(digitado: string): string {
 
     return digitos === '' ? '' : formatarCentavos(Number(digitos));
 }
+
+/**
+ * Cents typed in a pt-BR amount ("1.234,56" = 123456), or 0 when empty.
+ */
+export function centavosDe(texto: string): number {
+    const digitos = texto.replace(/\D/g, '');
+
+    return digitos === '' ? 0 : Number(digitos);
+}

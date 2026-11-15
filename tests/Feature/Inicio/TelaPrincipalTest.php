@@ -244,7 +244,7 @@ it('CA-080.1 falls back to the default wallet when the wallet in the URL no long
     expect($this->user->fresh()->ultima_carteira_id)->toBeNull();
 });
 
-it('CA-083.2 sends series data for installments and no edit data for shared entries', function () {
+it('CA-083.2 sends series data for installments and the split for shared entries', function () {
     $serie = Parcelamento::factory()->for($this->user)->create(['carteira_id' => $this->carteira->id, 'categoria_id' => $this->categoria->id]);
     lancamentoComCota($this->user, $this->carteira, $this->categoria, ['data' => '2026-11-10'])
         ->forceFill(['parcelamento_id' => $serie->id, 'numero_parcela' => 1])->save();
@@ -253,8 +253,8 @@ it('CA-083.2 sends series data for installments and no edit data for shared entr
 
     $this->actingAs($this->user)->get(route('home', ['carteira' => $this->carteira->id]))
         ->assertInertia(fn (Assert $page) => $page
-            ->where('lancamentos.despesa.parceladas.0.edicao.serie.numero', 1)
-            ->where('lancamentos.despesa.parceladas.0.edicao.serie.total', 10)
-            ->where('lancamentos.despesa.avista.0.edicao', null)
+            ->where('lancamentos.despesa.parceladas.0.serie.numero', 1)
+            ->where('lancamentos.despesa.parceladas.0.serie.total', 10)
+            ->where('lancamentos.despesa.avista.0.edicao.rateio.modo', 'iguais')
             ->whereNot('lancamentos.despesa.avista.1.edicao', null));
 });

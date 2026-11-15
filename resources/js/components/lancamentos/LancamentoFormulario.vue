@@ -3,6 +3,8 @@ import { router, useForm, usePage } from '@inertiajs/vue3';
 import { computed, ref, watch } from 'vue';
 import LancamentoController from '@/actions/App/Http/Controllers/LancamentoController';
 import InputError from '@/components/InputError.vue';
+import DividirCampos from '@/components/lancamentos/DividirCampos.vue';
+import type { Divisao } from '@/components/lancamentos/DividirCampos.vue';
 import EscopoSerieDialog from '@/components/lancamentos/EscopoSerieDialog.vue';
 import SerieAcoes from '@/components/lancamentos/SerieAcoes.vue';
 import { Button } from '@/components/ui/button';
@@ -25,7 +27,7 @@ import {
     SheetTitle,
 } from '@/components/ui/sheet';
 import { executadoPorPadrao } from '@/lib/datas';
-import { formatarCentavos, mascararValor } from '@/lib/dinheiro';
+import { centavosDe, formatarCentavos, mascararValor } from '@/lib/dinheiro';
 import {
     destroy as destroyAnexo,
     show as showAnexo,
@@ -33,8 +35,10 @@ import {
 import type {
     CarteiraResumo,
     CategoriaOpcao,
+    ContatoOpcao,
     EscopoSerie,
     LancamentoEdicao,
+    SerieDaParcela,
     TipoLancamento,
 } from '@/types';
 
@@ -43,7 +47,9 @@ const aberto = defineModel<boolean>('open', { required: true });
 const props = defineProps<{
     lancamentoId: number | null;
     edicao: LancamentoEdicao | null;
+    serie: SerieDaParcela | null;
     carteiraId: number;
+    contatos: ContatoOpcao[];
     dataPadrao: string;
     hoje: string;
     carteiras: CarteiraResumo[];
@@ -81,10 +87,39 @@ const form = useForm<Campos>(camposIniciais());
 const confirmandoExclusao = ref(false);
 const escolhendoEscopo = ref<'editar' | 'excluir' | null>(null);
 const page = usePage();
+const autorId = computed(() => page.props.auth.user.id as number);
+const divisao = ref<Divisao>(divisaoInicial());
+
+function divisaoInicial(): Divisao {
+    const rateio = props.edicao?.rateio;
+
+    return {
+        ativa: rateio != null,
+        modo: rateio?.modo ?? 'iguais',
+        autorParticipa: rateio?.autorParticipa ?? true,
+        participantes: rateio
+            ? rateio.participantes.map((participante) => ({
+                  userId: participante.userId,
+                  nome: participante.nome,
+                  percentual: participante.percentual ?? '',
+                  valor: formatarCentavos(participante.valor),
+              }))
+            : [
+                  {
+                      userId: autorId.value,
+                      nome: 'Eu',
+                      percentual: '',
+                      valor: '',
+                  },
+              ],
+    };
+}
+
+const bloqueado = computed(() => props.edicao?.rateio?.bloqueado ?? false);
 const anexoInput = ref<HTMLInputElement | null>(null);
 
 const editando = computed(() => props.lancamentoId !== null);
-const serie = computed(() => props.edicao?.serie ?? null);
+const serie = computed(() => props.serie);
 
 /**
  * New entries and simple entries may repeat (RF-050, RF-051, RF-057); installments may not (CA-057.3).
@@ -132,7 +167,7 @@ function camposIniciais(): Campos {
         periodicidade: 'mensal',
         total_parcelas: 2,
         modo_valor: 'total',
-        dia_vencimento: edicao?.serie?.diaVencimento ?? null,
+        dia_vencimento: props.serie?.diaVencimento ?? null,
         escopo: null,
     };
 }
@@ -142,6 +177,7 @@ watch(aberto, (estaAberto) => {
         form.defaults(camposIniciais());
         form.reset();
         form.clearErrors();
+        divisao.value = divisaoInicial();
     }
 });
 
@@ -187,6 +223,29 @@ function paraEnvio({
               }
             : {}),
         ...(serie.value ? { dia_vencimento, escopo } : {}),
+        ...(divisao.value.ativa ? { rateio: rateioParaEnvio() } : {}),
+    };
+}
+
+/**
+ * Participants in inclusion order, the author first when sharing (RN-073).
+ */
+function rateioParaEnvio() {
+    const { modo, autorParticipa, participantes } = divisao.value;
+    const incluidos = participantes.filter(
+        (participante) =>
+            participante.userId !== autorId.value || autorParticipa,
+    );
+
+    return {
+        modo,
+        participantes: incluidos.map((participante) => ({
+            user_id: participante.userId,
+            ...(modo === 'percentual'
+                ? { percentual: participante.percentual.replace(',', '.') }
+                : {}),
+            ...(modo === 'fixo' ? { valor: participante.valor } : {}),
+        })),
     };
 }
 
@@ -229,6 +288,7 @@ function salvar(adicionarOutro: boolean): void {
 
             form.defaults({ ...camposIniciais(), ...mantidos });
             form.reset();
+            divisao.value = divisaoInicial();
 
             if (anexoInput.value) {
                 anexoInput.value.value = '';
@@ -324,7 +384,9 @@ function removerAnexo(): void {
                                 v-model="form.tipo"
                                 type="radio"
                                 value="despesa"
-                                :disabled="serie !== null"
+                                :disabled="
+                                    serie !== null || edicao?.rateio != null
+                                "
                             />
                             Despesa
                         </label>
@@ -333,7 +395,9 @@ function removerAnexo(): void {
                                 v-model="form.tipo"
                                 type="radio"
                                 value="receita"
-                                :disabled="serie !== null"
+                                :disabled="
+                                    serie !== null || edicao?.rateio != null
+                                "
                             />
                             Receita
                         </label>
@@ -366,6 +430,7 @@ function removerAnexo(): void {
                                 :model-value="form.valor"
                                 inputmode="numeric"
                                 placeholder="0,00"
+                                :disabled="bloqueado"
                                 required
                                 @update:model-value="
                                     form.valor = mascararValor(String($event))
@@ -542,7 +607,22 @@ function removerAnexo(): void {
                         </template>
                     </div>
 
-                    <label v-if="!form.repetir" class="flex items-center gap-2">
+                    <DividirCampos
+                        v-model="divisao"
+                        :contatos="contatos"
+                        :autor-id="autorId"
+                        :total="centavosDe(form.valor)"
+                        :bloqueado="bloqueado"
+                        :erro="erros.rateio"
+                    />
+
+                    <label
+                        v-if="
+                            !form.repetir &&
+                            (!divisao.ativa || divisao.autorParticipa)
+                        "
+                        class="flex items-center gap-2"
+                    >
                         <Checkbox
                             :model-value="executadoExibido"
                             @update:model-value="

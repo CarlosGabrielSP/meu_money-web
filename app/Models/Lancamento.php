@@ -17,6 +17,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 /**
  * @property int $id
  * @property int $user_id
+ * @property int|null $carteira_id
  * @property string $descricao
  * @property TipoLancamento $tipo
  * @property int $valor
@@ -79,24 +80,19 @@ class Lancamento extends Model
     }
 
     /**
-     * Why the entry form cannot change this entry, or null when it can.
-     * Shared entries follow the sharing rules of phase 7 (RN-079).
-     */
-    public function motivoEdicaoIndisponivel(): ?string
-    {
-        return $this->modo_rateio !== null ? 'A edição de lançamento compartilhado ainda não está disponível.' : null;
-    }
-
-    /**
-     * Entries whose author's share is still pending (RN-049, RN-056).
+     * Entries whose author's share is not executed, including entries without an author share
+     * (RN-049, RN-056, RN-087).
      *
      * @param  Builder<self>  $query
      */
     #[Scope]
     protected function pendentesDoAutor(Builder $query): void
     {
-        $query->whereHas('cotas', fn (Builder $cotas) => $cotas
+        $query->whereDoesntHave('cotas', fn (Builder $cotas) => $cotas
             ->whereColumn('cotas.user_id', 'lancamentos.user_id')
-            ->where('executado', false));
+            ->where('executado', true))
+            ->where(fn (Builder $semCotaDoAutor) => $semCotaDoAutor
+                ->whereHas('cotas', fn (Builder $cotas) => $cotas->whereColumn('cotas.user_id', 'lancamentos.user_id'))
+                ->orWhereDoesntHave('cotas', fn (Builder $cotas) => $cotas->where('executado', true)));
     }
 }

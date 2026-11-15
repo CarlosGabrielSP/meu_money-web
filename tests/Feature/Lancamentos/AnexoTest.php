@@ -94,14 +94,14 @@ it('CA-044.6 forbids a participant to attach or remove', function () {
     $this->actingAs($participante)->delete(route('lancamentos.anexo.destroy', $this->lancamento))->assertForbidden();
 });
 
-it('refuses removing the attachment of a shared entry until sharing rules exist', function () {
+it('RN-018 lets the author remove the attachment of a shared entry', function () {
     enviarAnexo($this->user, $this->lancamento, $this->carteira, $this->categoria, UploadedFile::fake()->create('nota.pdf', 100, 'application/pdf'));
     $caminho = $this->lancamento->fresh()->anexo_caminho;
     $this->lancamento->forceFill(['modo_rateio' => ModoRateio::Iguais])->save();
 
-    $this->actingAs($this->user)->delete(route('lancamentos.anexo.destroy', $this->lancamento))->assertSessionHasErrors('lancamento');
+    $this->actingAs($this->user)->delete(route('lancamentos.anexo.destroy', $this->lancamento))->assertSessionHasNoErrors();
 
-    Storage::disk('local')->assertExists($caminho);
+    Storage::disk('local')->assertMissing($caminho);
 });
 
 it('removes attachment files when the wallet contents or the account are deleted', function () {

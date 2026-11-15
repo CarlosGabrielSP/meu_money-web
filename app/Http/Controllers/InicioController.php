@@ -46,6 +46,10 @@ class InicioController extends Controller
                     'nome' => $categoria->nome,
                     'tipo' => $categoria->tipo->value,
                 ]),
+            'contatos' => $user->consultaDeContatos()
+                ->orderBy('name')
+                ->get(['id', 'name'])
+                ->map(fn (User $contato): array => ['id' => $contato->id, 'nome' => $contato->name]),
             'mes' => $mes->format('Y-m'),
             'hoje' => $hoje->toDateString(),
             'filtros' => $filtros,

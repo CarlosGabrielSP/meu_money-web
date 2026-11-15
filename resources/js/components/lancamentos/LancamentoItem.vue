@@ -17,6 +17,10 @@ const emit = defineEmits<{
 }>();
 
 function alternar(marcado: boolean): void {
+    if (props.item.cotaId === null) {
+        return;
+    }
+
     router.patch(
         executado.url(props.item.cotaId),
         { executado: marcado },
@@ -30,7 +34,9 @@ function alternar(marcado: boolean): void {
         class="flex items-center gap-3 px-3 py-2"
         :class="{ 'bg-destructive/5': item.vencido }"
     >
+        <span v-if="item.cotaId === null" class="size-4 shrink-0" />
         <Checkbox
+            v-else
             :model-value="item.executado"
             :aria-label="`Executado: ${item.descricao}`"
             @update:model-value="alternar($event === true)"
@@ -38,7 +44,7 @@ function alternar(marcado: boolean): void {
         <button
             type="button"
             class="flex min-w-0 flex-1 items-center gap-3 text-left"
-            :disabled="item.edicao === null"
+            :disabled="item.edicao === null && item.participacao === null"
             @click="emit('editar', item)"
         >
             <span class="w-11 shrink-0 text-sm text-muted-foreground">
@@ -75,13 +81,21 @@ function alternar(marcado: boolean): void {
                     class="flex items-center gap-2 text-xs text-muted-foreground"
                 >
                     {{ item.categoria }}
+                    <span v-if="item.autor">· de {{ item.autor }}</span>
                     <Badge v-if="item.vencido" variant="destructive"
                         >Vencido</Badge
                     >
                 </span>
             </span>
-            <span class="shrink-0 font-medium tabular-nums">
-                {{ formatarMoeda(item.valor) }}
+            <span class="shrink-0 text-right tabular-nums">
+                <span class="block font-medium">{{
+                    formatarMoeda(item.valor)
+                }}</span>
+                <span
+                    v-if="item.compartilhado"
+                    class="block text-xs text-muted-foreground"
+                    >de {{ formatarMoeda(item.total) }}</span
+                >
             </span>
         </button>
     </li>

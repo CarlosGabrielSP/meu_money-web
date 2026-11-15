@@ -15,7 +15,7 @@ import type { EscopoSerie } from '@/types';
 const aberto = defineModel<boolean>('open', { required: true });
 
 const props = defineProps<{
-    acao: 'editar' | 'excluir';
+    acao: 'editar' | 'excluir' | 'sair';
     erro?: string;
     processando?: boolean;
 }>();
@@ -32,6 +32,12 @@ watch(aberto, (estaAberto) => {
     }
 });
 
+const titulos = {
+    editar: 'Alterar quais parcelas?',
+    excluir: 'Excluir quais parcelas?',
+    sair: 'Sair da divisão em quais parcelas?',
+};
+
 const opcoes: { valor: EscopoSerie; titulo: string }[] = [
     { valor: 'esta', titulo: 'Só esta parcela' },
     { valor: 'proximas', titulo: 'Esta e as próximas' },
@@ -43,11 +49,7 @@ const opcoes: { valor: EscopoSerie; titulo: string }[] = [
     <Dialog v-model:open="aberto">
         <DialogContent>
             <DialogHeader>
-                <DialogTitle>{{
-                    props.acao === 'editar'
-                        ? 'Alterar quais parcelas?'
-                        : 'Excluir quais parcelas?'
-                }}</DialogTitle>
+                <DialogTitle>{{ titulos[props.acao] }}</DialogTitle>
                 <DialogDescription>
                     Parcelas já executadas não mudam nas opções em massa.
                 </DialogDescription>
@@ -72,7 +74,11 @@ const opcoes: { valor: EscopoSerie; titulo: string }[] = [
                     :disabled="processando"
                     @click="emit('confirmar', escopo)"
                 >
-                    {{ props.acao === 'editar' ? 'Salvar' : 'Excluir' }}
+                    {{
+                        { editar: 'Salvar', excluir: 'Excluir', sair: 'Sair' }[
+                            props.acao
+                        ]
+                    }}
                 </Button>
             </DialogFooter>
         </DialogContent>

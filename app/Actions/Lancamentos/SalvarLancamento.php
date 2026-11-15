@@ -2,40 +2,37 @@
 
 namespace App\Actions\Lancamentos;
 
+use App\Actions\Rateio\AplicarRateio;
+use App\Enums\ModoRateio;
 use App\Enums\TipoLancamento;
-use App\Models\Cota;
 use App\Models\Lancamento;
 use App\Models\User;
-use Carbon\CarbonImmutable;
 use Closure;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
-use Illuminate\Validation\ValidationException;
 use Throwable;
 
 class SalvarLancamento
 {
+    public function __construct(private AplicarRateio $aplicarRateio) {}
+
     /**
-     * Create or update an entry and its single share of the author (RN-010 to RN-017, RN-027).
+     * Create or update an entry and its shares (RN-010 to RN-017, RN-027, RF-070, RF-072).
      *
+     * Without a split, the author has a single share with the full amount; with one, shares follow
+     * the split (AplicarRateio). The author's chosen status applies to the author's share; without
+     * one, a new share gets the initial status by date (RN-013) and an existing one keeps its own.
      * A new attachment replaces the previous one, whose file is removed only after the save commits (CA-044.2).
-     * Shared entries are refused: they follow the sharing rules (RN-027, RN-079).
      * $depois runs inside the same transaction with the saved entry (series creation, mass edits).
      *
      * @param  (Closure(Lancamento): void)|null  $depois
-     * @param  array{tipo: TipoLancamento, descricao: string, valor: int, data: string, categoria_id: int, carteira_id: int, observacao: string|null, executado: bool|null}  $dados
+     * @param  array{tipo: TipoLancamento, descricao: string, valor: int, data: string, categoria_id: int, carteira_id: int, observacao: string|null, executado: bool|null, rateio?: array{modo: ModoRateio, participantes: list<array{user_id: int, percentual: string|null, valor: int|null}>}|null}  $dados
      *
      * @throws Throwable
      */
     public function handle(User $autor, array $dados, ?UploadedFile $anexo = null, ?Lancamento $lancamento = null, ?Closure $depois = null): Lancamento
     {
-        $motivo = $lancamento?->motivoEdicaoIndisponivel();
-
-        if ($motivo !== null) {
-            throw ValidationException::withMessages(['lancamento' => $motivo]);
-        }
-
         $lancamento ??= new Lancamento;
         $anexoAnterior = $lancamento->anexo_caminho;
         $novoAnexo = $anexo?->store("anexos/{$autor->id}", 'local');
@@ -43,6 +40,7 @@ class SalvarLancamento
         try {
             DB::transaction(function () use ($autor, $dados, $anexo, $novoAnexo, $lancamento, $depois): void {
                 $lancamento->user_id ??= $autor->id;
+                $lancamento->carteira_id = $dados['carteira_id'];
                 $lancamento->fill([
                     'tipo' => $dados['tipo'],
                     'descricao' => $dados['descricao'],
@@ -60,7 +58,13 @@ class SalvarLancamento
 
                 $lancamento->save();
 
-                $this->salvarCota($lancamento, $dados);
+                $rateio = $dados['rateio'] ?? null;
+
+                $this->aplicarRateio->handle($lancamento, $rateio['modo'] ?? null, $rateio['participantes'] ?? [], [
+                    'carteira_id' => $dados['carteira_id'],
+                    'categoria_id' => $dados['categoria_id'],
+                    'executado' => $dados['executado'],
+                ]);
 
                 if ($depois !== null) {
                     $depois($lancamento);
@@ -79,47 +83,5 @@ class SalvarLancamento
         }
 
         return $lancamento;
-    }
-
-    /**
-     * The single share follows amount, wallet, category and status (CA-041.1).
-     * Without a chosen status, a new share gets the initial status by date (RN-013) and an existing one keeps its own.
-     *
-     * @param  array{tipo: TipoLancamento, valor: int, data: string, categoria_id: int, carteira_id: int, executado: bool|null}  $dados
-     */
-    private function salvarCota(Lancamento $lancamento, array $dados): void
-    {
-        $cota = $lancamento->cotas()->firstOrNew(['user_id' => $lancamento->user_id]);
-
-        $executado = $dados['executado']
-            ?? ($cota->exists
-                ? $cota->executado
-                : $dados['tipo']->executadoPorPadrao(CarbonImmutable::parse($dados['data']), CarbonImmutable::now()));
-
-        $cota->fill([
-            'carteira_id' => $dados['carteira_id'],
-            'categoria_id' => $dados['categoria_id'],
-            'valor' => $dados['valor'],
-        ]);
-
-        $this->aplicarStatus($cota, $executado);
-
-        $cota->save();
-    }
-
-    /**
-     * Executed shares record when they were executed; pending shares have no date (RN-014).
-     */
-    private function aplicarStatus(Cota $cota, bool $executado): void
-    {
-        if ($executado && ! ($cota->exists && $cota->executado)) {
-            $cota->executado_em = now();
-        }
-
-        if (! $executado) {
-            $cota->executado_em = null;
-        }
-
-        $cota->executado = $executado;
     }
 }

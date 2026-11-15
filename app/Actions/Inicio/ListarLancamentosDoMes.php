@@ -3,17 +3,24 @@
 namespace App\Actions\Inicio;
 
 use App\Models\Carteira;
+use App\Models\Categoria;
 use App\Models\Cota;
+use App\Models\Lancamento;
+use App\Models\Parcelamento;
 use App\Models\User;
 use Carbon\CarbonImmutable;
+use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\Collection;
 
 class ListarLancamentosDoMes
 {
     /**
-     * The user's shares of one wallet and month, split by type and subsection (RN-093, RN-094, RN-116).
+     * The user's shares of one wallet and month, split by type and subsection (RN-093, RN-094, RN-116),
+     * plus entries the user authored in this wallet without a share of their own (RN-145).
      *
-     * Groups (RN-093 last subsection) are part of phase 8. Shared entries are not editable here until
-     * the sharing rules exist (phase 7). Recurring installments show only their number (RN-050).
+     * The author gets edit data with the split (RF-072); a participant gets the data of their own
+     * share, the total and the author (RF-071). Groups (RN-093 last subsection) are part of phase 7.
+     * Recurring installments show only their number (RN-050).
      *
      * @param  array{tipo: string|null, categoria: int|null, status: string|null, compartilhado: string|null}  $filtros
      * @return array{receita: array<string, list<array<string, mixed>>>, despesa: array<string, list<array<string, mixed>>>}
@@ -26,74 +33,147 @@ class ListarLancamentosDoMes
             $secoes[$tipo] = ['avista' => [], 'parceladas' => [], 'recorrentes' => []];
         }
 
+        $inicio = $mes->startOfMonth()->toDateString();
+        $fim = $mes->startOfMonth()->addMonth()->toDateString();
+        $relacoes = [
+            'parcelamento:id,categoria_id,total_parcelas,dia_vencimento,encerrado_em',
+            'user:id,name',
+            'cotas:id,lancamento_id,user_id,categoria_id,valor,percentual,executado',
+            'cotas.user:id,name',
+        ];
+
         $cotas = Cota::query()
             ->select('cotas.*')
             ->join('lancamentos', 'lancamentos.id', '=', 'cotas.lancamento_id')
             ->where('cotas.user_id', $user->id)
             ->where('cotas.carteira_id', $carteira->id)
-            ->where('lancamentos.data', '>=', $mes->startOfMonth()->toDateString())
-            ->where('lancamentos.data', '<', $mes->startOfMonth()->addMonth()->toDateString())
+            ->where('lancamentos.data', '>=', $inicio)
+            ->where('lancamentos.data', '<', $fim)
             ->when($filtros['tipo'], fn ($query, string $tipo) => $query->where('lancamentos.tipo', $tipo))
             ->when($filtros['categoria'], fn ($query, int $categoria) => $query->where('cotas.categoria_id', $categoria))
             ->when($filtros['status'], fn ($query, string $status) => $query->where('cotas.executado', $status === 'executado'))
             ->when($filtros['compartilhado'], fn ($query, string $compartilhado) => $compartilhado === 'sim'
                 ? $query->whereNotNull('lancamentos.modo_rateio')
                 : $query->whereNull('lancamentos.modo_rateio'))
-            ->with(['lancamento.parcelamento:id,total_parcelas,dia_vencimento,encerrado_em', 'categoria:id,nome'])
-            ->orderBy('lancamentos.data')
-            ->orderBy('lancamentos.created_at')
-            ->orderBy('lancamentos.id')
+            ->with(['categoria:id,nome', ...array_map(fn (string $relacao): string => "lancamento.{$relacao}", $relacoes)])
             ->get();
 
-        foreach ($cotas as $cota) {
-            $lancamento = $cota->lancamento;
+        $semCota = $filtros['categoria'] !== null || $filtros['status'] !== null || $filtros['compartilhado'] === 'nao'
+            ? collect()
+            : Lancamento::query()
+                ->where('user_id', $user->id)
+                ->where('carteira_id', $carteira->id)
+                ->where('data', '>=', $inicio)
+                ->where('data', '<', $fim)
+                ->whereDoesntHave('cotas', fn (Builder $query) => $query->where('user_id', $user->id))
+                ->when($filtros['tipo'], fn ($query, string $tipo) => $query->where('tipo', $tipo))
+                ->with($relacoes)
+                ->get();
+
+        $categoriasVisiveis = $semCota->isEmpty() ? collect() : Categoria::query()->visiveisPara($user)->pluck('id');
+
+        $itens = $cotas->map(fn (Cota $cota): array => [$cota->lancamento, $cota])
+            ->concat($semCota->map(fn (Lancamento $lancamento): array => [$lancamento, null]))
+            ->sortBy(fn (array $par): array => [$par[0]->data->toDateString(), $par[0]->created_at?->toDateTimeString(), $par[0]->id]);
+
+        foreach ($itens as [$lancamento, $cota]) {
             $serie = $lancamento->parcelamento_id !== null ? $lancamento->parcelamento : null;
             $subsecao = match (true) {
                 $serie === null => 'avista',
                 $serie->isRecorrente() => 'recorrentes',
                 default => 'parceladas',
             };
-            $editavel = $lancamento->user_id === $user->id && $lancamento->motivoEdicaoIndisponivel() === null;
 
-            $secoes[$lancamento->tipo->value][$subsecao][] = [
-                'cotaId' => $cota->id,
-                'lancamentoId' => $lancamento->id,
-                'data' => $lancamento->data->toDateString(),
-                'descricao' => $lancamento->descricao,
-                'categoria' => $cota->categoria->nome,
-                'valor' => $cota->valor,
-                'executado' => $cota->executado,
-                'vencido' => ! $cota->executado && $lancamento->data->lessThan($hoje),
-                'parcela' => match (true) {
-                    $serie === null => null,
-                    $serie->isRecorrente() => (string) $lancamento->numero_parcela,
-                    default => "{$lancamento->numero_parcela}/{$serie->total_parcelas}",
-                },
-                'recorrente' => $serie?->isRecorrente() ?? false,
-                'compartilhado' => $lancamento->modo_rateio !== null,
-                'temAnexo' => $lancamento->anexo_caminho !== null,
-                'edicao' => $editavel ? [
-                    'tipo' => $lancamento->tipo->value,
-                    'descricao' => $lancamento->descricao,
-                    'valor' => $lancamento->valor,
-                    'data' => $lancamento->data->toDateString(),
-                    'categoriaId' => $cota->categoria_id,
-                    'carteiraId' => $cota->carteira_id,
-                    'observacao' => $lancamento->observacao,
-                    'executado' => $cota->executado,
-                    'anexoNome' => $lancamento->anexo_nome,
-                    'serie' => $serie === null ? null : [
-                        'id' => $serie->id,
-                        'recorrente' => $serie->isRecorrente(),
-                        'numero' => $lancamento->numero_parcela,
-                        'total' => $serie->total_parcelas,
-                        'diaVencimento' => $serie->dia_vencimento,
-                        'encerradaEm' => $serie->encerrado_em?->toDateString(),
-                    ],
-                ] : null,
-            ];
+            $secoes[$lancamento->tipo->value][$subsecao][] = $this->item($user, $lancamento, $cota, $hoje, $categoriasVisiveis);
         }
 
         return $secoes;
+    }
+
+    /**
+     * @param  Collection<int, mixed>  $categoriasVisiveis  ids of categories the user sees, for an author without a share
+     * @return array<string, mixed>
+     */
+    private function item(User $user, Lancamento $lancamento, ?Cota $cota, CarbonImmutable $hoje, Collection $categoriasVisiveis): array
+    {
+        $serie = $lancamento->parcelamento_id !== null ? $lancamento->parcelamento : null;
+        $autor = $lancamento->user_id === $user->id;
+
+        return [
+            'chave' => $cota === null ? "l{$lancamento->id}" : "c{$cota->id}",
+            'cotaId' => $cota?->id,
+            'lancamentoId' => $lancamento->id,
+            'data' => $lancamento->data->toDateString(),
+            'descricao' => $lancamento->descricao,
+            'categoria' => $cota?->categoria->nome,
+            'valor' => $cota === null ? 0 : $cota->valor,
+            'total' => $lancamento->valor,
+            'autor' => $autor ? null : $lancamento->user->name,
+            'executado' => $cota !== null && $cota->executado,
+            'vencido' => $cota !== null && ! $cota->executado && $lancamento->data->lessThan($hoje),
+            'parcela' => match (true) {
+                $serie === null => null,
+                $serie->isRecorrente() => (string) $lancamento->numero_parcela,
+                default => "{$lancamento->numero_parcela}/{$serie->total_parcelas}",
+            },
+            'recorrente' => $serie?->isRecorrente() ?? false,
+            'compartilhado' => $lancamento->modo_rateio !== null,
+            'temAnexo' => $lancamento->anexo_caminho !== null,
+            'serie' => $serie === null ? null : [
+                'id' => $serie->id,
+                'recorrente' => $serie->isRecorrente(),
+                'numero' => $lancamento->numero_parcela,
+                'total' => $serie->total_parcelas,
+                'diaVencimento' => $serie->dia_vencimento,
+                'encerradaEm' => $serie->encerrado_em?->toDateString(),
+            ],
+            'edicao' => ! $autor ? null : [
+                'tipo' => $lancamento->tipo->value,
+                'descricao' => $lancamento->descricao,
+                'valor' => $lancamento->valor,
+                'data' => $lancamento->data->toDateString(),
+                'categoriaId' => $cota !== null ? $cota->categoria_id : $this->categoriaSemCota($lancamento, $serie, $categoriasVisiveis),
+                'carteiraId' => $cota !== null ? $cota->carteira_id : $lancamento->carteira_id,
+                'observacao' => $lancamento->observacao,
+                'executado' => $cota !== null && $cota->executado,
+                'anexoNome' => $lancamento->anexo_nome,
+                'rateio' => $lancamento->modo_rateio === null ? null : [
+                    'modo' => $lancamento->modo_rateio->value,
+                    'autorParticipa' => $cota !== null,
+                    'bloqueado' => $lancamento->cotas->contains(fn (Cota $outra): bool => $outra->user_id !== $user->id && $outra->executado),
+                    'participantes' => $lancamento->cotas->sortBy('id')->values()->map(fn (Cota $outra): array => [
+                        'userId' => $outra->user_id,
+                        'nome' => $outra->user->name,
+                        'valor' => $outra->valor,
+                        'percentual' => $outra->percentual,
+                        'executado' => $outra->executado,
+                    ])->all(),
+                ],
+            ],
+            'participacao' => $autor || $cota === null ? null : [
+                'carteiraId' => $cota->carteira_id,
+                'categoriaId' => $cota->categoria_id,
+                'executado' => $cota->executado,
+                'observacao' => $lancamento->observacao,
+                'anexoNome' => $lancamento->anexo_nome,
+            ],
+        ];
+    }
+
+    /**
+     * Category shown in the form of an author without a share: the first participant's when the author
+     * can see it, else the series category, else none (RN-145).
+     *
+     * @param  Collection<int, mixed>  $categoriasVisiveis
+     */
+    private function categoriaSemCota(Lancamento $lancamento, ?Parcelamento $serie, Collection $categoriasVisiveis): ?int
+    {
+        $daParticipante = $lancamento->cotas->sortBy('id')->first()?->categoria_id;
+
+        return match (true) {
+            $daParticipante !== null && $categoriasVisiveis->contains($daParticipante) => $daParticipante,
+            $serie !== null => $serie->categoria_id,
+            default => null,
+        };
     }
 }

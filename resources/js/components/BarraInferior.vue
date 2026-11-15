@@ -5,6 +5,7 @@ import { useSidebar } from '@/components/ui/sidebar';
 import { useNovoLancamento } from '@/composables/useNovoLancamento';
 import { home } from '@/routes';
 import { index as contatosIndex } from '@/routes/contatos';
+import { index as recebidasIndex } from '@/routes/recebidas';
 
 const page = usePage();
 const { setOpenMobile } = useSidebar();
@@ -35,12 +36,18 @@ function adicionar(): void {
         >
             <House class="size-5" /> Início
         </Link>
-        <span
-            class="flex flex-col items-center gap-0.5 py-2 text-xs opacity-50"
-            aria-disabled="true"
+        <Link
+            :href="recebidasIndex()"
+            class="relative flex flex-col items-center gap-0.5 py-2 text-xs"
         >
             <Inbox class="size-5" /> Recebidas
-        </span>
+            <span
+                v-if="page.props.contadores.recebidas > 0"
+                class="absolute top-1 right-1/4 rounded-full bg-primary px-1.5 text-[10px] text-primary-foreground"
+                :aria-label="`${page.props.contadores.recebidas} recebidas novas`"
+                >{{ page.props.contadores.recebidas }}</span
+            >
+        </Link>
         <button
             type="button"
             class="flex items-center justify-center"

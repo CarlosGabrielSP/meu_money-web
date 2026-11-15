@@ -131,4 +131,12 @@ class User extends Authenticatable implements MustVerifyEmail
             ->whereKeyNot($this->id)
             ->whereNull('desativado_em');
     }
+
+    /**
+     * The default wallet, which receives shares from other users (RN-003, RN-076).
+     */
+    public function carteiraPadrao(): Carteira
+    {
+        return $this->carteiras()->where('padrao', true)->firstOrFail();
+    }
 }

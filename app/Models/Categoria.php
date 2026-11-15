@@ -67,6 +67,14 @@ class Categoria extends Model
     }
 
     /**
+     * The system category "Outros", which accepts both types (RN-083).
+     */
+    public static function outros(): self
+    {
+        return self::query()->globais()->where('nome', 'Outros')->firstOrFail();
+    }
+
+    /**
      * Whether this category belongs to the system instead of a user (RN-030).
      */
     public function isGlobal(): bool

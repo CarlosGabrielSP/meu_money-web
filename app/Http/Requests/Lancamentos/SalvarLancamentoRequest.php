@@ -2,7 +2,9 @@
 
 namespace App\Http\Requests\Lancamentos;
 
+use App\Actions\Rateio\CalcularCotas;
 use App\Enums\EscopoSerie;
+use App\Enums\ModoRateio;
 use App\Enums\Periodicidade;
 use App\Enums\TipoLancamento;
 use App\Models\Carteira;
@@ -36,13 +38,35 @@ class SalvarLancamentoRequest extends FormRequest
      */
     protected function prepareForValidation(): void
     {
-        $valor = $this->input('valor');
+        $this->merge(['valor' => self::centavos($this->input('valor'))]);
 
+        $participantes = $this->input('rateio.participantes');
+
+        if (is_array($participantes)) {
+            $this->merge(['rateio' => [
+                ...(array) $this->input('rateio'),
+                'participantes' => array_map(
+                    fn (mixed $participante): mixed => is_array($participante) && array_key_exists('valor', $participante)
+                        ? [...$participante, 'valor' => self::centavos($participante['valor'])]
+                        : $participante,
+                    $participantes,
+                ),
+            ]]);
+        }
+    }
+
+    /**
+     * A pt-BR amount ("1.234,56") as cents; anything else is returned untouched for validation to reject.
+     */
+    private static function centavos(mixed $valor): mixed
+    {
         if (is_string($valor) && preg_match('/^(\d{1,3}(\.\d{3})+|\d+)(,\d{1,2})?$/', $valor) === 1) {
             [$inteiro, $centavos] = array_pad(explode(',', str_replace('.', '', $valor)), 2, '');
 
-            $this->merge(['valor' => (int) $inteiro * 100 + (int) str_pad($centavos, 2, '0')]);
+            return (int) $inteiro * 100 + (int) str_pad($centavos, 2, '0');
         }
+
+        return $valor;
     }
 
     /**
@@ -70,6 +94,12 @@ class SalvarLancamentoRequest extends FormRequest
             'modo_valor' => ['nullable', 'required_if:repeticao,parcelado', 'prohibited_if:repeticao,recorrente', Rule::in(['total', 'parcela'])],
             'escopo' => [Rule::requiredIf(fn (): bool => $this->parcela()), 'nullable', Rule::enum(EscopoSerie::class)],
             'dia_vencimento' => ['nullable', 'integer', 'between:1,31'],
+            'rateio' => ['nullable', 'array', $this->rateioValido(...)],
+            'rateio.modo' => ['required_with:rateio', Rule::enum(ModoRateio::class)],
+            'rateio.participantes' => ['required_with:rateio', 'array', 'min:1'],
+            'rateio.participantes.*.user_id' => ['required', 'integer', 'distinct'],
+            'rateio.participantes.*.percentual' => ['nullable', 'numeric', 'gt:0', 'max:100', 'decimal:0,2'],
+            'rateio.participantes.*.valor' => ['nullable', 'integer', 'min:1', 'max:'.self::VALOR_MAXIMO],
         ];
     }
 
@@ -87,15 +117,98 @@ class SalvarLancamentoRequest extends FormRequest
     }
 
     /**
-     * An installment keeps the type of its series (RN-055, CA-053.5).
+     * An installment keeps the type of its series (RN-055, CA-053.5) and a shared entry keeps its
+     * type (RN-142, CA-072.6).
      */
     private function tipoDaSerie(string $attribute, mixed $value, Closure $fail): void
     {
-        $serie = $this->lancamento()?->parcelamento;
+        $lancamento = $this->lancamento();
 
-        if ($serie !== null && $serie->tipo->value !== $value) {
+        if ($lancamento?->parcelamento !== null && $lancamento->parcelamento->tipo->value !== $value) {
             $fail('O tipo de uma série não pode ser alterado.');
+        } elseif ($lancamento?->modo_rateio !== null && $lancamento->tipo->value !== $value) {
+            $fail('O tipo de um lançamento dividido não pode ser alterado.');
         }
+    }
+
+    /**
+     * A split needs at least one contact besides the author (RN-071, RN-088); new participants must
+     * be active contacts, while current ones stay even if no longer contacts (RN-064, RN-109,
+     * CA-070.9, CA-063.3). Percentages add up to 100% (RN-074), fixed amounts to the amount of one
+     * installment (RN-075, RN-143), and every share is at least one cent (CA-070.13).
+     */
+    private function rateioValido(string $attribute, mixed $value, Closure $fail): void
+    {
+        $modo = ModoRateio::tryFrom((string) data_get($value, 'modo'));
+        $participantes = data_get($value, 'participantes');
+        $valor = $this->input('valor');
+
+        if ($modo === null || ! is_array($participantes) || ! is_int($valor)) {
+            return;
+        }
+
+        $autorId = (int) $this->user()?->id;
+        $ids = array_map(fn (mixed $participante): int => (int) data_get($participante, 'user_id'), $participantes);
+        $outros = array_values(array_diff($ids, [$autorId]));
+
+        if ($outros === []) {
+            $fail('Inclua pelo menos um contato na divisão.');
+
+            return;
+        }
+
+        $permitidos = $this->user()?->consultaDeContatos()->whereKey($outros)->pluck('id')->all() ?? [];
+        $atuais = $this->lancamento()?->cotas()->pluck('user_id')->all() ?? [];
+
+        if (array_diff($outros, $permitidos, $atuais) !== []) {
+            $fail('Só é possível dividir com contatos ativos.');
+
+            return;
+        }
+
+        $base = $this->valorDaParcela($valor);
+        $normalizados = array_map(fn (mixed $participante): array => [
+            'user_id' => (int) data_get($participante, 'user_id'),
+            'percentual' => is_numeric(data_get($participante, 'percentual')) ? (string) data_get($participante, 'percentual') : null,
+            'valor' => is_int(data_get($participante, 'valor')) ? (int) data_get($participante, 'valor') : null,
+        ], array_values($participantes));
+
+        $calculadora = new CalcularCotas;
+
+        if ($modo === ModoRateio::Percentual) {
+            if (in_array(null, array_column($normalizados, 'percentual'), true)
+                || array_sum(array_map($calculadora->centesimos(...), array_column($normalizados, 'percentual'))) !== 10_000) {
+                $fail('Os percentuais precisam somar 100%.');
+
+                return;
+            }
+        }
+
+        if ($modo === ModoRateio::Fixo) {
+            if (in_array(null, array_column($normalizados, 'valor'), true) || array_sum(array_column($normalizados, 'valor')) !== $base) {
+                $fail('Os valores das cotas precisam somar o valor '.($base === $valor ? 'do lançamento.' : 'da parcela.'));
+
+                return;
+            }
+        }
+
+        $cotas = $calculadora->handle($base, $modo, $normalizados, $autorId);
+
+        if (collect($cotas)->contains(fn (array $cota): bool => $cota['valor'] < 1)) {
+            $fail('Cada cota precisa ter pelo menos R$ 0,01.');
+        }
+    }
+
+    /**
+     * Amount of one installment when a series total is split (RN-042), else the amount itself.
+     */
+    private function valorDaParcela(int $valor): int
+    {
+        $total = $this->input('total_parcelas');
+
+        return $this->input('repeticao') === 'parcelado' && $this->input('modo_valor') === 'total' && is_numeric($total) && (int) $total > 0
+            ? intdiv($valor, (int) $total)
+            : $valor;
     }
 
     /**
@@ -129,7 +242,7 @@ class SalvarLancamentoRequest extends FormRequest
     }
 
     /**
-     * @return array{tipo: TipoLancamento, descricao: string, valor: int, data: string, categoria_id: int, carteira_id: int, observacao: string|null, executado: bool|null}
+     * @return array{tipo: TipoLancamento, descricao: string, valor: int, data: string, categoria_id: int, carteira_id: int, observacao: string|null, executado: bool|null, rateio: array{modo: ModoRateio, participantes: list<array{user_id: int, percentual: string|null, valor: int|null}>}|null}
      */
     public function dados(): array
     {
@@ -144,6 +257,30 @@ class SalvarLancamentoRequest extends FormRequest
             'carteira_id' => (int) $this->validated('carteira_id'),
             'observacao' => $this->validated('observacao'),
             'executado' => $executado === null ? null : filter_var($executado, FILTER_VALIDATE_BOOLEAN),
+            'rateio' => $this->rateio(),
+        ];
+    }
+
+    /**
+     * Split chosen in the form, in the order the participants were included (RN-073), or null.
+     *
+     * @return array{modo: ModoRateio, participantes: list<array{user_id: int, percentual: string|null, valor: int|null}>}|null
+     */
+    public function rateio(): ?array
+    {
+        $rateio = $this->validated('rateio');
+
+        if (! is_array($rateio)) {
+            return null;
+        }
+
+        return [
+            'modo' => ModoRateio::from($rateio['modo']),
+            'participantes' => array_values(array_map(fn (array $participante): array => [
+                'user_id' => (int) $participante['user_id'],
+                'percentual' => isset($participante['percentual']) ? (string) $participante['percentual'] : null,
+                'valor' => isset($participante['valor']) ? (int) $participante['valor'] : null,
+            ], $rateio['participantes'])),
         ];
     }
 

@@ -122,19 +122,20 @@ it('CA-043.2 forbids deleting an entry of another user', function () {
     expect($this->lancamento->fresh())->not->toBeNull();
 });
 
-it('refuses editing a shared entry through the simple form until sharing rules exist', function () {
+it('CA-072.6 rejects a type change of a shared entry', function () {
     $this->lancamento->forceFill(['modo_rateio' => ModoRateio::Iguais])->save();
+    $ambos = Categoria::factory()->for($this->user)->create(['tipo' => TipoCategoria::Ambos]);
 
     $this->actingAs($this->user)
         ->put(route('lancamentos.update', $this->lancamento), [
-            'tipo' => 'despesa',
+            'tipo' => 'receita',
             'descricao' => 'Outro nome',
             'valor' => '100,00',
             'data' => '2026-11-20',
-            'categoria_id' => $this->despesa->id,
+            'categoria_id' => $ambos->id,
             'carteira_id' => $this->carteira->id,
         ])
-        ->assertSessionHasErrors('lancamento');
+        ->assertSessionHasErrors('tipo');
 
     expect($this->lancamento->fresh()->descricao)->not->toBe('Outro nome');
 });

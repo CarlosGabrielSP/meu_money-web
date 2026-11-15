@@ -1,6 +1,5 @@
 <?php
 
-use App\Enums\ModoRateio;
 use App\Models\Carteira;
 use App\Models\Categoria;
 use App\Models\Cota;
@@ -74,30 +73,6 @@ it('CA-024.6 keeps installments of a deleted series that live in another wallet 
         ->and($parcelaMovida->fresh())
         ->parcelamento_id->toBeNull()
         ->numero_parcela->toBeNull();
-});
-
-it('refuses cascade deletion of a wallet with shared entries until sharing rules exist', function () {
-    $compartilhado = lancamentoNaCarteira($this->user, $this->carteira, $this->categoria);
-    $compartilhado->forceFill(['modo_rateio' => ModoRateio::Iguais])->save();
-
-    $this->actingAs($this->user)
-        ->delete(route('carteiras.destroy', $this->carteira), ['modo' => 'excluir'])
-        ->assertSessionHasErrors('carteira');
-
-    expect($this->carteira->fresh())->not->toBeNull()
-        ->and($compartilhado->fresh())->not->toBeNull();
-});
-
-it('refuses cascade deletion of a wallet with a shared series even before it has entries', function () {
-    $serie = Parcelamento::factory()->for($this->user)->create(['carteira_id' => $this->carteira->id, 'categoria_id' => $this->categoria->id]);
-    $serie->forceFill(['modo_rateio' => ModoRateio::Iguais])->save();
-
-    $this->actingAs($this->user)
-        ->delete(route('carteiras.destroy', $this->carteira), ['modo' => 'excluir'])
-        ->assertSessionHasErrors('carteira');
-
-    expect($this->carteira->fresh())->not->toBeNull()
-        ->and($serie->fresh())->not->toBeNull();
 });
 
 it('CA-024.3 flags a wallet holding only series or groups as having content', function () {

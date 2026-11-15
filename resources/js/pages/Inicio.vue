@@ -5,6 +5,7 @@ import { computed, onMounted, ref, watch } from 'vue';
 import CarteiraIcone from '@/components/carteiras/CarteiraIcone.vue';
 import LancamentoFormulario from '@/components/lancamentos/LancamentoFormulario.vue';
 import LancamentoItem from '@/components/lancamentos/LancamentoItem.vue';
+import ParticipacaoFormulario from '@/components/lancamentos/ParticipacaoFormulario.vue';
 import { Button } from '@/components/ui/button';
 import { useNovoLancamento } from '@/composables/useNovoLancamento';
 import { deslocarMes, nomeDoMes } from '@/lib/datas';
@@ -13,8 +14,10 @@ import { home } from '@/routes';
 import type {
     CarteiraResumo,
     CategoriaOpcao,
+    ContatoOpcao,
     ItemLancamento,
     LancamentoEdicao,
+    SerieDaParcela,
     Subsecoes,
     TipoLancamento,
 } from '@/types';
@@ -32,6 +35,7 @@ const props = defineProps<{
     carteira: CarteiraResumo;
     carteiras: CarteiraResumo[];
     categorias: CategoriaOpcao[];
+    contatos: ContatoOpcao[];
     mes: string;
     hoje: string;
     filtros: Filtros;
@@ -65,7 +69,16 @@ const mostrarFiltros = ref(
     Object.values(props.filtros).some((valor) => valor !== null),
 );
 const formularioAberto = ref(false);
-const emEdicao = ref<{ id: number; edicao: LancamentoEdicao } | null>(null);
+const emEdicao = ref<{
+    id: number;
+    edicao: LancamentoEdicao;
+    serie: SerieDaParcela | null;
+} | null>(null);
+const participacaoAberta = ref(false);
+const emParticipacao = ref<{
+    item: ItemLancamento;
+    tipo: TipoLancamento;
+} | null>(null);
 
 const temFiltros = computed(() =>
     Object.values(props.filtros).some((valor) => valor !== null),
@@ -140,13 +153,21 @@ function abrirNovo(): void {
     formularioAberto.value = true;
 }
 
-function editar(item: ItemLancamento): void {
-    if (item.edicao === null) {
-        return;
+/**
+ * The author edits the entry (RN-117); a participant edits only their own share (RN-080).
+ */
+function editar(item: ItemLancamento, tipo: TipoLancamento): void {
+    if (item.edicao !== null) {
+        emEdicao.value = {
+            id: item.lancamentoId,
+            edicao: item.edicao,
+            serie: item.serie,
+        };
+        formularioAberto.value = true;
+    } else if (item.participacao !== null) {
+        emParticipacao.value = { item, tipo };
+        participacaoAberta.value = true;
     }
-
-    emEdicao.value = { id: item.lancamentoId, edicao: item.edicao };
-    formularioAberto.value = true;
 }
 
 const { pedidos } = useNovoLancamento();
@@ -443,9 +464,9 @@ onMounted(() => {
                                     v-for="item in lancamentos[secao.tipo][
                                         subsecao.chave
                                     ]"
-                                    :key="item.cotaId"
+                                    :key="item.chave"
                                     :item="item"
-                                    @editar="editar"
+                                    @editar="editar($event, secao.tipo)"
                                 />
                             </ul>
                         </div>
@@ -458,9 +479,19 @@ onMounted(() => {
             v-model:open="formularioAberto"
             :lancamento-id="emEdicao?.id ?? null"
             :edicao="emEdicao?.edicao ?? null"
+            :serie="emEdicao?.serie ?? null"
             :carteira-id="carteira.id"
+            :contatos="contatos"
             :data-padrao="dataPadrao"
             :hoje="hoje"
+            :carteiras="carteiras"
+            :categorias="categorias"
+        />
+
+        <ParticipacaoFormulario
+            v-model:open="participacaoAberta"
+            :item="emParticipacao?.item ?? null"
+            :tipo="emParticipacao?.tipo ?? 'despesa'"
             :carteiras="carteiras"
             :categorias="categorias"
         />

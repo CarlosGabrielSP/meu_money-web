@@ -27,6 +27,7 @@ import { index as usuariosIndex } from '@/routes/admin/usuarios';
 import { index as carteirasIndex } from '@/routes/carteiras';
 import { index as categoriasIndex } from '@/routes/categorias';
 import { index as contatosIndex } from '@/routes/contatos';
+import { index as recebidasIndex } from '@/routes/recebidas';
 import { edit as perfilEdit } from '@/routes/profile';
 import type { NavItem } from '@/types';
 
@@ -56,9 +57,9 @@ const mainNavItems = computed<NavItem[]>(() => [
     },
     {
         title: 'Recebidas',
-        href: home(),
+        href: recebidasIndex(),
         icon: Inbox,
-        disabled: true,
+        contador: page.props.contadores.recebidas,
     },
     {
         title: 'Configurações',

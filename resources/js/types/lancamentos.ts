@@ -18,12 +18,42 @@ export type LancamentoEdicao = {
     descricao: string;
     valor: number;
     data: string;
-    categoriaId: number;
+    categoriaId: number | null;
     carteiraId: number;
     observacao: string | null;
     executado: boolean;
     anexoNome: string | null;
-    serie: SerieDaParcela | null;
+    rateio: RateioEdicao | null;
+};
+
+export type ModoRateio = 'iguais' | 'percentual' | 'fixo';
+
+export type ParticipanteRateio = {
+    userId: number;
+    nome: string;
+    valor: number;
+    percentual: string | null;
+    executado: boolean;
+};
+
+export type RateioEdicao = {
+    modo: ModoRateio;
+    autorParticipa: boolean;
+    bloqueado: boolean;
+    participantes: ParticipanteRateio[];
+};
+
+export type Participacao = {
+    carteiraId: number;
+    categoriaId: number;
+    executado: boolean;
+    observacao: string | null;
+    anexoNome: string | null;
+};
+
+export type ContatoOpcao = {
+    id: number;
+    nome: string;
 };
 
 export type SerieDaParcela = {
@@ -38,19 +68,24 @@ export type SerieDaParcela = {
 export type EscopoSerie = 'esta' | 'proximas' | 'todas';
 
 export type ItemLancamento = {
-    cotaId: number;
+    chave: string;
+    cotaId: number | null;
     lancamentoId: number;
     data: string;
     descricao: string;
-    categoria: string;
+    categoria: string | null;
     valor: number;
+    total: number;
+    autor: string | null;
     executado: boolean;
     vencido: boolean;
     parcela: string | null;
     recorrente: boolean;
     compartilhado: boolean;
     temAnexo: boolean;
+    serie: SerieDaParcela | null;
     edicao: LancamentoEdicao | null;
+    participacao: Participacao | null;
 };
 
 export type Subsecoes = {
