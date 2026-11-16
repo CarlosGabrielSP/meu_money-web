@@ -41,7 +41,7 @@ const { isCurrentUrl } = useCurrentUrl();
                         <span>{{ item.title }}</span>
                         <span
                             v-if="item.contador"
-                            class="ml-auto rounded-full bg-primary px-1.5 text-xs text-primary-foreground"
+                            class="ml-auto rounded-full bg-destaque px-1.5 text-xs text-destaque-foreground"
                             :aria-label="`${item.contador} pendentes`"
                             >{{ item.contador }}</span
                         >

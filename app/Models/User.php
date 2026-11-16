@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Enums\Paleta;
 use App\Enums\StatusContato;
 use Carbon\CarbonImmutable;
 use Database\Factories\UserFactory;
@@ -9,6 +10,7 @@ use Illuminate\Contracts\Auth\MustVerifyEmail;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\Hidden;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -24,17 +26,27 @@ use Illuminate\Notifications\Notifiable;
  * @property CarbonImmutable|null $desativado_em
  * @property string|null $google_id
  * @property int|null $ultima_carteira_id
+ * @property Paleta $paleta
  * @property string|null $password
  * @property string|null $remember_token
  * @property CarbonImmutable|null $created_at
  * @property CarbonImmutable|null $updated_at
  */
-#[Fillable(['name', 'email', 'password'])]
+#[Fillable(['name', 'email', 'password', 'paleta'])]
 #[Hidden(['password', 'remember_token', 'google_id'])]
 class User extends Authenticatable implements MustVerifyEmail
 {
     /** @use HasFactory<UserFactory> */
     use HasFactory, Notifiable;
+
+    /**
+     * Defaults matching the database, so a user built in memory has a palette too (RN-151).
+     *
+     * @var array<string, mixed>
+     */
+    protected $attributes = [
+        'paleta' => 'neutro',
+    ];
 
     /**
      * Get the attributes that should be cast.
@@ -49,6 +61,20 @@ class User extends Authenticatable implements MustVerifyEmail
             'is_admin' => 'boolean',
             'desativado_em' => 'datetime',
         ];
+    }
+
+    /**
+     * Account palette (RN-151). A stored value outside the enum falls back to Neutro instead of
+     * breaking every page of the user.
+     *
+     * @return Attribute<Paleta, Paleta|string>
+     */
+    protected function paleta(): Attribute
+    {
+        return Attribute::make(
+            get: fn (?string $valor): Paleta => Paleta::tryFrom($valor ?? '') ?? Paleta::Neutro,
+            set: fn (Paleta|string $valor): string => $valor instanceof Paleta ? $valor->value : $valor,
+        );
     }
 
     /**

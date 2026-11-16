@@ -1,6 +1,6 @@
 import type { ComputedRef, Ref } from 'vue';
 import { computed, onMounted, ref } from 'vue';
-import type { Appearance, ResolvedAppearance } from '@/types';
+import type { Appearance, Paleta, ResolvedAppearance } from '@/types';
 
 export type { Appearance, ResolvedAppearance };
 
@@ -21,9 +21,33 @@ export function updateTheme(value: Appearance): void {
             : value === 'dark';
 
     document.documentElement.classList.toggle('dark', isDark);
-    document
-        .querySelector('meta[name="theme-color"]')
-        ?.setAttribute('content', isDark ? '#0a0a0a' : '#ffffff');
+
+    // Browser bar color = main background of the palette in the active mode (DEC-062)...
+    const themeColor = getComputedStyle(document.documentElement)
+        .getPropertyValue('--theme-color')
+        .trim();
+
+    if (themeColor) {
+        document
+            .querySelector('meta[name="theme-color"]')
+            ?.setAttribute('content', themeColor);
+    }
+}
+
+/**
+ * Applies the account palette (RN-152) without reloading the page.
+ */
+export function updatePaleta(paleta: Paleta): void {
+    if (typeof document === 'undefined') {
+        return;
+    }
+
+    if (document.documentElement.dataset.paleta === paleta) {
+        return;
+    }
+
+    document.documentElement.dataset.paleta = paleta;
+    updateTheme(getStoredAppearance() || 'system');
 }
 
 const setCookie = (name: string, value: string, days = 365) => {

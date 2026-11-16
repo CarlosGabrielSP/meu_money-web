@@ -64,7 +64,11 @@ defineOptions({
                         <span class="truncate font-medium">{{
                             recebida.descricao
                         }}</span>
-                        <Badge v-if="recebida.nova">Nova</Badge>
+                        <Badge
+                            v-if="recebida.nova"
+                            class="bg-destaque text-destaque-foreground"
+                            >Nova</Badge
+                        >
                     </span>
                     <span class="block truncate text-xs text-muted-foreground">
                         {{ recebida.data.split('-').reverse().join('/') }} · de

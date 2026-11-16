@@ -2,7 +2,13 @@
 import { Head } from '@inertiajs/vue3';
 import AppearanceTabs from '@/components/AppearanceTabs.vue';
 import Heading from '@/components/Heading.vue';
+import SeletorPaleta from '@/components/SeletorPaleta.vue';
 import { edit } from '@/routes/appearance';
+import type { OpcaoPaleta } from '@/types';
+
+defineProps<{
+    paletas: OpcaoPaleta[];
+}>();
 
 defineOptions({
     layout: {
@@ -24,9 +30,16 @@ defineOptions({
     <div class="space-y-6">
         <Heading
             variant="small"
-            title="Aparência"
-            description="Escolha o tema da aplicação"
+            title="Tema"
+            description="Claro, escuro ou do sistema. Vale só neste aparelho."
         />
         <AppearanceTabs />
+
+        <Heading
+            variant="small"
+            title="Paleta"
+            description="Cores do aplicativo. Vale em todos os seus aparelhos."
+        />
+        <SeletorPaleta :paletas="paletas" />
     </div>
 </template>

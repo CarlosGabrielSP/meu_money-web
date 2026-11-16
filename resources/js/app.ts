@@ -1,9 +1,11 @@
-import { createInertiaApp } from '@inertiajs/vue3';
-import { initializeTheme } from '@/composables/useAppearance';
+import { createInertiaApp, router } from '@inertiajs/vue3';
+import { initializeTheme, updatePaleta } from '@/composables/useAppearance';
 import AppLayout from '@/layouts/AppLayout.vue';
 import AuthLayout from '@/layouts/AuthLayout.vue';
 import SettingsLayout from '@/layouts/settings/Layout.vue';
 import { initializeFlashToast } from '@/lib/flashToast';
+import type { Page } from '@inertiajs/core';
+import type { Auth } from '@/types';
 
 const appName = import.meta.env.VITE_APP_NAME || 'Meu Money';
 
@@ -35,6 +37,22 @@ void createInertiaApp({
 
 // This will set light / dark mode on page load...
 initializeTheme();
+
+// Keeps the account palette in sync with server responses (choice in Aparência, login, logout); visitors use Neutro (RN-152).
+// "navigate" skips visits that end on the same URL (Inertia replaces the history entry), so "success" covers those.
+// Back/forward restores old props from history, so it never changes the palette...
+const sincronizarPaleta = (page: Page): void => {
+    const auth = page.props.auth as Auth | undefined;
+
+    updatePaleta(auth?.user?.paleta ?? 'neutro');
+};
+
+router.on('navigate', (event) => {
+    if (event.detail.type !== 'history') {
+        sincronizarPaleta(event.detail.page);
+    }
+});
+router.on('success', (event) => sincronizarPaleta(event.detail.page));
 
 // This will listen for flash toast data from the server...
 initializeFlashToast();

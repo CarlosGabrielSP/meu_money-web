@@ -27,7 +27,7 @@ function adicionar(): void {
 
 <template>
     <nav
-        class="fixed inset-x-0 bottom-0 z-20 grid grid-cols-5 border-t bg-background pb-[env(safe-area-inset-bottom)] md:hidden"
+        class="fixed inset-x-0 bottom-0 z-20 grid grid-cols-5 border-t bg-card pb-[env(safe-area-inset-bottom)] md:hidden"
         aria-label="Navegação principal"
     >
         <Link
@@ -43,7 +43,7 @@ function adicionar(): void {
             <Inbox class="size-5" /> Recebidas
             <span
                 v-if="page.props.contadores.recebidas > 0"
-                class="absolute top-1 right-1/4 rounded-full bg-primary px-1.5 text-[10px] text-primary-foreground"
+                class="absolute top-1 right-1/4 rounded-full bg-destaque px-1.5 text-[10px] text-destaque-foreground"
                 :aria-label="`${page.props.contadores.recebidas} recebidas novas`"
                 >{{ page.props.contadores.recebidas }}</span
             >
@@ -68,7 +68,7 @@ function adicionar(): void {
             <Users class="size-5" /> Contatos
             <span
                 v-if="page.props.contadores.convites > 0"
-                class="absolute top-1 right-1/4 rounded-full bg-primary px-1.5 text-[10px] text-primary-foreground"
+                class="absolute top-1 right-1/4 rounded-full bg-destaque px-1.5 text-[10px] text-destaque-foreground"
                 :aria-label="`${page.props.contadores.convites} convites pendentes`"
                 >{{ page.props.contadores.convites }}</span
             >
