@@ -2,6 +2,7 @@
 import { Head } from '@inertiajs/vue3';
 import AppearanceTabs from '@/components/AppearanceTabs.vue';
 import Heading from '@/components/Heading.vue';
+import InterruptorModoSimples from '@/components/InterruptorModoSimples.vue';
 import SeletorPaleta from '@/components/SeletorPaleta.vue';
 import { edit } from '@/routes/appearance';
 import type { OpcaoPaleta } from '@/types';
@@ -41,5 +42,12 @@ defineOptions({
             description="Cores do aplicativo. Vale em todos os seus aparelhos."
         />
         <SeletorPaleta :paletas="paletas" />
+
+        <Heading
+            variant="small"
+            title="Modo simples"
+            description="Vale em todos os seus aparelhos."
+        />
+        <InterruptorModoSimples />
     </div>
 </template>

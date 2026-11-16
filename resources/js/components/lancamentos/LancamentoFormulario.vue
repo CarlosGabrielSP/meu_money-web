@@ -26,6 +26,7 @@ import {
     SheetHeader,
     SheetTitle,
 } from '@/components/ui/sheet';
+import { useModoSimples } from '@/composables/useModoSimples';
 import { executadoPorPadrao } from '@/lib/datas';
 import { centavosDe, formatarCentavos, mascararValor } from '@/lib/dinheiro';
 import {
@@ -125,6 +126,32 @@ const serie = computed(() => props.serie);
  * New entries and simple entries may repeat (RF-050, RF-051, RF-057); installments may not (CA-057.3).
  */
 const podeRepetir = computed(() => serie.value === null);
+
+/**
+ * Simple mode (RN-162): a new entry shows only type, description, value, date, category and the
+ * status, in the wallet on screen. An entry that already has installments, a split, a note or an
+ * attachment also shows those sections. Hidden fields keep their values.
+ */
+const modoSimples = useModoSimples();
+const mostrarCarteira = computed(() => !modoSimples.value);
+const mostrarRepetir = computed(() => podeRepetir.value && !modoSimples.value);
+const mostrarDividir = computed(
+    () => !modoSimples.value || props.edicao?.rateio != null,
+);
+const mostrarObservacao = computed(
+    () => !modoSimples.value || Boolean(props.edicao?.observacao),
+);
+const mostrarAnexo = computed(
+    () => !modoSimples.value || Boolean(props.edicao?.anexoNome),
+);
+
+const rotuloExecutado = computed(() => {
+    if (!modoSimples.value) {
+        return 'Executado';
+    }
+
+    return form.tipo === 'receita' ? 'Recebido' : 'Pago';
+});
 
 const rotuloValor = computed(() => {
     if (!form.repetir) {
@@ -470,7 +497,7 @@ function removerAnexo(): void {
                         <InputError :message="form.errors.categoria_id" />
                     </div>
 
-                    <div class="grid gap-2">
+                    <div v-if="mostrarCarteira" class="grid gap-2">
                         <Label for="carteira_id">Carteira</Label>
                         <select
                             id="carteira_id"
@@ -507,7 +534,7 @@ function removerAnexo(): void {
                     </div>
 
                     <div
-                        v-if="podeRepetir"
+                        v-if="mostrarRepetir"
                         class="grid gap-3 rounded-md border p-3"
                     >
                         <label class="flex items-center gap-2 font-medium">
@@ -608,6 +635,7 @@ function removerAnexo(): void {
                     </div>
 
                     <DividirCampos
+                        v-if="mostrarDividir"
                         v-model="divisao"
                         :contatos="contatos"
                         :autor-id="autorId"
@@ -629,11 +657,11 @@ function removerAnexo(): void {
                                 form.executado = $event === true
                             "
                         />
-                        Executado
+                        {{ rotuloExecutado }}
                     </label>
                     <InputError :message="form.errors.executado" />
 
-                    <div class="grid gap-2">
+                    <div v-if="mostrarObservacao" class="grid gap-2">
                         <Label for="observacao">Observação</Label>
                         <textarea
                             id="observacao"
@@ -645,7 +673,7 @@ function removerAnexo(): void {
                         <InputError :message="form.errors.observacao" />
                     </div>
 
-                    <div class="grid gap-2">
+                    <div v-if="mostrarAnexo" class="grid gap-2">
                         <Label for="anexo"
                             >Anexo (PDF, JPG, PNG ou WEBP, até 5 MB)</Label
                         >
@@ -687,7 +715,7 @@ function removerAnexo(): void {
                             Salvar
                         </Button>
                         <Button
-                            v-if="!editando"
+                            v-if="!editando && !modoSimples"
                             type="button"
                             variant="secondary"
                             :disabled="form.processing"

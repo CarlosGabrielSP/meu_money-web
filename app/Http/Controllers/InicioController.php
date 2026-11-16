@@ -16,7 +16,8 @@ use Inertia\Response;
 class InicioController extends Controller
 {
     /**
-     * Main screen: one wallet, one month, balances and the month list (RF-080 to RF-085).
+     * Main screen: one wallet, one month, balances and the month list (RF-080 to RF-085). The simple
+     * mode gets the list without subsections and ignores the filters of the URL (RN-161).
      */
     public function __invoke(InicioRequest $request, CalcularSaldos $calcularSaldos, ListarLancamentosDoMes $listarLancamentos): Response
     {
@@ -24,8 +25,9 @@ class InicioController extends Controller
         $user = $request->user();
         $carteira = $request->carteira();
         $mes = $request->mes();
-        $filtros = $request->filtros();
         $hoje = CarbonImmutable::today();
+        $filtros = $user->modo_simples ? ListarLancamentosDoMes::SEM_FILTROS : $request->filtros();
+        $perguntarModoSimples = $this->perguntarModoSimples($user, $hoje);
 
         if ($request->carteiraInformada() === $carteira->id && $user->ultima_carteira_id !== $carteira->id) {
             $user->forceFill(['ultima_carteira_id' => $carteira->id])->save();
@@ -51,7 +53,8 @@ class InicioController extends Controller
                 ->orderBy('name')
                 ->get(['id', 'name'])
                 ->map(fn (User $contato): array => ['id' => $contato->id, 'nome' => $contato->name]),
-            'grupos' => $carteira->grupos()
+            // Only the selection to group uses the groups, and the simple mode has none (RN-161).
+            'grupos' => $user->modo_simples ? [] : $carteira->grupos()
                 ->where('user_id', $user->id)
                 ->orderBy('nome')
                 ->get(['id', 'nome', 'tipo'])
@@ -60,8 +63,30 @@ class InicioController extends Controller
             'hoje' => $hoje->toDateString(),
             'filtros' => $filtros,
             'saldos' => $calcularSaldos->handle($user, $carteira, $mes),
-            'lancamentos' => $listarLancamentos->handle($user, $carteira, $mes, $filtros, $hoje),
+            'lancamentos' => $user->modo_simples
+                ? $listarLancamentos->semSubsecoes($user, $carteira, $mes, $hoje)
+                : $listarLancamentos->handle($user, $carteira, $mes, $filtros, $hoje),
+            'perguntarModoSimples' => $perguntarModoSimples,
         ]);
+    }
+
+    /**
+     * First access (RN-155, RN-156): when the question applies it stays open until answered, even
+     * after a reload (CA-111.7); otherwise the first access ends on this visit.
+     */
+    private function perguntarModoSimples(User $user, CarbonImmutable $hoje): bool
+    {
+        if ($user->primeiro_acesso_em !== null) {
+            return false;
+        }
+
+        if ($user->devePerguntarModoSimples($hoje)) {
+            return true;
+        }
+
+        $user->forceFill(['primeiro_acesso_em' => now()])->save();
+
+        return false;
     }
 
     /**

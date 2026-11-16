@@ -19,6 +19,7 @@ class HandleAppearance
     {
         View::share('appearance', $request->cookie('appearance') ?? 'system');
         View::share('paleta', $request->user()->paleta ?? Paleta::Neutro);
+        View::share('modoSimples', (bool) $request->user()?->modo_simples);
 
         return $next($request);
     }

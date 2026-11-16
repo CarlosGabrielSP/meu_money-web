@@ -10,11 +10,13 @@ use App\Http\Controllers\InicioController;
 use App\Http\Controllers\LancamentoAnexoController;
 use App\Http\Controllers\LancamentoController;
 use App\Http\Controllers\ParcelamentoController;
+use App\Http\Controllers\PrimeiroAcessoController;
 use App\Http\Controllers\RecebidaController;
 use Illuminate\Support\Facades\Route;
 
 Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('/', InicioController::class)->name('home');
+    Route::post('primeiro-acesso', PrimeiroAcessoController::class)->name('primeiro-acesso');
 
     Route::resource('lancamentos', LancamentoController::class)->only(['store', 'update', 'destroy']);
     Route::get('lancamentos/{lancamento}/anexo', [LancamentoAnexoController::class, 'show'])->name('lancamentos.anexo.show');

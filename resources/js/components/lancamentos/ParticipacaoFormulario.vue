@@ -21,6 +21,7 @@ import {
     SheetHeader,
     SheetTitle,
 } from '@/components/ui/sheet';
+import { useModoSimples } from '@/composables/useModoSimples';
 import { formatarMoeda } from '@/lib/dinheiro';
 import { destroy, update } from '@/routes/cotas';
 import { show as showAnexo } from '@/routes/lancamentos/anexo';
@@ -114,6 +115,19 @@ function sair(escopo: EscopoSerie | null = null): void {
         },
     });
 }
+
+const modoSimples = useModoSimples();
+
+/**
+ * The simple mode names the status "Pago" or "Recebido" (RN-159).
+ */
+const rotuloExecutado = computed(() => {
+    if (!modoSimples.value) {
+        return 'Executado';
+    }
+
+    return props.tipo === 'receita' ? 'Recebido' : 'Pago';
+});
 </script>
 
 <template>
@@ -198,7 +212,7 @@ function sair(escopo: EscopoSerie | null = null): void {
                                 form.executado = $event === true
                             "
                         />
-                        Executado
+                        {{ rotuloExecutado }}
                     </label>
 
                     <div class="flex flex-wrap gap-2">

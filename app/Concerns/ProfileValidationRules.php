@@ -33,6 +33,17 @@ trait ProfileValidationRules
     }
 
     /**
+     * Optional birth date, neither in the future nor before 1900-01-01 (RN-154). "today" uses the
+     * application timezone, America/Sao_Paulo (RN-118).
+     *
+     * @return array<int, string>
+     */
+    protected function dataNascimentoRules(): array
+    {
+        return ['nullable', 'date_format:Y-m-d', 'after_or_equal:1900-01-01', 'before_or_equal:today'];
+    }
+
+    /**
      * Get the validation rules used to validate user emails.
      *
      * @return array<int, Unique|ValidationRule|array<mixed>|string>

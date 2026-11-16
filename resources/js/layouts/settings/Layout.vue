@@ -1,10 +1,14 @@
 <script setup lang="ts">
-import { Link } from '@inertiajs/vue3';
+import { Link, router, usePage } from '@inertiajs/vue3';
+import { LogOut, ShieldCheck } from '@lucide/vue';
 import Heading from '@/components/Heading.vue';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
 import { useCurrentUrl } from '@/composables/useCurrentUrl';
+import { useModoSimples } from '@/composables/useModoSimples';
 import { toUrl } from '@/lib/utils';
+import { logout } from '@/routes';
+import { index as usuariosIndex } from '@/routes/admin/usuarios';
 import { edit as editAppearance } from '@/routes/appearance';
 import { edit as editProfile } from '@/routes/profile';
 import { edit as editSecurity } from '@/routes/security';
@@ -26,6 +30,8 @@ const sidebarNavItems: NavItem[] = [
 ];
 
 const { isCurrentOrParentUrl } = useCurrentUrl();
+const page = usePage();
+const modoSimples = useModoSimples();
 </script>
 
 <template>
@@ -56,6 +62,33 @@ const { isCurrentOrParentUrl } = useCurrentUrl();
                             {{ item.title }}
                         </Link>
                     </Button>
+                    <!-- The simple mode bar has no "Mais", so its links live here (RN-163, DEC-068). -->
+                    <template v-if="modoSimples">
+                        <Button
+                            v-if="page.props.auth.user.is_admin"
+                            variant="ghost"
+                            class="w-full justify-start"
+                            as-child
+                        >
+                            <Link :href="usuariosIndex()">
+                                <ShieldCheck /> Administração
+                            </Link>
+                        </Button>
+                        <Button
+                            variant="ghost"
+                            class="w-full justify-start"
+                            as-child
+                        >
+                            <Link
+                                :href="logout()"
+                                as="button"
+                                data-test="logout-simples"
+                                @click="router.flushAll()"
+                            >
+                                <LogOut /> Sair
+                            </Link>
+                        </Button>
+                    </template>
                 </nav>
             </aside>
 

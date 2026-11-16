@@ -3,6 +3,7 @@ import { Link, usePage } from '@inertiajs/vue3';
 import {
     House,
     Inbox,
+    Plus,
     Settings,
     ShieldCheck,
     Tags,
@@ -22,6 +23,8 @@ import {
     SidebarMenuButton,
     SidebarMenuItem,
 } from '@/components/ui/sidebar';
+import { useModoSimples } from '@/composables/useModoSimples';
+import { useNovoLancamento } from '@/composables/useNovoLancamento';
 import { home } from '@/routes';
 import { index as usuariosIndex } from '@/routes/admin/usuarios';
 import { index as carteirasIndex } from '@/routes/carteiras';
@@ -32,8 +35,52 @@ import { edit as perfilEdit } from '@/routes/profile';
 import type { NavItem } from '@/types';
 
 const page = usePage();
+const modoSimples = useModoSimples();
+const { adicionar } = useNovoLancamento();
 
-const mainNavItems = computed<NavItem[]>(() => [
+const administracao = computed<NavItem[]>(() =>
+    page.props.auth.user.is_admin
+        ? [
+              {
+                  title: 'Administração',
+                  href: usuariosIndex(),
+                  icon: ShieldCheck,
+              },
+          ]
+        : [],
+);
+
+/**
+ * The simple mode keeps only Início, Adicionar, Recebidas and Configurações; the other pages stay
+ * reachable by address (RN-163).
+ */
+const navSimples = computed<NavItem[]>(() => [
+    {
+        title: 'Início',
+        href: home(),
+        icon: House,
+    },
+    {
+        title: 'Adicionar',
+        href: home(),
+        icon: Plus,
+        acao: adicionar,
+    },
+    {
+        title: 'Recebidas',
+        href: recebidasIndex(),
+        icon: Inbox,
+        contador: page.props.contadores.recebidas,
+    },
+    {
+        title: 'Configurações',
+        href: perfilEdit(),
+        icon: Settings,
+    },
+    ...administracao.value,
+]);
+
+const navCompleta = computed<NavItem[]>(() => [
     {
         title: 'Início',
         href: home(),
@@ -66,16 +113,12 @@ const mainNavItems = computed<NavItem[]>(() => [
         href: perfilEdit(),
         icon: Settings,
     },
-    ...(page.props.auth.user.is_admin
-        ? [
-              {
-                  title: 'Administração',
-                  href: usuariosIndex(),
-                  icon: ShieldCheck,
-              },
-          ]
-        : []),
+    ...administracao.value,
 ]);
+
+const mainNavItems = computed(() =>
+    modoSimples.value ? navSimples.value : navCompleta.value,
+);
 </script>
 
 <template>

@@ -44,6 +44,7 @@ class HandleInertiaRequests extends Middleware
                 'user' => $request->user(),
                 'temSenha' => $request->user()?->password !== null,
             ],
+            'modoSimples' => (bool) $request->user()?->modo_simples,
             'contadores' => fn (): array => [
                 'convites' => $request->user() === null ? 0 : Contato::query()->pendentesRecebidos($request->user())->count(),
                 'recebidas' => $request->user() === null ? 0 : Cota::query()->recebidasPor($request->user())->whereNull('vista_em')->count(),

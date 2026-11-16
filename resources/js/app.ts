@@ -1,5 +1,9 @@
 import { createInertiaApp, router } from '@inertiajs/vue3';
-import { initializeTheme, updatePaleta } from '@/composables/useAppearance';
+import {
+    initializeTheme,
+    updateModoSimples,
+    updatePaleta,
+} from '@/composables/useAppearance';
 import AppLayout from '@/layouts/AppLayout.vue';
 import AuthLayout from '@/layouts/AuthLayout.vue';
 import SettingsLayout from '@/layouts/settings/Layout.vue';
@@ -38,13 +42,15 @@ void createInertiaApp({
 // This will set light / dark mode on page load...
 initializeTheme();
 
-// Keeps the account palette in sync with server responses (choice in Aparência, login, logout); visitors use Neutro (RN-152).
+// Keeps the account palette and simple mode in sync with server responses (choice in Aparência, login, logout);
+// visitors use Neutro and the full mode (RN-152, RN-157).
 // "navigate" skips visits that end on the same URL (Inertia replaces the history entry), so "success" covers those.
 // Back/forward restores old props from history, so it never changes the palette...
 const sincronizarPaleta = (page: Page): void => {
     const auth = page.props.auth as Auth | undefined;
 
     updatePaleta(auth?.user?.paleta ?? 'neutro');
+    updateModoSimples(page.props.modoSimples === true);
 };
 
 router.on('navigate', (event) => {

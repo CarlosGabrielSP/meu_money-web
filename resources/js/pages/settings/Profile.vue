@@ -8,6 +8,7 @@ import InputError from '@/components/InputError.vue';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { hojeEmSaoPaulo } from '@/lib/datas';
 import { edit } from '@/routes/profile';
 
 defineOptions({
@@ -23,6 +24,8 @@ defineOptions({
 
 const page = usePage();
 const user = computed(() => page.props.auth.user);
+
+const hoje = hojeEmSaoPaulo();
 </script>
 
 <template>
@@ -34,7 +37,7 @@ const user = computed(() => page.props.auth.user);
         <Heading
             variant="small"
             title="Perfil"
-            description="Atualize seu nome"
+            description="Atualize seu nome e sua data de nascimento"
         />
 
         <Form
@@ -54,6 +57,22 @@ const user = computed(() => page.props.auth.user);
                     placeholder="Nome completo"
                 />
                 <InputError class="mt-2" :message="errors.name" />
+            </div>
+
+            <div class="grid gap-2">
+                <Label for="data_nascimento">
+                    Data de nascimento (opcional)
+                </Label>
+                <Input
+                    id="data_nascimento"
+                    type="date"
+                    class="mt-1 block w-full"
+                    name="data_nascimento"
+                    :default-value="user.data_nascimento ?? ''"
+                    min="1900-01-01"
+                    :max="hoje"
+                />
+                <InputError class="mt-2" :message="errors.data_nascimento" />
             </div>
 
             <div class="grid gap-2">

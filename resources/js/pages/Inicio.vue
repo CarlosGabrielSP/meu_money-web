@@ -14,8 +14,11 @@ import EscopoSerieDialog from '@/components/lancamentos/EscopoSerieDialog.vue';
 import GrupoItem from '@/components/lancamentos/GrupoItem.vue';
 import LancamentoFormulario from '@/components/lancamentos/LancamentoFormulario.vue';
 import LancamentoItem from '@/components/lancamentos/LancamentoItem.vue';
+import LancamentoItemSimples from '@/components/lancamentos/LancamentoItemSimples.vue';
 import ParticipacaoFormulario from '@/components/lancamentos/ParticipacaoFormulario.vue';
+import PerguntaModoSimples from '@/components/PerguntaModoSimples.vue';
 import { Button } from '@/components/ui/button';
+import { useModoSimples } from '@/composables/useModoSimples';
 import { useNovoLancamento } from '@/composables/useNovoLancamento';
 import { deslocarMes, nomeDoMes } from '@/lib/datas';
 import { formatarMoeda } from '@/lib/dinheiro';
@@ -58,8 +61,27 @@ const props = defineProps<{
         receitas: number;
         despesas: number;
     };
-    lancamentos: Record<TipoLancamento, Subsecoes>;
+    /** Subsections in the full mode; one plain list per type in the simple mode (RN-161). */
+    lancamentos:
+        | Record<TipoLancamento, Subsecoes>
+        | Record<TipoLancamento, ItemLancamento[]>;
+    perguntarModoSimples: boolean;
 }>();
+
+const modoSimples = useModoSimples();
+
+const listaSimples = computed<Record<TipoLancamento, ItemLancamento[]> | null>(
+    () =>
+        Array.isArray(props.lancamentos.receita)
+            ? (props.lancamentos as Record<TipoLancamento, ItemLancamento[]>)
+            : null,
+);
+
+const listaCompleta = computed<Record<TipoLancamento, Subsecoes> | null>(() =>
+    listaSimples.value === null
+        ? (props.lancamentos as Record<TipoLancamento, Subsecoes>)
+        : null,
+);
 
 defineOptions({
     layout: {
@@ -112,12 +134,22 @@ const quantidade = (subsecoesDoTipo: Subsecoes): number =>
     subsecoesDoTipo.recorrentes.length +
     subsecoesDoTipo.grupos.length;
 
+function quantidadeNaSecao(tipo: TipoLancamento): number {
+    if (listaSimples.value !== null) {
+        return listaSimples.value[tipo].length;
+    }
+
+    return listaCompleta.value === null
+        ? 0
+        : quantidade(listaCompleta.value[tipo]);
+}
+
 const secoesVisiveis = computed(() =>
     secoes.filter(
         (secao) =>
             (props.filtros.tipo === null ||
                 props.filtros.tipo === secao.tipo) &&
-            quantidade(props.lancamentos[secao.tipo]) > 0,
+            quantidadeNaSecao(secao.tipo) > 0,
     ),
 );
 
@@ -279,7 +311,11 @@ const { pedidos } = useNovoLancamento();
 watch(pedidos, abrirNovo);
 
 onMounted(() => {
-    if (new URLSearchParams(window.location.search).get('novo') === '1') {
+    // The first access question comes first; the form opens with (+) after the answer (RN-156).
+    if (
+        !props.perguntarModoSimples &&
+        new URLSearchParams(window.location.search).get('novo') === '1'
+    ) {
         abrirNovo();
     }
 });
@@ -393,7 +429,33 @@ onMounted(() => {
                 </div>
             </div>
 
-            <dl class="grid grid-cols-[auto_1fr_1fr] gap-x-4 gap-y-1 text-sm">
+            <!-- Simple mode balances: current accumulated balance and the estimated month totals (RN-160).
+                 Labels in the text color and darker green and red in light mode, for 4.5:1 (DEC-068). -->
+            <dl
+                v-if="modoSimples"
+                class="grid grid-cols-[1fr_auto] gap-x-4 gap-y-1"
+            >
+                <dt>Saldo atual</dt>
+                <dd class="text-right font-semibold tabular-nums">
+                    {{ formatarMoeda(saldos.acumulado.atual) }}
+                </dd>
+                <dt>Receitas do mês</dt>
+                <dd
+                    class="text-right font-semibold text-emerald-700 tabular-nums dark:text-emerald-400"
+                >
+                    {{ formatarMoeda(saldos.receitas) }}
+                </dd>
+                <dt>Despesas do mês</dt>
+                <dd
+                    class="text-right font-semibold text-red-700 tabular-nums dark:text-red-400"
+                >
+                    {{ formatarMoeda(saldos.despesas) }}
+                </dd>
+            </dl>
+            <dl
+                v-else
+                class="grid grid-cols-[auto_1fr_1fr] gap-x-4 gap-y-1 text-sm"
+            >
                 <span />
                 <span class="text-right text-xs text-muted-foreground"
                     >Estimado</span
@@ -416,7 +478,10 @@ onMounted(() => {
                     {{ formatarMoeda(saldos.mes.atual) }}
                 </dd>
             </dl>
-            <div class="flex justify-between text-sm tabular-nums">
+            <div
+                v-if="!modoSimples"
+                class="flex justify-between text-sm tabular-nums"
+            >
                 <span class="text-emerald-600 dark:text-emerald-400">
                     ▲ Receitas {{ formatarMoeda(saldos.receitas) }}
                 </span>
@@ -427,7 +492,8 @@ onMounted(() => {
         </div>
 
         <div class="grid gap-4 p-4">
-            <div class="flex items-center gap-2">
+            <!-- The simple mode has no filters and no selection to group (RN-161). -->
+            <div v-if="!modoSimples" class="flex items-center gap-2">
                 <Button
                     variant="outline"
                     size="sm"
@@ -456,7 +522,7 @@ onMounted(() => {
             </div>
 
             <div
-                v-if="mostrarFiltros"
+                v-if="mostrarFiltros && !modoSimples"
                 class="grid grid-cols-2 gap-3 md:grid-cols-4"
             >
                 <label class="grid gap-1 text-sm">
@@ -549,7 +615,34 @@ onMounted(() => {
                 </template>
             </div>
 
-            <div v-else class="grid items-start gap-6 md:grid-cols-2">
+            <div
+                v-else-if="listaSimples"
+                class="grid items-start gap-6 md:grid-cols-2"
+            >
+                <section
+                    v-for="secao in secoesVisiveis"
+                    :key="secao.tipo"
+                    class="grid gap-3"
+                >
+                    <h2 class="font-semibold tracking-wide uppercase">
+                        {{ secao.titulo }}
+                    </h2>
+                    <ul class="divide-y rounded-lg border">
+                        <LancamentoItemSimples
+                            v-for="item in listaSimples[secao.tipo]"
+                            :key="item.chave"
+                            :item="item"
+                            :tipo="secao.tipo"
+                            @editar="editar($event, secao.tipo)"
+                        />
+                    </ul>
+                </section>
+            </div>
+
+            <div
+                v-else-if="listaCompleta"
+                class="grid items-start gap-6 md:grid-cols-2"
+            >
                 <section
                     v-for="secao in secoesVisiveis"
                     :key="secao.tipo"
@@ -564,8 +657,8 @@ onMounted(() => {
                     >
                         <div
                             v-if="
-                                lancamentos[secao.tipo][subsecao.chave].length >
-                                0
+                                listaCompleta[secao.tipo][subsecao.chave]
+                                    .length > 0
                             "
                             class="grid gap-1"
                         >
@@ -574,7 +667,7 @@ onMounted(() => {
                             </h3>
                             <ul class="divide-y rounded-lg border">
                                 <LancamentoItem
-                                    v-for="item in lancamentos[secao.tipo][
+                                    v-for="item in listaCompleta[secao.tipo][
                                         subsecao.chave
                                     ]"
                                     :key="item.chave"
@@ -591,13 +684,14 @@ onMounted(() => {
                         </div>
                     </template>
                     <div
-                        v-if="lancamentos[secao.tipo].grupos.length > 0"
+                        v-if="listaCompleta[secao.tipo].grupos.length > 0"
                         class="grid gap-1"
                     >
                         <h3 class="text-xs text-muted-foreground">Grupos</h3>
                         <ul class="divide-y rounded-lg border">
                             <GrupoItem
-                                v-for="grupo in lancamentos[secao.tipo].grupos"
+                                v-for="grupo in listaCompleta[secao.tipo]
+                                    .grupos"
                                 :key="grupo.chave"
                                 :grupo="grupo"
                                 :selecionando="selecionando"
@@ -612,7 +706,7 @@ onMounted(() => {
         </div>
 
         <div
-            v-if="selecionando"
+            v-if="selecionando && !modoSimples"
             class="sticky bottom-20 z-10 mx-4 mb-4 flex flex-wrap items-center gap-2 rounded-lg border bg-background p-3 shadow-lg md:bottom-4"
             role="toolbar"
             aria-label="Ações da seleção"
@@ -671,6 +765,8 @@ onMounted(() => {
             :carteiras="carteiras"
             :categorias="categorias"
         />
+
+        <PerguntaModoSimples :perguntar="perguntarModoSimples" />
 
         <ParticipacaoFormulario
             v-model:open="participacaoAberta"

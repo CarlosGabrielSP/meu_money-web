@@ -7,6 +7,7 @@ use App\Actions\Usuarios\DesativarUsuario;
 use App\Actions\Usuarios\EnviarLinkDefinirSenha;
 use App\Actions\Usuarios\GarantirAdministradorAtivo;
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Admin\AlterarDataNascimentoRequest;
 use App\Http\Requests\Admin\AlterarEmailRequest;
 use App\Http\Requests\Admin\CriarUsuarioRequest;
 use App\Models\User;
@@ -44,7 +45,11 @@ class UsuarioController extends Controller
      */
     public function store(CriarUsuarioRequest $request, CriarUsuario $criarUsuario): RedirectResponse
     {
-        [, $linkEnviado] = $criarUsuario->handle($request->validated('nome'), $request->validated('email'));
+        [, $linkEnviado] = $criarUsuario->handle(
+            $request->validated('nome'),
+            $request->validated('email'),
+            dataNascimento: $request->validated('data_nascimento'),
+        );
 
         Inertia::flash('toast', $linkEnviado
             ? ['type' => 'success', 'message' => 'Usuário criado. Enviamos o link para definir a senha.']
@@ -128,6 +133,18 @@ class UsuarioController extends Controller
             report($exception);
             Inertia::flash('toast', ['type' => 'warning', 'message' => 'E-mail alterado, mas o link de confirmação não foi enviado.']);
         }
+
+        return to_route('admin.usuarios.index');
+    }
+
+    /**
+     * Set or remove a user's birth date; an empty value removes it (RN-154, CA-110.3).
+     */
+    public function alterarDataNascimento(AlterarDataNascimentoRequest $request, User $usuario): RedirectResponse
+    {
+        $usuario->forceFill(['data_nascimento' => $request->validated('data_nascimento')])->save();
+
+        Inertia::flash('toast', ['type' => 'success', 'message' => 'Data de nascimento atualizada.']);
 
         return to_route('admin.usuarios.index');
     }

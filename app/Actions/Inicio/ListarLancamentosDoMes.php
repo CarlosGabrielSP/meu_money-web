@@ -16,6 +16,13 @@ use Illuminate\Support\Collection;
 class ListarLancamentosDoMes
 {
     /**
+     * The filters of the main screen when none applies (RN-094, RN-161).
+     *
+     * @var array{tipo: null, categoria: null, status: null, compartilhado: null}
+     */
+    public const SEM_FILTROS = ['tipo' => null, 'categoria' => null, 'status' => null, 'compartilhado' => null];
+
+    /**
      * The user's shares of one wallet and month, split by type and subsection (RN-093, RN-094, RN-116),
      * plus entries the user authored in this wallet without a share of their own (RN-145).
      *
@@ -37,48 +44,9 @@ class ListarLancamentosDoMes
             $secoes[$tipo] = ['avista' => [], 'parceladas' => [], 'recorrentes' => [], 'grupos' => []];
         }
 
-        $inicio = $mes->startOfMonth()->toDateString();
-        $fim = $mes->startOfMonth()->addMonth()->toDateString();
-        $relacoes = [
-            'parcelamento:id,categoria_id,total_parcelas,dia_vencimento,encerrado_em',
-            'user:id,name',
-            'cotas:id,lancamento_id,user_id,categoria_id,valor,percentual,executado',
-            'cotas.user:id,name',
-        ];
-
-        $cotas = Cota::query()
-            ->select('cotas.*')
-            ->join('lancamentos', 'lancamentos.id', '=', 'cotas.lancamento_id')
-            ->where('cotas.user_id', $user->id)
-            ->where('cotas.carteira_id', $carteira->id)
-            ->where('lancamentos.data', '>=', $inicio)
-            ->where('lancamentos.data', '<', $fim)
-            ->when($filtros['tipo'], fn ($query, string $tipo) => $query->where('lancamentos.tipo', $tipo))
-            ->when($filtros['categoria'], fn ($query, int $categoria) => $query->where('cotas.categoria_id', $categoria))
-            ->when($filtros['status'], fn ($query, string $status) => $query->where('cotas.executado', $status === 'executado'))
-            ->when($filtros['compartilhado'], fn ($query, string $compartilhado) => $compartilhado === 'sim'
-                ? $query->whereNotNull('lancamentos.modo_rateio')
-                : $query->whereNull('lancamentos.modo_rateio'))
-            ->with(['categoria:id,nome', 'grupo:id,nome', ...array_map(fn (string $relacao): string => "lancamento.{$relacao}", $relacoes)])
-            ->get();
-
-        $semCota = $filtros['categoria'] !== null || $filtros['status'] !== null || $filtros['compartilhado'] === 'nao'
-            ? collect()
-            : Lancamento::query()
-                ->where('user_id', $user->id)
-                ->where('carteira_id', $carteira->id)
-                ->where('data', '>=', $inicio)
-                ->where('data', '<', $fim)
-                ->whereDoesntHave('cotas', fn (Builder $query) => $query->where('user_id', $user->id))
-                ->when($filtros['tipo'], fn ($query, string $tipo) => $query->where('tipo', $tipo))
-                ->with($relacoes)
-                ->get();
-
-        $categoriasVisiveis = $semCota->isEmpty() ? collect() : Categoria::query()->visiveisPara($user)->pluck('id');
-
-        $itens = $cotas->map(fn (Cota $cota): array => [$cota->lancamento, $cota])
-            ->concat($semCota->map(fn (Lancamento $lancamento): array => [$lancamento, null]))
-            ->sortBy(fn (array $par): array => [$par[0]->data->toDateString(), $par[0]->created_at?->toDateTimeString(), $par[0]->id]);
+        [$inicio, $fim] = $this->limites($mes);
+        $itens = $this->itens($user, $carteira, $inicio, $fim, $filtros, comGrupo: true);
+        $categoriasVisiveis = $this->categoriasVisiveis($user, $itens);
 
         $grupos = [];
 
@@ -121,6 +89,101 @@ class ListarLancamentosDoMes
         }
 
         return $secoes;
+    }
+
+    /**
+     * The month list of the simple mode: Receitas and Despesas without subsections, by date and, on
+     * the same day, by creation. Grouped items are plain items and filters never apply (RN-161).
+     *
+     * @return array{receita: list<array<string, mixed>>, despesa: list<array<string, mixed>>}
+     */
+    public function semSubsecoes(User $user, Carteira $carteira, CarbonImmutable $mes, CarbonImmutable $hoje): array
+    {
+        $secoes = ['receita' => [], 'despesa' => []];
+        [$inicio, $fim] = $this->limites($mes);
+        $itens = $this->itens($user, $carteira, $inicio, $fim, self::SEM_FILTROS, comGrupo: false);
+        $categoriasVisiveis = $this->categoriasVisiveis($user, $itens);
+
+        foreach ($itens as [$lancamento, $cota]) {
+            $secoes[$lancamento->tipo->value][] = $this->item($user, $lancamento, $cota, $hoje, $categoriasVisiveis);
+        }
+
+        return $secoes;
+    }
+
+    /**
+     * The user's shares in the month plus the entries they authored here without a share of their
+     * own, sorted by date and creation (RN-093, RN-145). The group is loaded only for the
+     * subsections of the full mode (RN-122).
+     *
+     * @param  array{tipo: string|null, categoria: int|null, status: string|null, compartilhado: string|null}  $filtros
+     * @return Collection<int, array{0: Lancamento, 1: Cota|null}>
+     */
+    private function itens(User $user, Carteira $carteira, string $inicio, string $fim, array $filtros, bool $comGrupo): Collection
+    {
+        $relacoes = [
+            'parcelamento:id,categoria_id,total_parcelas,dia_vencimento,encerrado_em',
+            'user:id,name',
+            'cotas:id,lancamento_id,user_id,categoria_id,valor,percentual,executado',
+            'cotas.user:id,name',
+        ];
+
+        $cotas = Cota::query()
+            ->select('cotas.*')
+            ->join('lancamentos', 'lancamentos.id', '=', 'cotas.lancamento_id')
+            ->where('cotas.user_id', $user->id)
+            ->where('cotas.carteira_id', $carteira->id)
+            ->where('lancamentos.data', '>=', $inicio)
+            ->where('lancamentos.data', '<', $fim)
+            ->when($filtros['tipo'], fn ($query, string $tipo) => $query->where('lancamentos.tipo', $tipo))
+            ->when($filtros['categoria'], fn ($query, int $categoria) => $query->where('cotas.categoria_id', $categoria))
+            ->when($filtros['status'], fn ($query, string $status) => $query->where('cotas.executado', $status === 'executado'))
+            ->when($filtros['compartilhado'], fn ($query, string $compartilhado) => $compartilhado === 'sim'
+                ? $query->whereNotNull('lancamentos.modo_rateio')
+                : $query->whereNull('lancamentos.modo_rateio'))
+            ->with(['categoria:id,nome', ...($comGrupo ? ['grupo:id,nome'] : []), ...array_map(fn (string $relacao): string => "lancamento.{$relacao}", $relacoes)])
+            ->get();
+
+        $semCota = $filtros['categoria'] !== null || $filtros['status'] !== null || $filtros['compartilhado'] === 'nao'
+            ? collect()
+            : Lancamento::query()
+                ->where('user_id', $user->id)
+                ->where('carteira_id', $carteira->id)
+                ->where('data', '>=', $inicio)
+                ->where('data', '<', $fim)
+                ->whereDoesntHave('cotas', fn (Builder $query) => $query->where('user_id', $user->id))
+                ->when($filtros['tipo'], fn ($query, string $tipo) => $query->where('tipo', $tipo))
+                ->with($relacoes)
+                ->get();
+
+        return $cotas->map(fn (Cota $cota): array => [$cota->lancamento, $cota])
+            ->concat($semCota->map(fn (Lancamento $lancamento): array => [$lancamento, null]))
+            ->sortBy(fn (array $par): array => [$par[0]->data->toDateString(), $par[0]->created_at?->toDateTimeString(), $par[0]->id])
+            ->values();
+    }
+
+    /**
+     * First day of the month and of the next one; the next month start is the upper bound because
+     * the date cast stores "Y-m-d 00:00:00" (RN-093).
+     *
+     * @return array{0: string, 1: string}
+     */
+    private function limites(CarbonImmutable $mes): array
+    {
+        return [$mes->startOfMonth()->toDateString(), $mes->startOfMonth()->addMonth()->toDateString()];
+    }
+
+    /**
+     * Ids of the categories the user sees, needed only for entries without a share of the user (RN-145).
+     *
+     * @param  Collection<int, array{0: Lancamento, 1: Cota|null}>  $itens
+     * @return Collection<int, mixed>
+     */
+    private function categoriasVisiveis(User $user, Collection $itens): Collection
+    {
+        return $itens->contains(fn (array $par): bool => $par[1] === null)
+            ? Categoria::query()->visiveisPara($user)->pluck('id')
+            : collect();
     }
 
     /**

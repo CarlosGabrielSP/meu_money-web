@@ -6,6 +6,7 @@
 @source '../../storage/framework/views/*.php';
 
 @custom-variant dark (&:is(.dark *));
+@custom-variant simples (&:where([data-modo-simples], [data-modo-simples] *));
 
 @theme inline {
     --font-sans:
@@ -469,4 +470,58 @@
     body {
         @apply bg-background text-foreground;
     }
+}
+
+/*
+ * Simple mode (RN-159, RNF-007, DEC-068): the root font is 18 px, so text, spacing and icons grow
+ * together, and every touch target is at least 48 px. These rules stay outside the layers so they
+ * win over the size utilities of the components. Plain links (breadcrumbs, attachment, user menu)
+ * keep their size: accepted risk of the /code-review of Phase 10 (DEC-068).
+ */
+html[data-modo-simples] {
+    font-size: 18px;
+}
+
+[data-modo-simples]
+    :is(
+        [data-slot='button'],
+        [data-slot='input'],
+        [data-slot='select-trigger'],
+        [data-sidebar='menu-button'],
+        label:has(> input[type='radio']),
+        select,
+        input:not([type='checkbox'], [type='radio'], [type='hidden'])
+    ) {
+    min-height: 48px;
+}
+
+[data-modo-simples]
+    :is(
+        [data-slot='button'][data-size^='icon'],
+        [data-slot='sidebar-trigger'],
+        [data-slot='dialog-close'],
+        [data-slot='sheet-close']
+    ) {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 48px;
+    min-height: 48px;
+}
+
+[data-modo-simples] input[type='radio'] {
+    width: 1.5rem;
+    height: 1.5rem;
+}
+
+[data-modo-simples] [data-slot='checkbox'] {
+    position: relative;
+    width: 1.5rem;
+    height: 1.5rem;
+}
+
+[data-modo-simples] [data-slot='checkbox']::after {
+    content: '';
+    position: absolute;
+    inset: -12px;
 }

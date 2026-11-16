@@ -25,6 +25,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * @property CarbonImmutable|null $vista_em
  * @property CarbonImmutable|null $created_at
  * @property CarbonImmutable|null $updated_at
+ * @property-read Lancamento $lancamento required foreign key, never null
  */
 #[Fillable([
     'user_id', 'carteira_id', 'categoria_id', 'grupo_id', 'valor', 'percentual',

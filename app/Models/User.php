@@ -27,12 +27,15 @@ use Illuminate\Notifications\Notifiable;
  * @property string|null $google_id
  * @property int|null $ultima_carteira_id
  * @property Paleta $paleta
+ * @property CarbonImmutable|null $data_nascimento
+ * @property bool $modo_simples
+ * @property CarbonImmutable|null $primeiro_acesso_em
  * @property string|null $password
  * @property string|null $remember_token
  * @property CarbonImmutable|null $created_at
  * @property CarbonImmutable|null $updated_at
  */
-#[Fillable(['name', 'email', 'password', 'paleta'])]
+#[Fillable(['name', 'email', 'password', 'paleta', 'data_nascimento', 'modo_simples'])]
 #[Hidden(['password', 'remember_token', 'google_id'])]
 class User extends Authenticatable implements MustVerifyEmail
 {
@@ -46,6 +49,7 @@ class User extends Authenticatable implements MustVerifyEmail
      */
     protected $attributes = [
         'paleta' => 'neutro',
+        'modo_simples' => false,
     ];
 
     /**
@@ -60,6 +64,9 @@ class User extends Authenticatable implements MustVerifyEmail
             'password' => 'hashed',
             'is_admin' => 'boolean',
             'desativado_em' => 'datetime',
+            'data_nascimento' => 'date:Y-m-d',
+            'modo_simples' => 'boolean',
+            'primeiro_acesso_em' => 'datetime',
         ];
     }
 
@@ -75,6 +82,17 @@ class User extends Authenticatable implements MustVerifyEmail
             get: fn (?string $valor): Paleta => Paleta::tryFrom($valor ?? '') ?? Paleta::Neutro,
             set: fn (Paleta|string $valor): string => $valor instanceof Paleta ? $valor->value : $valor,
         );
+    }
+
+    /**
+     * Whether the simple mode question applies on the first access: birth date known, 50 years or
+     * older on the given day, and simple mode still off (RN-156, DEC-068).
+     */
+    public function devePerguntarModoSimples(CarbonImmutable $hoje): bool
+    {
+        return $this->data_nascimento !== null
+            && ! $this->modo_simples
+            && $this->data_nascimento->addYears(50)->lessThanOrEqualTo($hoje);
     }
 
     /**

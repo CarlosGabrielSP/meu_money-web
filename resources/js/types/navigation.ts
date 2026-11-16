@@ -13,4 +13,6 @@ export type NavItem = {
     isActive?: boolean;
     disabled?: boolean;
     contador?: number;
+    /** Runs instead of following the link, e.g. "Adicionar" (RN-163). */
+    acao?: () => void;
 };

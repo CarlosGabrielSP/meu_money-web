@@ -35,6 +35,17 @@ export function updateTheme(value: Appearance): void {
 }
 
 /**
+ * Simple mode of the account on the html element, which the CSS reads (RN-157, RNF-007).
+ */
+export function updateModoSimples(modoSimples: boolean): void {
+    if (typeof document === 'undefined') {
+        return;
+    }
+
+    document.documentElement.toggleAttribute('data-modo-simples', modoSimples);
+}
+
+/**
  * Applies the account palette (RN-152) without reloading the page.
  */
 export function updatePaleta(paleta: Paleta): void {

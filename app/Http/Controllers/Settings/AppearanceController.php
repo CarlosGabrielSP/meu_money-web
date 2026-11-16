@@ -25,11 +25,15 @@ class AppearanceController extends Controller
     }
 
     /**
-     * Save the palette in the account; light, dark and system stay per device (RN-152).
+     * Save the palette or the simple mode in the account; light, dark and system stay per device
+     * (RN-152, RN-157).
      */
     public function update(AppearanceUpdateRequest $request): RedirectResponse
     {
-        $request->user()->update(['paleta' => $request->enum('paleta', Paleta::class)]);
+        $request->user()->update(array_filter([
+            'paleta' => $request->enum('paleta', Paleta::class),
+            'modo_simples' => $request->has('modo_simples') ? $request->boolean('modo_simples') : null,
+        ], fn (mixed $valor): bool => $valor !== null));
 
         return to_route('appearance.edit');
     }

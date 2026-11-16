@@ -6,6 +6,7 @@ import {
     SidebarMenu,
     SidebarMenuButton,
     SidebarMenuItem,
+    useSidebar,
 } from '@/components/ui/sidebar';
 import { useCurrentUrl } from '@/composables/useCurrentUrl';
 import type { NavItem } from '@/types';
@@ -15,6 +16,15 @@ defineProps<{
 }>();
 
 const { isCurrentUrl } = useCurrentUrl();
+const { setOpenMobile } = useSidebar();
+
+/**
+ * An action item has no navigation to close the mobile menu, so it closes it first.
+ */
+function executar(acao: () => void): void {
+    setOpenMobile(false);
+    acao();
+}
 </script>
 
 <template>
@@ -26,6 +36,14 @@ const { isCurrentUrl } = useCurrentUrl();
                     v-if="item.disabled"
                     disabled
                     :tooltip="`${item.title} (em breve)`"
+                >
+                    <component :is="item.icon" />
+                    <span>{{ item.title }}</span>
+                </SidebarMenuButton>
+                <SidebarMenuButton
+                    v-else-if="item.acao"
+                    :tooltip="item.title"
+                    @click="executar(item.acao)"
                 >
                     <component :is="item.icon" />
                     <span>{{ item.title }}</span>

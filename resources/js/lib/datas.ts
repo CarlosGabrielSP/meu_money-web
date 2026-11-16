@@ -43,3 +43,12 @@ export function executadoPorPadrao(
 
     return data < hoje;
 }
+
+/**
+ * Today as "Y-m-d" in America/Sao_Paulo (RN-118), for the max of date fields.
+ */
+export function hojeEmSaoPaulo(): string {
+    return new Intl.DateTimeFormat('en-CA', {
+        timeZone: 'America/Sao_Paulo',
+    }).format(new Date());
+}
