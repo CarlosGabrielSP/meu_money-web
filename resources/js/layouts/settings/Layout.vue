@@ -1,13 +1,13 @@
 <script setup lang="ts">
 import { Link, router, usePage } from '@inertiajs/vue3';
-import { LogOut, ShieldCheck } from '@lucide/vue';
+import { CircleHelp, LogOut, ShieldCheck } from '@lucide/vue';
 import Heading from '@/components/Heading.vue';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
 import { useCurrentUrl } from '@/composables/useCurrentUrl';
 import { useModoSimples } from '@/composables/useModoSimples';
 import { toUrl } from '@/lib/utils';
-import { logout } from '@/routes';
+import { home, logout } from '@/routes';
 import { index as usuariosIndex } from '@/routes/admin/usuarios';
 import { edit as editAppearance } from '@/routes/appearance';
 import { edit as editProfile } from '@/routes/profile';
@@ -60,6 +60,16 @@ const modoSimples = useModoSimples();
                         <Link :href="item.href">
                             <component :is="item.icon" class="h-4 w-4" />
                             {{ item.title }}
+                        </Link>
+                    </Button>
+                    <!-- "Ver tutorial" lives only here, in both modes (RN-167, DEC-069). -->
+                    <Button
+                        variant="ghost"
+                        class="w-full justify-start"
+                        as-child
+                    >
+                        <Link :href="home({ query: { tutorial: 1 } })">
+                            <CircleHelp /> Ver tutorial
                         </Link>
                     </Button>
                     <!-- The simple mode bar has no "Mais", so its links live here (RN-163, DEC-068). -->

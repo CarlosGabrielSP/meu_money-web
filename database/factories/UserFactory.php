@@ -33,6 +33,7 @@ class UserFactory extends Factory
             'is_admin' => false,
             'desativado_em' => null,
             'primeiro_acesso_em' => now(),
+            'tutorial_visto_em' => now(),
         ];
     }
 

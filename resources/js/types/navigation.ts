@@ -15,4 +15,6 @@ export type NavItem = {
     contador?: number;
     /** Runs instead of following the link, e.g. "Adicionar" (RN-163). */
     acao?: () => void;
+    /** `data-tutorial` value the tour highlights (RN-164). */
+    tutorial?: string;
 };

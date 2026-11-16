@@ -28,10 +28,14 @@ function executar(acao: () => void): void {
 </script>
 
 <template>
-    <SidebarGroup class="px-2 py-0">
+    <SidebarGroup class="px-2 py-0" data-tutorial="menu">
         <SidebarGroupLabel>Menu</SidebarGroupLabel>
         <SidebarMenu>
-            <SidebarMenuItem v-for="item in items" :key="item.title">
+            <SidebarMenuItem
+                v-for="item in items"
+                :key="item.title"
+                :data-tutorial="item.tutorial"
+            >
                 <SidebarMenuButton
                     v-if="item.disabled"
                     disabled

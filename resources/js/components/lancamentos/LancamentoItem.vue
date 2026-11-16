@@ -103,6 +103,7 @@ function alternar(marcado: boolean): void {
             v-else
             :model-value="item.executado"
             :aria-label="`Executado: ${item.descricao}`"
+            data-tutorial="executado"
             @update:model-value="alternar($event === true)"
         />
         <button

@@ -30,6 +30,7 @@ use Illuminate\Notifications\Notifiable;
  * @property CarbonImmutable|null $data_nascimento
  * @property bool $modo_simples
  * @property CarbonImmutable|null $primeiro_acesso_em
+ * @property CarbonImmutable|null $tutorial_visto_em
  * @property string|null $password
  * @property string|null $remember_token
  * @property CarbonImmutable|null $created_at
@@ -67,6 +68,7 @@ class User extends Authenticatable implements MustVerifyEmail
             'data_nascimento' => 'date:Y-m-d',
             'modo_simples' => 'boolean',
             'primeiro_acesso_em' => 'datetime',
+            'tutorial_visto_em' => 'datetime',
         ];
     }
 

@@ -20,6 +20,8 @@ const modoSimples = useModoSimples();
         class="fixed inset-x-0 bottom-0 z-20 grid border-t bg-card pb-[env(safe-area-inset-bottom)] md:hidden"
         :class="modoSimples ? 'grid-cols-4' : 'grid-cols-5'"
         aria-label="Navegação principal"
+        data-tutorial="menu"
+        data-tutorial-fixo
     >
         <Link
             :href="home()"
@@ -30,6 +32,7 @@ const modoSimples = useModoSimples();
         <Link
             :href="recebidasIndex()"
             class="relative flex flex-col items-center gap-0.5 py-2 text-xs"
+            data-tutorial="recebidas"
         >
             <Inbox class="size-5" /> Recebidas
             <span
@@ -44,6 +47,7 @@ const modoSimples = useModoSimples();
             class="flex items-center justify-center"
             aria-label="Adicionar lançamento"
             data-test="adicionar-lancamento-mobile"
+            data-tutorial="adicionar"
             @click="adicionar"
         >
             <span
@@ -57,6 +61,7 @@ const modoSimples = useModoSimples();
             v-if="modoSimples"
             :href="perfilEdit()"
             class="flex flex-col items-center gap-0.5 py-2 text-xs"
+            data-tutorial="configuracoes"
         >
             <Settings class="size-5" /> Configurações
         </Link>
@@ -76,6 +81,7 @@ const modoSimples = useModoSimples();
             <button
                 type="button"
                 class="flex flex-col items-center gap-0.5 py-2 text-xs"
+                data-tutorial="mais"
                 @click="setOpenMobile(true)"
             >
                 <Menu class="size-5" /> Mais

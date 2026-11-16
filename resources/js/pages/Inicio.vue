@@ -17,12 +17,14 @@ import LancamentoItem from '@/components/lancamentos/LancamentoItem.vue';
 import LancamentoItemSimples from '@/components/lancamentos/LancamentoItemSimples.vue';
 import ParticipacaoFormulario from '@/components/lancamentos/ParticipacaoFormulario.vue';
 import PerguntaModoSimples from '@/components/PerguntaModoSimples.vue';
+import TourTutorial from '@/components/TourTutorial.vue';
 import { Button } from '@/components/ui/button';
 import { useModoSimples } from '@/composables/useModoSimples';
 import { useNovoLancamento } from '@/composables/useNovoLancamento';
 import { deslocarMes, nomeDoMes } from '@/lib/datas';
 import { formatarMoeda } from '@/lib/dinheiro';
-import { home } from '@/routes';
+import { passosModoCompleto, passosModoSimples } from '@/lib/tutorial';
+import { home, tutorialVisto } from '@/routes';
 import { desagrupar } from '@/routes/grupos';
 import type {
     CarteiraResumo,
@@ -66,6 +68,7 @@ const props = defineProps<{
         | Record<TipoLancamento, Subsecoes>
         | Record<TipoLancamento, ItemLancamento[]>;
     perguntarModoSimples: boolean;
+    mostrarTutorial: boolean;
 }>();
 
 const modoSimples = useModoSimples();
@@ -310,10 +313,55 @@ const { pedidos } = useNovoLancamento();
 
 watch(pedidos, abrirNovo);
 
+/**
+ * The tour opens after the simple mode question: answering reloads the page without the question,
+ * and closing it without an answer leaves the tour for the next visit (RN-165, DEC-069).
+ */
+const tutorialPendente = computed(
+    () => props.mostrarTutorial && !props.perguntarModoSimples,
+);
+const tutorialAberto = ref(tutorialPendente.value);
+
+watch(tutorialPendente, (pendente) => {
+    if (pendente) {
+        tutorialAberto.value = true;
+    }
+});
+
+const terminandoTutorial = ref(false);
+
+/**
+ * Finishing or skipping saves the tutorial as seen; the server keeps the first date, so "Ver
+ * tutorial" changes nothing (RN-165, RN-167). The server redirects to the same screen without
+ * "?tutorial=1" and "?novo=1" (DEC-069). The tour stays open, with its buttons disabled, until
+ * the answer arrives, so no click on the page can race the save.
+ */
+function terminarTutorial(): void {
+    if (terminandoTutorial.value) {
+        return;
+    }
+
+    router.post(
+        tutorialVisto.url(),
+        {},
+        {
+            preserveState: true,
+            preserveScroll: true,
+            onStart: () => (terminandoTutorial.value = true),
+            onFinish: () => {
+                terminandoTutorial.value = false;
+                tutorialAberto.value = false;
+            },
+        },
+    );
+}
+
 onMounted(() => {
-    // The first access question comes first; the form opens with (+) after the answer (RN-156).
+    // The first access question and the tour come first; the form opens with (+) after them
+    // (RN-156, DEC-069).
     if (
         !props.perguntarModoSimples &&
+        !tutorialAberto.value &&
         new URLSearchParams(window.location.search).get('novo') === '1'
     ) {
         abrirNovo();
@@ -325,9 +373,15 @@ onMounted(() => {
     <Head title="Início" />
 
     <div class="flex flex-col">
-        <div class="sticky top-0 z-10 grid gap-3 border-b bg-background p-4">
+        <div
+            class="sticky top-0 z-10 grid gap-3 border-b bg-background p-4"
+            data-tutorial-fixo
+        >
             <div class="flex items-center justify-between gap-2">
-                <label class="flex min-w-0 items-center gap-2">
+                <label
+                    class="flex min-w-0 items-center gap-2"
+                    data-tutorial="carteira"
+                >
                     <CarteiraIcone
                         :cor="carteira.cor"
                         :icone="carteira.icone"
@@ -356,6 +410,7 @@ onMounted(() => {
                 <Button
                     class="hidden md:inline-flex"
                     data-test="adicionar-lancamento"
+                    data-tutorial="adicionar"
                     @click="abrirNovo"
                 >
                     <Plus /> Adicionar
@@ -363,33 +418,38 @@ onMounted(() => {
             </div>
 
             <div class="flex flex-wrap items-center gap-2">
-                <Button
-                    variant="ghost"
-                    size="icon"
-                    aria-label="Mês anterior"
-                    @click="navegar({ mes: deslocarMes(mes, -1) })"
+                <div
+                    class="flex flex-wrap items-center gap-2"
+                    data-tutorial="mes"
                 >
-                    <ChevronLeft />
-                </Button>
-                <span class="min-w-36 text-center font-semibold">
-                    {{ nomeDoMes(mes) }}
-                </span>
-                <Button
-                    variant="ghost"
-                    size="icon"
-                    aria-label="Mês seguinte"
-                    @click="navegar({ mes: deslocarMes(mes, 1) })"
-                >
-                    <ChevronRight />
-                </Button>
-                <Button
-                    variant="outline"
-                    size="sm"
-                    :disabled="mes === mesAtual"
-                    @click="navegar({ mes: mesAtual })"
-                >
-                    Hoje
-                </Button>
+                    <Button
+                        variant="ghost"
+                        size="icon"
+                        aria-label="Mês anterior"
+                        @click="navegar({ mes: deslocarMes(mes, -1) })"
+                    >
+                        <ChevronLeft />
+                    </Button>
+                    <span class="min-w-36 text-center font-semibold">
+                        {{ nomeDoMes(mes) }}
+                    </span>
+                    <Button
+                        variant="ghost"
+                        size="icon"
+                        aria-label="Mês seguinte"
+                        @click="navegar({ mes: deslocarMes(mes, 1) })"
+                    >
+                        <ChevronRight />
+                    </Button>
+                    <Button
+                        variant="outline"
+                        size="sm"
+                        :disabled="mes === mesAtual"
+                        @click="navegar({ mes: mesAtual })"
+                    >
+                        Hoje
+                    </Button>
+                </div>
                 <div class="ml-auto flex items-center gap-1">
                     <label>
                         <span class="sr-only">Mês</span>
@@ -434,6 +494,7 @@ onMounted(() => {
             <dl
                 v-if="modoSimples"
                 class="grid grid-cols-[1fr_auto] gap-x-4 gap-y-1"
+                data-tutorial="saldos"
             >
                 <dt>Saldo atual</dt>
                 <dd class="text-right font-semibold tabular-nums">
@@ -455,6 +516,7 @@ onMounted(() => {
             <dl
                 v-else
                 class="grid grid-cols-[auto_1fr_1fr] gap-x-4 gap-y-1 text-sm"
+                data-tutorial="saldos"
             >
                 <span />
                 <span class="text-right text-xs text-muted-foreground"
@@ -498,6 +560,7 @@ onMounted(() => {
                     variant="outline"
                     size="sm"
                     :aria-expanded="mostrarFiltros"
+                    data-tutorial="filtros"
                     @click="mostrarFiltros = !mostrarFiltros"
                 >
                     <ListFilter /> Filtros
@@ -515,6 +578,7 @@ onMounted(() => {
                     variant="outline"
                     size="sm"
                     class="ml-auto"
+                    data-tutorial="selecionar"
                     @click="selecionando = true"
                 >
                     <ListChecks /> Selecionar
@@ -602,6 +666,7 @@ onMounted(() => {
 
             <div
                 v-if="secoesVisiveis.length === 0"
+                data-tutorial="lista-vazia"
                 class="grid justify-items-center gap-3 rounded-lg border border-dashed p-8 text-center text-sm text-muted-foreground"
             >
                 <template v-if="temFiltros">
@@ -767,6 +832,12 @@ onMounted(() => {
         />
 
         <PerguntaModoSimples :perguntar="perguntarModoSimples" />
+        <TourTutorial
+            v-if="tutorialAberto"
+            :passos="modoSimples ? passosModoSimples : passosModoCompleto"
+            :terminando="terminandoTutorial"
+            @terminar="terminarTutorial"
+        />
 
         <ParticipacaoFormulario
             v-model:open="participacaoAberta"

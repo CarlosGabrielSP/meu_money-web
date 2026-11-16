@@ -71,11 +71,13 @@ const navSimples = computed<NavItem[]>(() => [
         href: recebidasIndex(),
         icon: Inbox,
         contador: page.props.contadores.recebidas,
+        tutorial: 'recebidas',
     },
     {
         title: 'Configurações',
         href: perfilEdit(),
         icon: Settings,
+        tutorial: 'configuracoes',
     },
     ...administracao.value,
 ]);
@@ -107,11 +109,13 @@ const navCompleta = computed<NavItem[]>(() => [
         href: recebidasIndex(),
         icon: Inbox,
         contador: page.props.contadores.recebidas,
+        tutorial: 'recebidas',
     },
     {
         title: 'Configurações',
         href: perfilEdit(),
         icon: Settings,
+        tutorial: 'configuracoes',
     },
     ...administracao.value,
 ]);

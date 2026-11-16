@@ -17,7 +17,8 @@ class InicioController extends Controller
 {
     /**
      * Main screen: one wallet, one month, balances and the month list (RF-080 to RF-085). The simple
-     * mode gets the list without subsections and ignores the filters of the URL (RN-161).
+     * mode gets the list without subsections and ignores the filters of the URL (RN-161). The tour
+     * opens while it was never seen, or again with "?tutorial=1" (RN-165, RN-167).
      */
     public function __invoke(InicioRequest $request, CalcularSaldos $calcularSaldos, ListarLancamentosDoMes $listarLancamentos): Response
     {
@@ -67,6 +68,7 @@ class InicioController extends Controller
                 ? $listarLancamentos->semSubsecoes($user, $carteira, $mes, $hoje)
                 : $listarLancamentos->handle($user, $carteira, $mes, $filtros, $hoje),
             'perguntarModoSimples' => $perguntarModoSimples,
+            'mostrarTutorial' => $user->tutorial_visto_em === null || $request->query('tutorial') === '1',
         ]);
     }
 

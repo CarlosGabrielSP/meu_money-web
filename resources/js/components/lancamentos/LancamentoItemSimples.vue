@@ -55,6 +55,7 @@ function alternar(marcado: boolean): void {
         <label
             class="flex min-h-12 shrink-0 cursor-pointer items-center gap-2 rounded-md border px-3 font-medium"
             :class="{ invisible: item.cotaId === null }"
+            data-tutorial="executado"
         >
             <Checkbox
                 :model-value="item.executado"

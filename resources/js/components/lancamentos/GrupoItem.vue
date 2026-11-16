@@ -104,6 +104,7 @@ function excluir(): void {
                         : grupo.status === 'executado'
                 "
                 :aria-label="`Executar grupo: ${grupo.nome}`"
+                data-tutorial="executado"
                 @update:model-value="executar"
             />
             <button
