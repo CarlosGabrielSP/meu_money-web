@@ -3,6 +3,7 @@ import { Head, Link } from '@inertiajs/vue3';
 import Heading from '@/components/Heading.vue';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { dataCompleta } from '@/lib/datas';
 import { formatarMoeda } from '@/lib/dinheiro';
 import { index } from '@/routes/recebidas';
 
@@ -52,7 +53,7 @@ defineOptions({
             Nenhum lançamento foi dividido com você ainda.
         </p>
 
-        <ul v-else class="divide-y rounded-lg border">
+        <ul v-else class="divide-y overflow-hidden rounded-2xl border bg-card">
             <li
                 v-for="recebida in recebidas.data"
                 :key="recebida.id"
@@ -71,7 +72,7 @@ defineOptions({
                         >
                     </span>
                     <span class="block truncate text-xs text-muted-foreground">
-                        {{ recebida.data.split('-').reverse().join('/') }} · de
+                        {{ dataCompleta(recebida.data) }} · de
                         {{ recebida.autor }} · {{ recebida.carteira }} ·
                         {{ recebida.categoria }}
                     </span>

@@ -52,3 +52,12 @@ export function hojeEmSaoPaulo(): string {
         timeZone: 'America/Sao_Paulo',
     }).format(new Date());
 }
+
+/**
+ * "2026-11-05" as "05/11/2026" (RNF-004).
+ */
+export function dataCompleta(data: string): string {
+    const [ano, mes, dia] = data.split('-');
+
+    return `${dia}/${mes}/${ano}`;
+}

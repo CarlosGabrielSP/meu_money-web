@@ -1,0 +1,134 @@
+<script setup lang="ts">
+import { computed } from 'vue';
+import { formatarMoeda } from '@/lib/dinheiro';
+import type { SaldosInicio } from '@/types';
+
+const props = defineProps<{
+    saldos: SaldosInicio;
+    simples: boolean;
+}>();
+
+const previsto = computed(() => props.saldos.acumulado.estimado);
+const pendente = computed(() => props.saldos.aReceber + props.saldos.aPagar);
+
+/**
+ * Share of each pending part on the track; at least 4% so a small amount stays visible (RN-169).
+ */
+function largura(valor: number): string {
+    return `${Math.max((valor / pendente.value) * 100, 4)}%`;
+}
+
+function comSinal(valor: number): string {
+    return `${valor > 0 ? '+' : valor < 0 ? '−' : ''} ${formatarMoeda(Math.abs(valor))}`;
+}
+</script>
+
+<template>
+    <!-- Main card (RN-092, RN-169): the only strong element of the screen, in the side menu color
+         (DEC-070). The simple mode shows the balances of RN-160, without the track (RN-175). -->
+    <section
+        class="rounded-3xl bg-saldo p-5 text-saldo-foreground shadow-sm md:p-6 dark:border dark:border-saldo-borda"
+        aria-label="Saldos"
+        data-tutorial="saldos"
+    >
+        <p class="text-sm text-saldo-foreground/75">Saldo atual</p>
+        <p
+            class="mt-1 font-display text-[2.5rem] leading-none font-semibold tracking-tight tabular-nums md:text-5xl"
+        >
+            {{ formatarMoeda(saldos.acumulado.atual) }}
+        </p>
+
+        <dl v-if="simples" class="mt-5 grid gap-2 text-lg">
+            <div class="flex items-baseline justify-between gap-4">
+                <dt>Receitas do mês</dt>
+                <dd class="font-semibold text-emerald-300 tabular-nums">
+                    {{ formatarMoeda(saldos.receitas) }}
+                </dd>
+            </div>
+            <div class="flex items-baseline justify-between gap-4">
+                <dt>Despesas do mês</dt>
+                <dd class="font-semibold text-red-300 tabular-nums">
+                    {{ formatarMoeda(saldos.despesas) }}
+                </dd>
+            </div>
+        </dl>
+
+        <template v-else>
+            <!-- Month track: from the current balance to the balance foreseen for the end of the
+                 month; dashed parts are what is still to receive and to pay (RN-169). -->
+            <div class="mt-6" aria-hidden="true">
+                <div class="flex items-center gap-1.5">
+                    <span
+                        class="size-3 shrink-0 rounded-full bg-saldo-foreground"
+                    />
+                    <span
+                        v-if="pendente === 0"
+                        class="h-0.5 flex-1 rounded-full bg-saldo-foreground/40"
+                    />
+                    <span v-else class="flex flex-1 items-center gap-1">
+                        <span
+                            v-if="saldos.aReceber > 0"
+                            class="h-0 border-t-2 border-dashed border-emerald-300"
+                            :style="{ width: largura(saldos.aReceber) }"
+                        />
+                        <span
+                            v-if="saldos.aPagar > 0"
+                            class="h-0 border-t-2 border-dashed border-red-300"
+                            :style="{ width: largura(saldos.aPagar) }"
+                        />
+                    </span>
+                    <span
+                        class="size-3 shrink-0 rounded-full border-2 border-saldo-foreground"
+                    />
+                </div>
+            </div>
+            <div
+                class="mt-3 flex flex-wrap items-end justify-between gap-x-4 gap-y-2"
+            >
+                <p class="grid text-sm">
+                    <span class="text-emerald-300 tabular-nums"
+                        >{{ comSinal(saldos.aReceber) }} a receber</span
+                    >
+                    <span class="text-red-300 tabular-nums"
+                        >{{ comSinal(-saldos.aPagar) }} a pagar</span
+                    >
+                </p>
+                <p class="grid text-right">
+                    <span class="text-sm text-saldo-foreground/75"
+                        >Previsto para o fim do mês</span
+                    >
+                    <span
+                        class="font-display text-xl font-semibold tabular-nums"
+                        >{{ formatarMoeda(previsto) }}</span
+                    >
+                </p>
+            </div>
+
+            <dl
+                class="mt-5 grid grid-cols-3 gap-3 border-t border-saldo-foreground/15 pt-4 text-sm"
+            >
+                <div class="grid gap-0.5">
+                    <dt class="text-saldo-foreground/75">Receitas</dt>
+                    <dd class="font-medium text-emerald-300 tabular-nums">
+                        {{ formatarMoeda(saldos.receitas) }}
+                    </dd>
+                </div>
+                <div class="grid gap-0.5">
+                    <dt class="text-saldo-foreground/75">Despesas</dt>
+                    <dd class="font-medium text-red-300 tabular-nums">
+                        {{ formatarMoeda(saldos.despesas) }}
+                    </dd>
+                </div>
+                <div class="grid gap-0.5">
+                    <dt class="text-saldo-foreground/75">Resultado do mês</dt>
+                    <dd class="font-medium tabular-nums">
+                        {{ formatarMoeda(saldos.mes.estimado) }}
+                    </dd>
+                    <dd class="text-xs text-saldo-foreground/75 tabular-nums">
+                        atual {{ formatarMoeda(saldos.mes.atual) }}
+                    </dd>
+                </div>
+            </dl>
+        </template>
+    </section>
+</template>

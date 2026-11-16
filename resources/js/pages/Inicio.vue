@@ -7,8 +7,16 @@ import {
     ListFilter,
     Plus,
 } from '@lucide/vue';
-import { computed, onMounted, ref, watch } from 'vue';
+import { useIntersectionObserver } from '@vueuse/core';
+import { computed, onMounted, ref, useTemplateRef, watch } from 'vue';
 import CarteiraIcone from '@/components/carteiras/CarteiraIcone.vue';
+import AvisosPendencias from '@/components/inicio/AvisosPendencias.vue';
+import CardSaldos from '@/components/inicio/CardSaldos.vue';
+import CartoesCarteira from '@/components/inicio/CartoesCarteira.vue';
+import FaixaSaldos from '@/components/inicio/FaixaSaldos.vue';
+import GastosDoMes from '@/components/inicio/GastosDoMes.vue';
+import PainelPendencias from '@/components/inicio/PainelPendencias.vue';
+import type { TipoPainel } from '@/components/inicio/PainelPendencias.vue';
 import AgruparDialog from '@/components/lancamentos/AgruparDialog.vue';
 import EscopoSerieDialog from '@/components/lancamentos/EscopoSerieDialog.vue';
 import GrupoItem from '@/components/lancamentos/GrupoItem.vue';
@@ -22,7 +30,6 @@ import { Button } from '@/components/ui/button';
 import { useModoSimples } from '@/composables/useModoSimples';
 import { useNovoLancamento } from '@/composables/useNovoLancamento';
 import { deslocarMes, nomeDoMes } from '@/lib/datas';
-import { formatarMoeda } from '@/lib/dinheiro';
 import { passosModoCompleto, passosModoSimples } from '@/lib/tutorial';
 import { home, tutorialVisto } from '@/routes';
 import { desagrupar } from '@/routes/grupos';
@@ -30,10 +37,12 @@ import type {
     CarteiraResumo,
     CategoriaOpcao,
     ContatoOpcao,
+    DestaquesInicio,
     EscopoSerie,
     GrupoOpcao,
     ItemLancamento,
     LancamentoEdicao,
+    SaldosInicio,
     SerieDaParcela,
     Subsecoes,
     TipoLancamento,
@@ -46,8 +55,6 @@ type Filtros = {
     compartilhado: 'sim' | 'nao' | null;
 };
 
-type Saldo = { estimado: number; atual: number };
-
 const props = defineProps<{
     carteira: CarteiraResumo;
     carteiras: CarteiraResumo[];
@@ -57,18 +64,15 @@ const props = defineProps<{
     mes: string;
     hoje: string;
     filtros: Filtros;
-    saldos: {
-        acumulado: Saldo;
-        mes: Saldo;
-        receitas: number;
-        despesas: number;
-    };
+    saldos: SaldosInicio;
     /** Subsections in the full mode; one plain list per type in the simple mode (RN-161). */
     lancamentos:
         | Record<TipoLancamento, Subsecoes>
         | Record<TipoLancamento, ItemLancamento[]>;
     perguntarModoSimples: boolean;
     mostrarTutorial: boolean;
+    /** Null in the simple mode (RN-175). */
+    destaques: DestaquesInicio | null;
 }>();
 
 const modoSimples = useModoSimples();
@@ -309,6 +313,18 @@ watch(
     encerrarSelecao,
 );
 
+/**
+ * The main card turns into the compact strip while it is off the screen (RN-170).
+ */
+const card = useTemplateRef<HTMLElement>('card');
+const cardVisivel = ref(true);
+
+useIntersectionObserver(card, ([entrada]) => {
+    cardVisivel.value = entrada?.isIntersecting ?? true;
+});
+
+const painel = ref<TipoPainel | null>(null);
+
 const { pedidos } = useNovoLancamento();
 
 watch(pedidos, abrirNovo);
@@ -373,12 +389,26 @@ onMounted(() => {
     <Head title="Início" />
 
     <div class="flex flex-col">
-        <div
-            class="sticky top-0 z-10 grid gap-3 border-b bg-background p-4"
-            data-tutorial-fixo
-        >
-            <div class="flex items-center justify-between gap-2">
+        <FaixaSaldos
+            :visivel="!cardVisivel"
+            :carteira="carteira.nome"
+            :mes="nomeDoMes(mes)"
+            :saldos="saldos"
+            :simples="modoSimples"
+        />
+
+        <div class="grid gap-4 p-4 md:gap-5 md:p-6">
+            <div class="flex items-center gap-3">
+                <CartoesCarteira
+                    v-if="destaques"
+                    class="min-w-0 flex-1"
+                    :carteiras="carteiras"
+                    :atual="carteira.id"
+                    :saldos="destaques.saldosCarteiras"
+                    @escolher="navegar({ carteira: $event })"
+                />
                 <label
+                    v-else
                     class="flex min-w-0 items-center gap-2"
                     data-tutorial="carteira"
                 >
@@ -408,7 +438,7 @@ onMounted(() => {
                     </select>
                 </label>
                 <Button
-                    class="hidden md:inline-flex"
+                    class="ml-auto hidden shrink-0 md:inline-flex"
                     data-test="adicionar-lancamento"
                     data-tutorial="adicionar"
                     @click="abrirNovo"
@@ -430,7 +460,9 @@ onMounted(() => {
                     >
                         <ChevronLeft />
                     </Button>
-                    <span class="min-w-36 text-center font-semibold">
+                    <span
+                        class="min-w-36 text-center font-display text-lg font-semibold"
+                    >
                         {{ nomeDoMes(mes) }}
                     </span>
                     <Button
@@ -489,71 +521,29 @@ onMounted(() => {
                 </div>
             </div>
 
-            <!-- Simple mode balances: current accumulated balance and the estimated month totals (RN-160).
-                 Labels in the text color and darker green and red in light mode, for 4.5:1 (DEC-068). -->
-            <dl
-                v-if="modoSimples"
-                class="grid grid-cols-[1fr_auto] gap-x-4 gap-y-1"
-                data-tutorial="saldos"
-            >
-                <dt>Saldo atual</dt>
-                <dd class="text-right font-semibold tabular-nums">
-                    {{ formatarMoeda(saldos.acumulado.atual) }}
-                </dd>
-                <dt>Receitas do mês</dt>
-                <dd
-                    class="text-right font-semibold text-emerald-700 tabular-nums dark:text-emerald-400"
-                >
-                    {{ formatarMoeda(saldos.receitas) }}
-                </dd>
-                <dt>Despesas do mês</dt>
-                <dd
-                    class="text-right font-semibold text-red-700 tabular-nums dark:text-red-400"
-                >
-                    {{ formatarMoeda(saldos.despesas) }}
-                </dd>
-            </dl>
-            <dl
-                v-else
-                class="grid grid-cols-[auto_1fr_1fr] gap-x-4 gap-y-1 text-sm"
-                data-tutorial="saldos"
-            >
-                <span />
-                <span class="text-right text-xs text-muted-foreground"
-                    >Estimado</span
-                >
-                <span class="text-right text-xs text-muted-foreground"
-                    >Atual</span
-                >
-                <dt>Acumulado</dt>
-                <dd class="text-right font-medium tabular-nums">
-                    {{ formatarMoeda(saldos.acumulado.estimado) }}
-                </dd>
-                <dd class="text-right font-medium tabular-nums">
-                    {{ formatarMoeda(saldos.acumulado.atual) }}
-                </dd>
-                <dt>Mês</dt>
-                <dd class="text-right font-medium tabular-nums">
-                    {{ formatarMoeda(saldos.mes.estimado) }}
-                </dd>
-                <dd class="text-right font-medium tabular-nums">
-                    {{ formatarMoeda(saldos.mes.atual) }}
-                </dd>
-            </dl>
             <div
-                v-if="!modoSimples"
-                class="flex justify-between text-sm tabular-nums"
+                class="grid items-start gap-4"
+                :class="
+                    destaques
+                        ? 'md:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]'
+                        : 'md:max-w-xl'
+                "
             >
-                <span class="text-emerald-600 dark:text-emerald-400">
-                    ▲ Receitas {{ formatarMoeda(saldos.receitas) }}
-                </span>
-                <span class="text-red-600 dark:text-red-400">
-                    ▼ Despesas {{ formatarMoeda(saldos.despesas) }}
-                </span>
+                <div ref="card">
+                    <CardSaldos :saldos="saldos" :simples="modoSimples" />
+                </div>
+                <div v-if="destaques" class="grid gap-4">
+                    <AvisosPendencias
+                        :vencidas="destaques.vencidas"
+                        :proximas="destaques.proximas"
+                        @abrir="painel = $event"
+                    />
+                    <GastosDoMes
+                        :gastos="destaques.gastosDoMes"
+                        :total-despesas="saldos.despesas"
+                    />
+                </div>
             </div>
-        </div>
-
-        <div class="grid gap-4 p-4">
             <!-- The simple mode has no filters and no selection to group (RN-161). -->
             <div v-if="!modoSimples" class="flex items-center gap-2">
                 <Button
@@ -667,7 +657,7 @@ onMounted(() => {
             <div
                 v-if="secoesVisiveis.length === 0"
                 data-tutorial="lista-vazia"
-                class="grid justify-items-center gap-3 rounded-lg border border-dashed p-8 text-center text-sm text-muted-foreground"
+                class="grid justify-items-center gap-3 rounded-2xl border border-dashed p-8 text-center text-sm text-muted-foreground"
             >
                 <template v-if="temFiltros">
                     Nenhum lançamento com esses filtros.
@@ -689,10 +679,12 @@ onMounted(() => {
                     :key="secao.tipo"
                     class="grid gap-3"
                 >
-                    <h2 class="font-semibold tracking-wide uppercase">
+                    <h2 class="text-lg font-semibold">
                         {{ secao.titulo }}
                     </h2>
-                    <ul class="divide-y rounded-lg border">
+                    <ul
+                        class="divide-y overflow-hidden rounded-2xl border bg-card"
+                    >
                         <LancamentoItemSimples
                             v-for="item in listaSimples[secao.tipo]"
                             :key="item.chave"
@@ -713,7 +705,7 @@ onMounted(() => {
                     :key="secao.tipo"
                     class="grid gap-3"
                 >
-                    <h2 class="text-sm font-semibold tracking-wide uppercase">
+                    <h2 class="text-lg font-semibold">
                         {{ secao.titulo }}
                     </h2>
                     <template
@@ -730,7 +722,9 @@ onMounted(() => {
                             <h3 class="text-xs text-muted-foreground">
                                 {{ subsecao.titulo }}
                             </h3>
-                            <ul class="divide-y rounded-lg border">
+                            <ul
+                                class="divide-y overflow-hidden rounded-2xl border bg-card"
+                            >
                                 <LancamentoItem
                                     v-for="item in listaCompleta[secao.tipo][
                                         subsecao.chave
@@ -753,7 +747,9 @@ onMounted(() => {
                         class="grid gap-1"
                     >
                         <h3 class="text-xs text-muted-foreground">Grupos</h3>
-                        <ul class="divide-y rounded-lg border">
+                        <ul
+                            class="divide-y overflow-hidden rounded-2xl border bg-card"
+                        >
                             <GrupoItem
                                 v-for="grupo in listaCompleta[secao.tipo]
                                     .grupos"
@@ -772,7 +768,7 @@ onMounted(() => {
 
         <div
             v-if="selecionando && !modoSimples"
-            class="sticky bottom-20 z-10 mx-4 mb-4 flex flex-wrap items-center gap-2 rounded-lg border bg-background p-3 shadow-lg md:bottom-4"
+            class="sticky bottom-24 z-10 mx-4 mb-4 flex flex-wrap items-center gap-2 rounded-2xl border bg-background p-3 shadow-lg md:bottom-4"
             role="toolbar"
             aria-label="Ações da seleção"
         >
@@ -837,6 +833,16 @@ onMounted(() => {
             :passos="modoSimples ? passosModoSimples : passosModoCompleto"
             :terminando="terminandoTutorial"
             @terminar="terminarTutorial"
+        />
+
+        <PainelPendencias
+            :painel="painel"
+            :quantidade="
+                painel === 'vencidas'
+                    ? (destaques?.vencidas.quantidade ?? 0)
+                    : (destaques?.proximas.quantidade ?? 0)
+            "
+            @fechar="painel = null"
         />
 
         <ParticipacaoFormulario

@@ -2,6 +2,8 @@
 import { Form, Head, router } from '@inertiajs/vue3';
 import { computed, ref } from 'vue';
 import CategoriaController from '@/actions/App/Http/Controllers/CategoriaController';
+import CategoriaIcone from '@/components/categorias/CategoriaIcone.vue';
+import { iconesCategoria, rotulosIcones } from '@/components/categorias/icones';
 import Heading from '@/components/Heading.vue';
 import InputError from '@/components/InputError.vue';
 import { Badge } from '@/components/ui/badge';
@@ -24,6 +26,7 @@ type Categoria = {
     id: number;
     nome: string;
     tipo: Tipo;
+    icone: string;
     doSistema: boolean;
 };
 
@@ -51,6 +54,8 @@ const porTipo = computed(() =>
         ),
     })),
 );
+
+const icones = Object.keys(iconesCategoria);
 
 const dialogAberto = ref(false);
 const editando = ref<Categoria | null>(null);
@@ -94,13 +99,14 @@ function excluir(): void {
             <h2 class="text-sm font-semibold text-muted-foreground">
                 {{ grupo.titulo }}
             </h2>
-            <ul class="divide-y rounded-lg border">
+            <ul class="divide-y overflow-hidden rounded-2xl border bg-card">
                 <li
                     v-for="categoria in grupo.categorias"
                     :key="categoria.id"
                     class="flex items-center justify-between gap-3 px-4 py-3"
                 >
-                    <div class="flex min-w-0 items-center gap-2">
+                    <div class="flex min-w-0 items-center gap-3">
+                        <CategoriaIcone :icone="categoria.icone" />
                         <span class="truncate">{{ categoria.nome }}</span>
                         <Badge v-if="categoria.doSistema" variant="secondary">
                             do sistema
@@ -175,6 +181,38 @@ function excluir(): void {
                         {{ tipo.titulo }}
                     </label>
                     <InputError :message="errors.tipo" />
+                </fieldset>
+
+                <!-- Icon from the fixed list; a new category starts with "tag" (RN-176). -->
+                <fieldset class="grid gap-2">
+                    <legend class="mb-2 text-sm font-medium">Ícone</legend>
+                    <div
+                        class="grid grid-cols-[repeat(auto-fill,minmax(2.25rem,1fr))] gap-2 simples:grid-cols-[repeat(auto-fill,minmax(3rem,1fr))]"
+                    >
+                        <label
+                            v-for="opcao in icones"
+                            :key="opcao"
+                            class="cursor-pointer"
+                        >
+                            <input
+                                type="radio"
+                                name="icone"
+                                :value="opcao"
+                                :checked="(editando?.icone ?? 'tag') === opcao"
+                                class="peer sr-only"
+                            />
+                            <span
+                                class="flex size-9 items-center justify-center rounded-md border peer-checked:border-foreground peer-checked:bg-accent peer-focus-visible:ring-2 simples:size-12"
+                                :aria-label="rotulosIcones[opcao]"
+                            >
+                                <component
+                                    :is="iconesCategoria[opcao]"
+                                    class="size-5"
+                                />
+                            </span>
+                        </label>
+                    </div>
+                    <InputError :message="errors.icone" />
                 </fieldset>
 
                 <DialogFooter>

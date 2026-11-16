@@ -3,7 +3,10 @@
 namespace App\Http\Controllers;
 
 use App\Actions\Inicio\CalcularSaldos;
+use App\Actions\Inicio\GastosDoMes;
 use App\Actions\Inicio\ListarLancamentosDoMes;
+use App\Actions\Inicio\PendenciasDaCarteira;
+use App\Actions\Inicio\SaldosDasCarteiras;
 use App\Http\Requests\InicioRequest;
 use App\Models\Carteira;
 use App\Models\Categoria;
@@ -18,10 +21,18 @@ class InicioController extends Controller
     /**
      * Main screen: one wallet, one month, balances and the month list (RF-080 to RF-085). The simple
      * mode gets the list without subsections and ignores the filters of the URL (RN-161). The tour
-     * opens while it was never seen, or again with "?tutorial=1" (RN-165, RN-167).
+     * opens while it was never seen, or again with "?tutorial=1" (RN-165, RN-167). The full mode also gets
+     * the highlights: wallet balances, overdue and upcoming shares and the month's top categories; the
+     * panel lists load only on request (RN-171 to RN-175).
      */
-    public function __invoke(InicioRequest $request, CalcularSaldos $calcularSaldos, ListarLancamentosDoMes $listarLancamentos): Response
-    {
+    public function __invoke(
+        InicioRequest $request,
+        CalcularSaldos $calcularSaldos,
+        ListarLancamentosDoMes $listarLancamentos,
+        SaldosDasCarteiras $saldosDasCarteiras,
+        PendenciasDaCarteira $pendencias,
+        GastosDoMes $gastosDoMes,
+    ): Response {
         /** @var User $user */
         $user = $request->user();
         $carteira = $request->carteira();
@@ -69,6 +80,13 @@ class InicioController extends Controller
                 : $listarLancamentos->handle($user, $carteira, $mes, $filtros, $hoje),
             'perguntarModoSimples' => $perguntarModoSimples,
             'mostrarTutorial' => $user->tutorial_visto_em === null || $request->query('tutorial') === '1',
+            'destaques' => fn (): ?array => $user->modo_simples ? null : [
+                'saldosCarteiras' => (object) $saldosDasCarteiras->handle($user, $mes),
+                ...$pendencias->resumo($user, $carteira, $hoje),
+                'gastosDoMes' => $gastosDoMes->handle($user, $carteira, $mes),
+            ],
+            'cotasVencidas' => Inertia::optional(fn (): array => $pendencias->listaVencidas($user, $carteira, $hoje)),
+            'cotasProximas' => Inertia::optional(fn (): array => $pendencias->listaProximas($user, $carteira, $hoje)),
         ]);
     }
 

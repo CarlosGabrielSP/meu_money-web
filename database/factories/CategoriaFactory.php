@@ -2,6 +2,7 @@
 
 namespace Database\Factories;
 
+use App\Enums\IconeCategoria;
 use App\Enums\TipoCategoria;
 use App\Models\Categoria;
 use App\Models\User;
@@ -23,6 +24,7 @@ class CategoriaFactory extends Factory
             'user_id' => User::factory(),
             'nome' => fake()->unique()->words(2, true),
             'tipo' => TipoCategoria::Despesa,
+            'icone' => IconeCategoria::Tag,
         ];
     }
 

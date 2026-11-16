@@ -13,6 +13,9 @@
         'Instrument Sans', ui-sans-serif, system-ui, sans-serif,
         'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol',
         'Noto Color Emoji';
+    --font-display:
+        'Bricolage Grotesque', 'Instrument Sans', ui-sans-serif, system-ui,
+        sans-serif;
 
     --radius-lg: var(--radius);
     --radius-md: calc(var(--radius) - 2px);
@@ -41,6 +44,10 @@
 
     --color-destaque: var(--destaque);
     --color-destaque-foreground: var(--destaque-foreground);
+
+    --color-saldo: var(--saldo);
+    --color-saldo-foreground: var(--saldo-foreground);
+    --color-saldo-borda: var(--saldo-borda);
 
     --color-destructive: var(--destructive);
     --color-destructive-foreground: var(--destructive-foreground);
@@ -462,6 +469,25 @@
     --theme-color: #0c0c0e;
 }
 
+/*
+ * Main balance card (RN-169, DEC-070): the dark color of the palette, the same as the side menu,
+ * with its text (at least 9.2:1, DEC-062). Neutro light keeps a light menu, so its card is #171717.
+ * Income and expense on the card use emerald-300 and red-300 in every palette (RN-153, DEC-070).
+ */
+:root,
+[data-paleta] {
+    --saldo: var(--sidebar);
+    --saldo-foreground: var(--sidebar-foreground);
+    --saldo-borda: var(--sidebar-border);
+}
+
+:root:not([data-paleta], .dark),
+[data-paleta='neutro']:not(.dark) {
+    --saldo: #171717;
+    --saldo-foreground: #fafafa;
+    --saldo-borda: #171717;
+}
+
 @layer base {
     * {
         @apply border-border outline-ring/50;
@@ -469,6 +495,13 @@
 
     body {
         @apply bg-background text-foreground;
+    }
+
+    /* Headings carry the display face; body text and amounts stay in Instrument Sans (DEC-070). */
+    h1,
+    h2,
+    h3 {
+        font-family: var(--font-display);
     }
 }
 

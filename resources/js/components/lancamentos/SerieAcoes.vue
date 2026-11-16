@@ -15,6 +15,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { encerrar, total } from '@/routes/parcelamentos';
 import type { SerieDaParcela } from '@/types';
+import { dataCompleta } from '@/lib/datas';
 
 const props = defineProps<{
     serie: SerieDaParcela;
@@ -69,7 +70,7 @@ function confirmarTotal(): void {
                 Parcela {{ serie.numero }} de série recorrente
                 <template v-if="serie.encerradaEm">
                     (encerrada em
-                    {{ serie.encerradaEm.split('-').reverse().join('/') }})
+                    {{ dataCompleta(serie.encerradaEm) }})
                 </template>
             </template>
             <template v-else>

@@ -73,7 +73,7 @@ function tornarPadrao(carteira: Carteira): void {
             </Button>
         </div>
 
-        <ul class="divide-y rounded-lg border">
+        <ul class="divide-y overflow-hidden rounded-2xl border bg-card">
             <li
                 v-for="carteira in carteiras"
                 :key="carteira.id"

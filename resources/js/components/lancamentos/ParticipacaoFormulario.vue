@@ -14,6 +14,7 @@ import {
     DialogTitle,
 } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
+import { dataCompleta } from '@/lib/datas';
 import {
     Sheet,
     SheetContent,
@@ -149,7 +150,7 @@ const rotuloExecutado = computed(() => {
                     @submit.prevent="salvar"
                 >
                     <p class="text-sm">
-                        Data: {{ item.data.split('-').reverse().join('/') }}
+                        Data: {{ dataCompleta(item.data) }}
                         <template v-if="item.parcela">
                             · parcela {{ item.parcela }}</template
                         >

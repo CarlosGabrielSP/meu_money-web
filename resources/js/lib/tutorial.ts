@@ -16,12 +16,12 @@ const textoMes =
 export const passosModoCompleto: PassoTutorial[] = [
     {
         alvos: ['carteira'],
-        texto: 'Cada carteira tem saldo próprio; troque de carteira aqui.',
+        texto: 'Cada carteira tem saldo próprio; toque num cartão para trocar.',
     },
     { alvos: ['mes'], texto: textoMes },
     {
         alvos: ['saldos'],
-        texto: 'Acumulado soma os meses até aqui, Mês mostra só este mês e Atual conta só o que já foi pago ou recebido.',
+        texto: 'Saldo atual conta o que já foi pago ou recebido, e o trilho mostra o previsto para o fim do mês.',
     },
     {
         alvos: ['adicionar'],

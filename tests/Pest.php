@@ -132,3 +132,20 @@ function valoresDasCotas(Lancamento $lancamento): array
 {
     return $lancamento->cotas()->orderBy('id')->pluck('valor', 'user_id')->all();
 }
+
+/**
+ * Sample data of RF-081 in wallet X (also used by RF-130, RF-131 and RF-136).
+ */
+function exemploSaldos(User $user, Carteira $carteira, Categoria $categoria): void
+{
+    foreach ([
+        ['2026-10-05', 'receita', 500000, true],
+        ['2026-10-20', 'despesa', 100000, true],
+        ['2026-11-05', 'receita', 500000, true],
+        ['2026-11-10', 'despesa', 200000, true],
+        ['2026-11-25', 'despesa', 150000, false],
+        ['2026-12-05', 'receita', 500000, false],
+    ] as [$data, $tipo, $valor, $executado]) {
+        lancamentoComCota($user, $carteira, $categoria, ['data' => $data, 'tipo' => $tipo, 'valor' => $valor], ['executado' => $executado]);
+    }
+}

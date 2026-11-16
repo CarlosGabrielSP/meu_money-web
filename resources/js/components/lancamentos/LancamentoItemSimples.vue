@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { router } from '@inertiajs/vue3';
 import { computed } from 'vue';
+import CategoriaIcone from '@/components/categorias/CategoriaIcone.vue';
 import { Checkbox } from '@/components/ui/checkbox';
 import { diaEMes } from '@/lib/datas';
 import { formatarMoeda } from '@/lib/dinheiro';
@@ -67,32 +68,37 @@ function alternar(marcado: boolean): void {
         </label>
         <button
             type="button"
-            class="flex min-h-12 min-w-0 flex-1 flex-col items-start text-left"
+            class="flex min-h-12 min-w-0 flex-1 items-center gap-3 text-left"
             :disabled="item.edicao === null && item.participacao === null"
             @click="emit('editar', item)"
         >
-            <span class="flex w-full min-w-0 gap-2">
-                <span class="shrink-0 text-muted-foreground">
-                    {{ diaEMes(item.data) }}
+            <CategoriaIcone :icone="item.categoriaIcone" />
+            <span class="flex min-w-0 flex-1 flex-col items-start">
+                <span class="flex w-full min-w-0 gap-2">
+                    <span class="shrink-0 text-muted-foreground">
+                        {{ diaEMes(item.data) }}
+                    </span>
+                    <span class="truncate font-medium">{{
+                        item.descricao
+                    }}</span>
                 </span>
-                <span class="truncate font-medium">{{ item.descricao }}</span>
-            </span>
-            <span class="flex flex-wrap items-center gap-x-3 gap-y-1">
-                <span class="font-semibold tabular-nums">
-                    {{ formatarMoeda(item.valor) }}
-                </span>
-                <span
-                    v-for="indicador in indicadores"
-                    :key="indicador"
-                    class="text-sm text-muted-foreground"
-                >
-                    {{ indicador }}
-                </span>
-                <span
-                    v-if="item.vencido"
-                    class="text-sm font-semibold text-destructive"
-                >
-                    Vencido
+                <span class="flex flex-wrap items-center gap-x-3 gap-y-1">
+                    <span class="font-semibold tabular-nums">
+                        {{ formatarMoeda(item.valor) }}
+                    </span>
+                    <span
+                        v-for="indicador in indicadores"
+                        :key="indicador"
+                        class="text-sm text-muted-foreground"
+                    >
+                        {{ indicador }}
+                    </span>
+                    <span
+                        v-if="item.vencido"
+                        class="text-sm font-semibold text-destructive"
+                    >
+                        Vencido
+                    </span>
                 </span>
             </span>
         </button>

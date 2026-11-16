@@ -1,5 +1,6 @@
 <?php
 
+use App\Enums\IconeCategoria;
 use App\Enums\TipoCategoria;
 use App\Models\Categoria;
 use Database\Seeders\CategoriasGlobaisSeeder;
@@ -25,4 +26,12 @@ it('CA-034.2 does not duplicate categories when run again', function () {
     $this->seed(CategoriasGlobaisSeeder::class);
 
     expect(Categoria::query()->globais()->count())->toBe(17);
+});
+
+it('CA-135.4 gives each system category the icon of the map', function () {
+    $this->seed(CategoriasGlobaisSeeder::class);
+
+    expect(Categoria::query()->globais()->get()->mapWithKeys(fn (Categoria $categoria) => [$categoria->nome => $categoria->icone])->all())
+        ->toEqualCanonicalizing(IconeCategoria::GLOBAIS)
+        ->and(Categoria::query()->globais()->where('nome', 'Mercado')->sole()->icone)->toBe(IconeCategoria::ShoppingCart);
 });

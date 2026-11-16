@@ -24,6 +24,7 @@ class ListarLancamentosDoMes
 
     /**
      * The user's shares of one wallet and month, split by type and subsection (RN-093, RN-094, RN-116),
+     * each with the icon of its category (RN-176),
      * plus entries the user authored in this wallet without a share of their own (RN-145).
      *
      * The author gets edit data with the split (RF-072); a participant gets the data of their own
@@ -141,7 +142,7 @@ class ListarLancamentosDoMes
             ->when($filtros['compartilhado'], fn ($query, string $compartilhado) => $compartilhado === 'sim'
                 ? $query->whereNotNull('lancamentos.modo_rateio')
                 : $query->whereNull('lancamentos.modo_rateio'))
-            ->with(['categoria:id,nome', ...($comGrupo ? ['grupo:id,nome'] : []), ...array_map(fn (string $relacao): string => "lancamento.{$relacao}", $relacoes)])
+            ->with(['categoria:id,nome,icone', ...($comGrupo ? ['grupo:id,nome'] : []), ...array_map(fn (string $relacao): string => "lancamento.{$relacao}", $relacoes)])
             ->get();
 
         $semCota = $filtros['categoria'] !== null || $filtros['status'] !== null || $filtros['compartilhado'] === 'nao'
@@ -230,6 +231,7 @@ class ListarLancamentosDoMes
             'data' => $lancamento->data->toDateString(),
             'descricao' => $lancamento->descricao,
             'categoria' => $cota?->categoria->nome,
+            'categoriaIcone' => $cota?->categoria->icone->value,
             'valor' => $cota === null ? 0 : $cota->valor,
             'total' => $lancamento->valor,
             'autor' => $autor ? null : $lancamento->user->name,

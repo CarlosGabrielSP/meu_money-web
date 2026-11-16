@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Enums\IconeCategoria;
 use App\Enums\TipoCategoria;
 use Carbon\CarbonImmutable;
 use Database\Factories\CategoriaFactory;
@@ -17,14 +18,25 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * @property int|null $user_id
  * @property string $nome
  * @property TipoCategoria $tipo
+ * @property IconeCategoria $icone
  * @property CarbonImmutable|null $created_at
  * @property CarbonImmutable|null $updated_at
  */
-#[Fillable(['nome', 'tipo'])]
+#[Fillable(['nome', 'tipo', 'icone'])]
 class Categoria extends Model
 {
     /** @use HasFactory<CategoriaFactory> */
     use HasFactory;
+
+    /**
+     * Same default as the column, so a category created in memory has an icon before a refetch
+     * (RN-176).
+     *
+     * @var array<string, string>
+     */
+    protected $attributes = [
+        'icone' => 'tag',
+    ];
 
     /**
      * @return array<string, string>
@@ -33,6 +45,7 @@ class Categoria extends Model
     {
         return [
             'tipo' => TipoCategoria::class,
+            'icone' => IconeCategoria::class,
         ];
     }
 

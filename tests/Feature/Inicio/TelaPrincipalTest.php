@@ -10,6 +10,7 @@ use App\Models\Lancamento;
 use App\Models\Parcelamento;
 use App\Models\User;
 use Carbon\CarbonImmutable;
+use Database\Seeders\CategoriasGlobaisSeeder;
 use Inertia\Testing\AssertableInertia as Assert;
 
 beforeEach(function () {
@@ -19,23 +20,6 @@ beforeEach(function () {
     $this->carteira = Carteira::factory()->for($this->user)->create(['nome' => 'X']);
     $this->categoria = Categoria::factory()->for($this->user)->create(['tipo' => TipoCategoria::Ambos]);
 });
-
-/**
- * Sample data of RF-081 in wallet X.
- */
-function exemploSaldos(User $user, Carteira $carteira, Categoria $categoria): void
-{
-    foreach ([
-        ['2026-10-05', 'receita', 500000, true],
-        ['2026-10-20', 'despesa', 100000, true],
-        ['2026-11-05', 'receita', 500000, true],
-        ['2026-11-10', 'despesa', 200000, true],
-        ['2026-11-25', 'despesa', 150000, false],
-        ['2026-12-05', 'receita', 500000, false],
-    ] as [$data, $tipo, $valor, $executado]) {
-        lancamentoComCota($user, $carteira, $categoria, ['data' => $data, 'tipo' => $tipo, 'valor' => $valor], ['executado' => $executado]);
-    }
-}
 
 it('CA-080.1 opens the default wallet and the current month', function () {
     $this->actingAs($this->user)->get(route('home'))
@@ -261,4 +245,17 @@ it('CA-083.2 sends series data for installments and the split for shared entries
 
 it('RNF-020 sends guests to the login page', function () {
     $this->get(route('home'))->assertRedirect(route('login'));
+});
+
+it('CA-135.5 sends the icon of the share category in plain and grouped items', function () {
+    $this->seed(CategoriasGlobaisSeeder::class);
+    $mercado = Categoria::query()->globais()->where('nome', 'Mercado')->sole();
+    lancamentoComCota($this->user, $this->carteira, $mercado, ['data' => '2026-11-10', 'descricao' => 'Feira']);
+    $agrupada = lancamentoComCota($this->user, $this->carteira, $mercado, ['data' => '2026-11-11'])->cotas()->sole();
+    $this->actingAs($this->user)->post(route('grupos.agrupar'), ['cotas' => [$agrupada->id], 'nome' => 'Fatura'])->assertSessionHasNoErrors();
+
+    $this->actingAs($this->user)->get(route('home', ['carteira' => $this->carteira->id]))
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('lancamentos.despesa.avista.0.categoriaIcone', 'shopping-cart')
+            ->where('lancamentos.despesa.grupos.0.itens.0.categoriaIcone', 'shopping-cart'));
 });

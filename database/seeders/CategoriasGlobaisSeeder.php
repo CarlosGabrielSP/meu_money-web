@@ -2,6 +2,7 @@
 
 namespace Database\Seeders;
 
+use App\Enums\IconeCategoria;
 use App\Enums\TipoCategoria;
 use App\Models\Categoria;
 use Illuminate\Database\Seeder;
@@ -23,7 +24,7 @@ class CategoriasGlobaisSeeder extends Seeder
     ];
 
     /**
-     * Create the system categories, skipping the ones that already exist.
+     * Create the system categories with their icons (DEC-073), skipping the ones that already exist.
      */
     public function run(): void
     {
@@ -31,7 +32,7 @@ class CategoriasGlobaisSeeder extends Seeder
             foreach ($nomes as $nome) {
                 Categoria::query()->firstOrCreate(
                     ['user_id' => null, 'nome' => $nome],
-                    ['tipo' => TipoCategoria::from($tipo)],
+                    ['tipo' => TipoCategoria::from($tipo), 'icone' => IconeCategoria::daGlobal($nome)],
                 );
             }
         }

@@ -75,6 +75,8 @@ export type ItemLancamento = {
     data: string;
     descricao: string;
     categoria: string | null;
+    /** Icon of the share category (RN-176); null for an author without a share. */
+    categoriaIcone: string | null;
     valor: number;
     total: number;
     autor: string | null;
@@ -113,4 +115,39 @@ export type Subsecoes = {
     parceladas: ItemLancamento[];
     recorrentes: ItemLancamento[];
     grupos: GrupoLinha[];
+};
+
+export type Saldo = { estimado: number; atual: number };
+
+/** Balances of the main card (RN-092, RN-169). */
+export type SaldosInicio = {
+    acumulado: Saldo;
+    mes: Saldo;
+    receitas: number;
+    despesas: number;
+    aReceber: number;
+    aPagar: number;
+};
+
+/** One pending share of the overdue or upcoming panel (RN-172, RN-173). */
+export type CotaPendente = {
+    cotaId: number;
+    data: string;
+    descricao: string;
+    tipo: TipoLancamento;
+    valor: number;
+};
+
+export type GastoDoMes = {
+    nome: string;
+    icone: string;
+    valor: number;
+};
+
+/** Highlights of the main screen in the full mode (RN-171 to RN-174). */
+export type DestaquesInicio = {
+    saldosCarteiras: Record<string, number>;
+    vencidas: { quantidade: number; receitas: number; despesas: number };
+    proximas: { quantidade: number; total: number };
+    gastosDoMes: GastoDoMes[];
 };

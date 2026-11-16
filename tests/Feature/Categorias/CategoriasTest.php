@@ -1,5 +1,6 @@
 <?php
 
+use App\Enums\IconeCategoria;
 use App\Enums\TipoCategoria;
 use App\Enums\TipoLancamento;
 use App\Models\Categoria;
@@ -142,4 +143,53 @@ it('CA-033.2 moves shares and series to "Outros" when deleting a used category',
     expect($categoria->fresh())->toBeNull()
         ->and($cota->fresh()->categoria_id)->toBe($this->outros->id)
         ->and($serie->fresh()->categoria_id)->toBe($this->outros->id);
+});
+
+it('CA-135.1 saves the chosen icon of a new category and defaults to tag', function (?string $icone, string $esperado) {
+    $this->actingAs($this->user)
+        ->post(route('categorias.store'), array_filter(['nome' => 'Pet', 'tipo' => 'despesa', 'icone' => $icone]))
+        ->assertSessionHasNoErrors();
+
+    expect($this->user->categorias()->sole()->icone)->toBe(IconeCategoria::from($esperado));
+})->with([
+    'chosen' => ['car', 'car'],
+    'missing' => [null, 'tag'],
+]);
+
+it('CA-135.2 rejects an icon outside the list on create and update', function () {
+    $categoria = Categoria::factory()->for($this->user)->create(['nome' => 'Pet', 'icone' => IconeCategoria::Car]);
+
+    $this->actingAs($this->user)
+        ->post(route('categorias.store'), ['nome' => 'Nova', 'tipo' => 'despesa', 'icone' => 'rocket'])
+        ->assertSessionHasErrors('icone');
+    $this->actingAs($this->user)
+        ->put(route('categorias.update', $categoria), ['nome' => 'Pet', 'tipo' => 'despesa', 'icone' => 'rocket'])
+        ->assertSessionHasErrors('icone');
+
+    expect($this->user->categorias()->count())->toBe(1)
+        ->and($categoria->refresh()->icone)->toBe(IconeCategoria::Car);
+});
+
+it('CA-135.3 changes the icon of an own category and keeps it when none is sent', function () {
+    $categoria = Categoria::factory()->for($this->user)->create(['nome' => 'Pet']);
+
+    $this->actingAs($this->user)
+        ->put(route('categorias.update', $categoria), ['nome' => 'Pet', 'tipo' => 'despesa', 'icone' => 'plane'])
+        ->assertSessionHasNoErrors();
+    expect($categoria->refresh()->icone)->toBe(IconeCategoria::Plane);
+
+    $this->actingAs($this->user)
+        ->put(route('categorias.update', $categoria), ['nome' => 'Viagem', 'tipo' => 'despesa'])
+        ->assertSessionHasNoErrors();
+    expect($categoria->refresh()->icone)->toBe(IconeCategoria::Plane);
+});
+
+it('CA-135.6 lists every category with its icon', function () {
+    Categoria::factory()->for($this->user)->create(['nome' => 'Pet', 'icone' => IconeCategoria::PawPrint]);
+
+    $this->actingAs($this->user)
+        ->get(route('categorias.index'))
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('categorias', fn ($categorias) => $categorias->firstWhere('nome', 'Pet')['icone'] === 'paw-print'
+                && $categorias->firstWhere('nome', 'Mercado')['icone'] === 'shopping-cart'));
 });

@@ -14,7 +14,7 @@ use Inertia\Response;
 class CategoriaController extends Controller
 {
     /**
-     * List system categories and the user's own, grouped by type on the page (RF-030).
+     * List system categories and the user's own with their icons, grouped by type on the page (RF-030, RN-176).
      */
     public function index(Request $request): Response
     {
@@ -22,11 +22,12 @@ class CategoriaController extends Controller
             'categorias' => Categoria::query()
                 ->visiveisPara($request->user())
                 ->orderBy('nome')
-                ->get(['id', 'user_id', 'nome', 'tipo'])
+                ->get(['id', 'user_id', 'nome', 'tipo', 'icone'])
                 ->map(fn (Categoria $categoria): array => [
                     'id' => $categoria->id,
                     'nome' => $categoria->nome,
                     'tipo' => $categoria->tipo->value,
+                    'icone' => $categoria->icone->value,
                     'doSistema' => $categoria->isGlobal(),
                 ]),
         ]);
@@ -37,7 +38,7 @@ class CategoriaController extends Controller
      */
     public function store(SalvarCategoriaRequest $request): RedirectResponse
     {
-        $request->user()->categorias()->create($request->validated());
+        $request->user()->categorias()->create($request->dados());
 
         Inertia::flash('toast', ['type' => 'success', 'message' => 'Categoria criada.']);
 
@@ -49,7 +50,7 @@ class CategoriaController extends Controller
      */
     public function update(SalvarCategoriaRequest $request, Categoria $categoria): RedirectResponse
     {
-        $categoria->update($request->validated());
+        $categoria->update($request->dados());
 
         Inertia::flash('toast', ['type' => 'success', 'message' => 'Categoria atualizada.']);
 

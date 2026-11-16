@@ -2,6 +2,7 @@
 import { router } from '@inertiajs/vue3';
 import { Paperclip, Repeat, Users } from '@lucide/vue';
 import { computed, onBeforeUnmount } from 'vue';
+import CategoriaIcone from '@/components/categorias/CategoriaIcone.vue';
 import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
 import { diaEMes } from '@/lib/datas';
@@ -82,7 +83,7 @@ function alternar(marcado: boolean): void {
 
 <template>
     <li
-        class="flex items-center gap-3 px-3 py-2"
+        class="flex items-center gap-3 px-3 py-2.5"
         :class="{
             'bg-destructive/5': item.vencido && !selecionado,
             'bg-primary/10': selecionado,
@@ -121,9 +122,7 @@ function alternar(marcado: boolean): void {
             @pointercancel="cancelarPressao"
             @contextmenu="selecionavel && $event.preventDefault()"
         >
-            <span class="w-11 shrink-0 text-sm text-muted-foreground">
-                {{ diaEMes(item.data) }}
-            </span>
+            <CategoriaIcone :icone="item.categoriaIcone" />
             <span class="min-w-0 flex-1">
                 <span class="flex items-center gap-1.5">
                     <span class="truncate font-medium">{{
@@ -154,6 +153,7 @@ function alternar(marcado: boolean): void {
                 <span
                     class="flex items-center gap-2 text-xs text-muted-foreground"
                 >
+                    <span class="tabular-nums">{{ diaEMes(item.data) }}</span>
                     {{ item.categoria }}
                     <span v-if="item.autor">· de {{ item.autor }}</span>
                     <Badge v-if="item.vencido" variant="destructive"

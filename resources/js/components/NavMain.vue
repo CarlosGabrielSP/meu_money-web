@@ -57,6 +57,7 @@ function executar(acao: () => void): void {
                     as-child
                     :is-active="isCurrentUrl(item.href)"
                     :tooltip="item.title"
+                    class="data-[active=true]:bg-primary data-[active=true]:text-primary-foreground data-[active=true]:hover:bg-primary/90 data-[active=true]:hover:text-primary-foreground"
                 >
                     <Link :href="item.href">
                         <component :is="item.icon" />

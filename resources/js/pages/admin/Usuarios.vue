@@ -159,7 +159,7 @@ function alternarAdministrador(usuario: Usuario): void {
             <Heading title="Usuários" />
             <InputError :message="$page.props.errors.usuario" />
 
-            <ul class="divide-y rounded-lg border">
+            <ul class="divide-y overflow-hidden rounded-2xl border bg-card">
                 <li
                     v-for="usuario in usuarios"
                     :key="usuario.id"

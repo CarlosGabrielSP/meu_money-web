@@ -98,7 +98,7 @@ function excluir(registro: Pessoa, onSuccess?: () => void): void {
 
         <section v-if="recebidos.length > 0" class="grid gap-2">
             <h2 class="text-sm font-semibold">Convites recebidos</h2>
-            <ul class="divide-y rounded-lg border">
+            <ul class="divide-y overflow-hidden rounded-2xl border bg-card">
                 <li
                     v-for="convite in recebidos"
                     :key="convite.id"
@@ -142,7 +142,10 @@ function excluir(registro: Pessoa, onSuccess?: () => void): void {
             >
                 Você ainda não tem contatos. Convide alguém pelo e-mail.
             </p>
-            <ul v-else class="divide-y rounded-lg border">
+            <ul
+                v-else
+                class="divide-y overflow-hidden rounded-2xl border bg-card"
+            >
                 <li
                     v-for="contato in contatos"
                     :key="contato.id"
@@ -171,7 +174,7 @@ function excluir(registro: Pessoa, onSuccess?: () => void): void {
 
         <section v-if="enviados.length > 0" class="grid gap-2">
             <h2 class="text-sm font-semibold">Convites enviados</h2>
-            <ul class="divide-y rounded-lg border">
+            <ul class="divide-y overflow-hidden rounded-2xl border bg-card">
                 <li
                     v-for="convite in enviados"
                     :key="convite.id"

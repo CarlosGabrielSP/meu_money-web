@@ -17,7 +17,7 @@ const modoSimples = useModoSimples();
 
 <template>
     <nav
-        class="fixed inset-x-0 bottom-0 z-20 grid border-t bg-card pb-[env(safe-area-inset-bottom)] md:hidden"
+        class="fixed inset-x-3 bottom-[max(0.75rem,env(safe-area-inset-bottom))] z-20 grid rounded-2xl border bg-card/95 shadow-lg backdrop-blur md:hidden"
         :class="modoSimples ? 'grid-cols-4' : 'grid-cols-5'"
         aria-label="Navegação principal"
         data-tutorial="menu"

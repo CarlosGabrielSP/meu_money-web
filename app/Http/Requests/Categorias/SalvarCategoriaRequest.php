@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests\Categorias;
 
+use App\Enums\IconeCategoria;
 use App\Enums\TipoCategoria;
 use App\Enums\TipoLancamento;
 use App\Models\Categoria;
@@ -32,7 +33,30 @@ class SalvarCategoriaRequest extends FormRequest
         return [
             'nome' => ['required', 'string', 'max:100', $this->nomeDisponivel(...)],
             'tipo' => ['required', Rule::enum(TipoCategoria::class), $this->tipoCompativelComUso(...)],
+            'icone' => ['nullable', Rule::enum(IconeCategoria::class)],
         ];
+    }
+
+    /**
+     * Validated data. A missing icon gets the default on create and keeps the current one on update (RN-176).
+     *
+     * @return array{nome: string, tipo: string, icone: IconeCategoria|string}
+     */
+    public function dados(): array
+    {
+        return [
+            'nome' => $this->validated('nome'),
+            'tipo' => $this->validated('tipo'),
+            'icone' => $this->validated('icone') ?? $this->categoria()->icone ?? IconeCategoria::Tag,
+        ];
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    public function attributes(): array
+    {
+        return ['icone' => 'ícone'];
     }
 
     /**
