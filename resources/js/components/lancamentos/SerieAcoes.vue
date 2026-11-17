@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import CampoData from '@/components/CampoData.vue';
-import { router, usePage } from '@inertiajs/vue3';
+import { Link, router, usePage } from '@inertiajs/vue3';
 import { ref } from 'vue';
 import InputError from '@/components/InputError.vue';
 import { Button } from '@/components/ui/button';
@@ -14,13 +14,17 @@ import {
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { encerrar, total } from '@/routes/parcelamentos';
+import { encerrar, show, total } from '@/routes/parcelamentos';
 import type { SerieDaParcela } from '@/types';
 import { dataCompleta } from '@/lib/datas';
 
 const props = defineProps<{
     serie: SerieDaParcela;
     hoje: string;
+    /** False for an author without a share in the open installment (RN-087), who gets no link (RN-213). */
+    comCota: boolean;
+    /** Unsaved changes in the form disable the link, so leaving does not drop them (RN-213). */
+    alteracoesPendentes: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -78,6 +82,27 @@ function confirmarTotal(): void {
                 Parcela {{ serie.numero }}/{{ serie.total }}
             </template>
         </span>
+        <template v-if="comCota">
+            <Button
+                v-if="alteracoesPendentes"
+                type="button"
+                variant="outline"
+                size="sm"
+                disabled
+                aria-describedby="ver-parcelas-dica"
+            >
+                Ver parcelas
+            </Button>
+            <Button v-else variant="outline" size="sm" as-child>
+                <Link :href="show(serie.id)">Ver parcelas</Link>
+            </Button>
+            <span
+                v-if="alteracoesPendentes"
+                id="ver-parcelas-dica"
+                class="text-xs text-muted-foreground"
+                >Salve antes de ver as parcelas</span
+            >
+        </template>
         <Button
             v-if="serie.recorrente && !serie.encerradaEm"
             type="button"

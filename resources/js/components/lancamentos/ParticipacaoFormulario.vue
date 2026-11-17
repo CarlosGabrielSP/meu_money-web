@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import CampoSelecao from '@/components/CampoSelecao.vue';
-import { router, useForm, usePage } from '@inertiajs/vue3';
+import { Link, router, useForm, usePage } from '@inertiajs/vue3';
 import { computed, ref, watch } from 'vue';
 import InputError from '@/components/InputError.vue';
 import EscopoSerieDialog from '@/components/lancamentos/EscopoSerieDialog.vue';
@@ -26,6 +26,7 @@ import {
 import { useModoSimples } from '@/composables/useModoSimples';
 import { formatarMoeda } from '@/lib/dinheiro';
 import { destroy, update } from '@/routes/cotas';
+import { show as showSerie } from '@/routes/parcelamentos';
 import { show as showAnexo } from '@/routes/lancamentos/anexo';
 import type {
     CarteiraResumo,
@@ -150,12 +151,38 @@ const rotuloExecutado = computed(() => {
                     class="grid gap-4 px-4 pb-6"
                     @submit.prevent="salvar"
                 >
-                    <p class="text-sm">
-                        Data: {{ dataCompleta(item.data) }}
-                        <template v-if="item.parcela">
-                            · parcela {{ item.parcela }}</template
-                        >
-                    </p>
+                    <div class="flex flex-wrap items-center gap-2 text-sm">
+                        <span>
+                            Data: {{ dataCompleta(item.data) }}
+                            <template v-if="item.parcela">
+                                · parcela {{ item.parcela }}</template
+                            >
+                        </span>
+                        <!-- Tracking of the series (RN-213, CA-152.1). -->
+                        <template v-if="item.serie">
+                            <Button
+                                v-if="form.isDirty"
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                disabled
+                                aria-describedby="participacao-ver-parcelas-dica"
+                            >
+                                Ver parcelas
+                            </Button>
+                            <Button v-else variant="outline" size="sm" as-child>
+                                <Link :href="showSerie(item.serie.id)"
+                                    >Ver parcelas</Link
+                                >
+                            </Button>
+                            <span
+                                v-if="form.isDirty"
+                                id="participacao-ver-parcelas-dica"
+                                class="text-xs text-muted-foreground"
+                                >Salve antes de ver as parcelas</span
+                            >
+                        </template>
+                    </div>
                     <p
                         v-if="item.participacao.observacao"
                         class="rounded-md bg-muted p-3 text-sm whitespace-pre-line"

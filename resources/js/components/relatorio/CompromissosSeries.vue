@@ -1,6 +1,9 @@
 <script setup lang="ts">
+import { Link } from '@inertiajs/vue3';
 import { mesPorExtenso } from '@/lib/datas';
 import { formatarMoeda } from '@/lib/dinheiro';
+import { tituloDaPeriodicidade } from '@/lib/periodicidades';
+import { show } from '@/routes/parcelamentos';
 import type { CompromissosRelatorio } from '@/types';
 
 defineProps<{
@@ -34,7 +37,11 @@ defineProps<{
                     class="flex items-baseline justify-between gap-3 py-2"
                 >
                     <span class="grid min-w-0">
-                        <span class="truncate">{{ serie.descricao }}</span>
+                        <Link
+                            :href="show(serie.id)"
+                            class="truncate underline-offset-4 hover:underline"
+                            >{{ serie.descricao }}</Link
+                        >
                         <span class="text-sm text-muted-foreground">
                             {{ serie.parcelasPendentes }}
                             {{
@@ -74,12 +81,16 @@ defineProps<{
                     class="flex items-baseline justify-between gap-3 py-2"
                 >
                     <span class="grid min-w-0">
-                        <span class="truncate">{{ serie.descricao }}</span>
+                        <Link
+                            :href="show(serie.id)"
+                            class="truncate underline-offset-4 hover:underline"
+                            >{{ serie.descricao }}</Link
+                        >
                         <span
                             class="text-sm text-muted-foreground tabular-nums"
                         >
                             {{ formatarMoeda(serie.proximoValor) }}
-                            {{ serie.periodicidade }}
+                            {{ tituloDaPeriodicidade(serie.periodicidade) }}
                         </span>
                     </span>
                     <span class="shrink-0 text-right tabular-nums">

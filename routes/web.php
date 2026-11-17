@@ -25,6 +25,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::resource('lancamentos', LancamentoController::class)->only(['store', 'update', 'destroy']);
     Route::get('lancamentos/{lancamento}/anexo', [LancamentoAnexoController::class, 'show'])->name('lancamentos.anexo.show');
     Route::delete('lancamentos/{lancamento}/anexo', [LancamentoAnexoController::class, 'destroy'])->name('lancamentos.anexo.destroy');
+    Route::get('parcelamentos/{parcelamento}', [ParcelamentoController::class, 'show'])->name('parcelamentos.show');
     Route::post('parcelamentos/{parcelamento}/encerrar', [ParcelamentoController::class, 'encerrar'])->name('parcelamentos.encerrar');
     Route::patch('parcelamentos/{parcelamento}/total', [ParcelamentoController::class, 'alterarTotal'])->name('parcelamentos.total');
     Route::patch('cotas/{cota}/executado', [CotaController::class, 'alternarExecutado'])->name('cotas.executado');

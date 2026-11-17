@@ -2,6 +2,7 @@
 import CampoData from '@/components/CampoData.vue';
 import CampoSelecao from '@/components/CampoSelecao.vue';
 import { router, useForm, usePage } from '@inertiajs/vue3';
+import { periodicidades } from '@/lib/periodicidades';
 import { computed, ref, watch } from 'vue';
 import LancamentoController from '@/actions/App/Http/Controllers/LancamentoController';
 import InputError from '@/components/InputError.vue';
@@ -77,14 +78,6 @@ type Campos = {
     dia_vencimento: number | null;
     escopo: EscopoSerie | null;
 };
-
-const periodicidades = [
-    { valor: 'mensal', titulo: 'Mensal' },
-    { valor: 'bimestral', titulo: 'Bimestral' },
-    { valor: 'trimestral', titulo: 'Trimestral' },
-    { valor: 'semestral', titulo: 'Semestral' },
-    { valor: 'anual', titulo: 'Anual' },
-];
 
 const form = useForm<Campos>(camposIniciais());
 const confirmandoExclusao = ref(false);
@@ -437,6 +430,8 @@ function removerAnexo(): void {
                         v-if="serie"
                         :serie="serie"
                         :hoje="hoje"
+                        :com-cota="edicao?.rateio?.autorParticipa ?? true"
+                        :alteracoes-pendentes="form.isDirty"
                         @concluido="aberto = false"
                     />
 
