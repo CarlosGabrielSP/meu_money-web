@@ -8,15 +8,45 @@ export function diaEMes(data: string): string {
 }
 
 /**
- * "2026-11" as "Novembro 2026".
+ * Lowercase month name of "YYYY-MM" ("novembro") and its year.
  */
-export function nomeDoMes(mes: string): string {
+function partesDoMes(mes: string): { nome: string; ano: number } {
     const [ano, numero] = mes.split('-').map(Number);
     const nome = new Intl.DateTimeFormat('pt-BR', { month: 'long' }).format(
         new Date(ano, numero - 1, 1),
     );
 
+    return { nome, ano };
+}
+
+/**
+ * "2026-11" as "Novembro 2026".
+ */
+export function nomeDoMes(mes: string): string {
+    const { nome, ano } = partesDoMes(mes);
+
     return `${nome.charAt(0).toUpperCase()}${nome.slice(1)} ${ano}`;
+}
+
+/**
+ * "2026-11" as "novembro de 2026", for sentences; without the year: "novembro".
+ */
+export function mesPorExtenso(mes: string, comAno = true): string {
+    const { nome, ano } = partesDoMes(mes);
+
+    return comAno ? `${nome} de ${ano}` : nome;
+}
+
+/**
+ * "2026-11" as "nov/26", for chart axes.
+ */
+export function mesCurto(mes: string): string {
+    const [ano, numero] = mes.split('-').map(Number);
+    const nome = new Intl.DateTimeFormat('pt-BR', { month: 'short' })
+        .format(new Date(ano, numero - 1, 1))
+        .replace('.', '');
+
+    return `${nome}/${String(ano).slice(2)}`;
 }
 
 /**

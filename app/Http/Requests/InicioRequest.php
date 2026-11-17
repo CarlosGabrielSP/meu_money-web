@@ -2,13 +2,11 @@
 
 namespace App\Http\Requests;
 
+use App\Concerns\EscolheCarteira;
 use App\Enums\TipoLancamento;
-use App\Models\Carteira;
-use App\Models\User;
 use Carbon\CarbonImmutable;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
-use Illuminate\Support\Facades\Gate;
 
 /**
  * Query string of the main screen (RN-115). Invalid values fall back to defaults instead of failing,
@@ -16,42 +14,14 @@ use Illuminate\Support\Facades\Gate;
  */
 class InicioRequest extends FormRequest
 {
+    use EscolheCarteira;
+
     /**
      * @return array<string, ValidationRule|array<mixed>|string>
      */
     public function rules(): array
     {
         return [];
-    }
-
-    /**
-     * Wallet from the URL, else the last used one, else the default (RN-090, CA-080.1 to CA-080.4).
-     * A wallet of another user is forbidden; a wallet that no longer exists falls back.
-     */
-    public function carteira(): Carteira
-    {
-        /** @var User $user */
-        $user = $this->user();
-
-        $informada = $this->carteiraInformada() === null
-            ? null
-            : Carteira::query()->whereKey($this->carteiraInformada())->first();
-
-        if ($informada !== null) {
-            Gate::authorize('view', $informada);
-
-            return $informada;
-        }
-
-        return $user->carteiras()->whereKey($user->ultima_carteira_id)->first()
-            ?? $user->carteiras()->where('padrao', true)->firstOrFail();
-    }
-
-    public function carteiraInformada(): ?int
-    {
-        $carteira = $this->query('carteira');
-
-        return is_string($carteira) && ctype_digit($carteira) ? (int) $carteira : null;
     }
 
     /**

@@ -31,7 +31,11 @@ function responder(modoSimples: boolean): void {
             preserveScroll: true,
             onStart: () => (enviando.value = true),
             onFinish: () => (enviando.value = false),
-            onSuccess: () => (aberto.value = false),
+            onSuccess: () => {
+                aberto.value = false;
+                // Drop prefetched pages that still carry the old mode.
+                router.flushAll();
+            },
         },
     );
 }

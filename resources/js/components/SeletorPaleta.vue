@@ -25,6 +25,9 @@ function escolher(paleta: Paleta): void {
         {
             preserveScroll: true,
             onStart: () => (enviando.value = true),
+            // Prefetched pages (Configurações in the user menu) keep the old props, which would
+            // switch the palette back on the next visit; drop them.
+            onSuccess: () => router.flushAll(),
             onFinish: () => (enviando.value = false),
         },
     );

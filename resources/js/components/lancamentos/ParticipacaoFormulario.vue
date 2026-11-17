@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import CampoSelecao from '@/components/CampoSelecao.vue';
 import { router, useForm, usePage } from '@inertiajs/vue3';
 import { computed, ref, watch } from 'vue';
 import InputError from '@/components/InputError.vue';
@@ -172,37 +173,31 @@ const rotuloExecutado = computed(() => {
 
                     <div class="grid gap-2">
                         <Label for="participacao_carteira">Carteira</Label>
-                        <select
+                        <CampoSelecao
                             id="participacao_carteira"
                             v-model="form.carteira_id"
-                            class="h-9 rounded-md border bg-transparent px-3 text-sm"
-                        >
-                            <option
-                                v-for="carteira in carteiras"
-                                :key="carteira.id"
-                                :value="carteira.id"
-                            >
-                                {{ carteira.nome }}
-                            </option>
-                        </select>
+                            :opcoes="
+                                carteiras.map((carteira) => ({
+                                    valor: carteira.id,
+                                    rotulo: carteira.nome,
+                                }))
+                            "
+                        />
                         <InputError :message="form.errors.carteira_id" />
                     </div>
 
                     <div class="grid gap-2">
                         <Label for="participacao_categoria">Categoria</Label>
-                        <select
+                        <CampoSelecao
                             id="participacao_categoria"
                             v-model="form.categoria_id"
-                            class="h-9 rounded-md border bg-transparent px-3 text-sm"
-                        >
-                            <option
-                                v-for="categoria in categoriasDoTipo"
-                                :key="categoria.id"
-                                :value="categoria.id"
-                            >
-                                {{ categoria.nome }}
-                            </option>
-                        </select>
+                            :opcoes="
+                                categoriasDoTipo.map((categoria) => ({
+                                    valor: categoria.id,
+                                    rotulo: categoria.nome,
+                                }))
+                            "
+                        />
                         <InputError :message="form.errors.categoria_id" />
                     </div>
 

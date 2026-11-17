@@ -18,14 +18,14 @@ const tabs = [
             :key="value"
             @click="updateAppearance(value)"
             :class="[
-                'flex items-center rounded-md px-3.5 py-1.5 transition-colors',
+                'flex items-center rounded-md px-3.5 py-1.5 transition-colors simples:min-h-12 simples:px-4',
                 appearance === value
                     ? 'bg-card text-foreground shadow-xs'
                     : 'text-muted-foreground hover:bg-card/60 hover:text-foreground',
             ]"
         >
             <component :is="Icon" class="-ml-1 h-4 w-4" />
-            <span class="ml-1.5 text-sm">{{ label }}</span>
+            <span class="ml-1.5 text-sm simples:text-base">{{ label }}</span>
         </button>
     </div>
 </template>

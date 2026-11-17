@@ -61,6 +61,8 @@
     --color-chart-3: var(--chart-3);
     --color-chart-4: var(--chart-4);
     --color-chart-5: var(--chart-5);
+    --color-chart-6: var(--chart-6);
+    --color-chart-outras: var(--chart-outras);
 
     --color-sidebar: var(--sidebar);
     --color-sidebar-foreground: var(--sidebar-foreground);
@@ -94,11 +96,6 @@
     --border: oklch(0.922 0 0);
     --input: oklch(0.922 0 0);
     --ring: oklch(0.87 0 0);
-    --chart-1: oklch(0.646 0.222 41.116);
-    --chart-2: oklch(0.6 0.118 184.704);
-    --chart-3: oklch(0.398 0.07 227.392);
-    --chart-4: oklch(0.828 0.189 84.429);
-    --chart-5: oklch(0.769 0.188 70.08);
     --radius: 0.625rem;
     --sidebar: oklch(0.985 0 0);
     --sidebar-foreground: oklch(0.145 0 0);
@@ -133,11 +130,6 @@
     --border: oklch(0.269 0 0);
     --input: oklch(0.269 0 0);
     --ring: oklch(0.439 0 0);
-    --chart-1: oklch(0.488 0.243 264.376);
-    --chart-2: oklch(0.696 0.17 162.48);
-    --chart-3: oklch(0.769 0.188 70.08);
-    --chart-4: oklch(0.627 0.265 303.9);
-    --chart-5: oklch(0.645 0.246 16.439);
     --sidebar: oklch(0.205 0 0);
     --sidebar-foreground: oklch(0.985 0 0);
     --sidebar-primary: oklch(0.985 0 0);
@@ -467,6 +459,38 @@
     --sidebar-border: #222223;
     --sidebar-ring: #fafafa;
     --theme-color: #0c0c0e;
+}
+
+/* Category colors of the charts, fixed in every palette, light and dark: at least 3:1 against the
+   background and the cards of all palettes (DEC-071, RNF-008). */
+:root,
+[data-paleta] {
+    --chart-1: #0284c7;
+    --chart-2: #dc5a12;
+    --chart-3: #8b5cf6;
+    --chart-4: #0d9488;
+    --chart-5: #db2777;
+    --chart-6: #a16207;
+    --chart-outras: #6b7280;
+    --grafico-receita: #059669;
+    --grafico-despesa: #dc2626;
+}
+
+/* Unovis theme of the report charts; set on the chart wrapper because Unovis injects its own
+   defaults on :root. */
+.grafico {
+    --vis-font-family: var(--font-sans);
+    --vis-axis-tick-label-color: var(--muted-foreground);
+    --vis-axis-tick-label-font-size: 11px;
+    --vis-axis-grid-color: var(--border);
+    --vis-donut-background-color: var(--muted);
+}
+
+/* Income and expense in the charts follow the fixed text colors of RN-153. */
+:root.dark,
+[data-paleta].dark {
+    --grafico-receita: #34d399;
+    --grafico-despesa: #f87171;
 }
 
 /*

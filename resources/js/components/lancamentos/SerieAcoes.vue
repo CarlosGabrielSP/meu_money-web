@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import CampoData from '@/components/CampoData.vue';
 import { router, usePage } from '@inertiajs/vue3';
 import { ref } from 'vue';
 import InputError from '@/components/InputError.vue';
@@ -107,10 +108,9 @@ function confirmarTotal(): void {
                 </DialogHeader>
                 <div class="grid gap-2">
                     <Label for="data_encerramento">Encerrar em</Label>
-                    <Input
+                    <CampoData
                         id="data_encerramento"
                         v-model="dataEncerramento"
-                        type="date"
                     />
                     <InputError :message="page.props.errors.data" />
                 </div>

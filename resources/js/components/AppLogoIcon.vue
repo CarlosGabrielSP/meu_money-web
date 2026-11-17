@@ -20,17 +20,23 @@ defineProps<Props>();
         v-bind="$attrs"
     >
         <rect width="512" height="512" rx="112" fill="#FF2D20" />
+        <!-- "PGMS" in geometric strokes (DEC-030, DEC-075). -->
         <g
             fill="none"
             stroke="#FFFFFF"
-            stroke-width="34"
+            stroke-width="30"
             stroke-linejoin="round"
         >
-            <path d="M73 331V198H142Q159 198 159 215V250Q159 267 142 267H73" />
             <path
-                d="M299 198H230Q213 198 213 215V297Q213 314 230 314H282Q299 314 299 297V262H258"
+                d="M54 326V186H108Q122 186 122 200V244.8Q122 258.8 108 258.8H54"
             />
-            <path d="M353 331V198L396 260L439 198V331" />
+            <path
+                d="M234 186H180Q166 186 166 200V297Q166 311 180 311H220Q234 311 234 297V263H200"
+            />
+            <path d="M278 326V186L312 251.8L346 186V326" />
+            <path
+                d="M458 186H404Q390 186 390 200V234.5Q390 248.5 404 248.5H444Q458 248.5 458 262.5V297Q458 311 444 311H390"
+            />
         </g>
     </svg>
 </template>

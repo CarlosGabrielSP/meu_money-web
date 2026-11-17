@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import CampoSelecao from '@/components/CampoSelecao.vue';
 import { Form, Head, router } from '@inertiajs/vue3';
 import { computed, ref } from 'vue';
 import CarteiraController from '@/actions/App/Http/Controllers/CarteiraController';
@@ -45,6 +46,8 @@ const editando = ref<Carteira | null>(null);
 const excluindo = ref<Carteira | null>(null);
 const modoExclusao = ref<'mover' | 'excluir'>('mover');
 
+const destinoId = ref<number | null>(null);
+
 const destinosPossiveis = computed(() =>
     props.carteiras.filter((carteira) => carteira.id !== excluindo.value?.id),
 );
@@ -52,6 +55,8 @@ const destinosPossiveis = computed(() =>
 function abrirExclusao(carteira: Carteira): void {
     modoExclusao.value = carteira.temConteudo ? 'mover' : 'excluir';
     excluindo.value = carteira;
+    destinoId.value =
+        props.carteiras.find((outra) => outra.id !== carteira.id)?.id ?? null;
 }
 
 function tornarPadrao(carteira: Carteira): void {
@@ -208,19 +213,17 @@ function tornarPadrao(carteira: Carteira): void {
                         class="grid gap-2 pl-6"
                     >
                         <Label for="destino_id">Carteira de destino</Label>
-                        <select
+                        <CampoSelecao
                             id="destino_id"
+                            v-model="destinoId"
                             name="destino_id"
-                            class="h-9 rounded-md border bg-transparent px-3 text-sm"
-                        >
-                            <option
-                                v-for="destino in destinosPossiveis"
-                                :key="destino.id"
-                                :value="destino.id"
-                            >
-                                {{ destino.nome }}
-                            </option>
-                        </select>
+                            :opcoes="
+                                destinosPossiveis.map((destino) => ({
+                                    valor: destino.id,
+                                    rotulo: destino.nome,
+                                }))
+                            "
+                        />
                         <InputError :message="errors.destino_id" />
                     </div>
                     <label class="flex items-center gap-2">

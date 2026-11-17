@@ -12,12 +12,14 @@ use App\Http\Controllers\LancamentoController;
 use App\Http\Controllers\ParcelamentoController;
 use App\Http\Controllers\PrimeiroAcessoController;
 use App\Http\Controllers\RecebidaController;
+use App\Http\Controllers\RelatorioController;
 use App\Http\Controllers\TutorialVistoController;
 use Illuminate\Support\Facades\Route;
 
 Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('/', InicioController::class)->name('home');
     Route::post('primeiro-acesso', PrimeiroAcessoController::class)->name('primeiro-acesso');
+    Route::get('relatorio', RelatorioController::class)->name('relatorio');
     Route::post('tutorial-visto', TutorialVistoController::class)->name('tutorial-visto');
 
     Route::resource('lancamentos', LancamentoController::class)->only(['store', 'update', 'destroy']);

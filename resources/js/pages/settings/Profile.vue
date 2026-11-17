@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import CampoData from '@/components/CampoData.vue';
 import { Form, Head, usePage } from '@inertiajs/vue3';
 import { computed } from 'vue';
 import ProfileController from '@/actions/App/Http/Controllers/Settings/ProfileController';
@@ -63,12 +64,12 @@ const hoje = hojeEmSaoPaulo();
                 <Label for="data_nascimento">
                     Data de nascimento (opcional)
                 </Label>
-                <Input
+                <CampoData
                     id="data_nascimento"
-                    type="date"
-                    class="mt-1 block w-full"
+                    class="mt-1"
                     name="data_nascimento"
-                    :default-value="user.data_nascimento ?? ''"
+                    :default-value="user.data_nascimento"
+                    limpavel
                     min="1900-01-01"
                     :max="hoje"
                 />

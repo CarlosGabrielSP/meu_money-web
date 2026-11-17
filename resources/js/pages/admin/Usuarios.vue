@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import CampoData from '@/components/CampoData.vue';
 import { Form, Head, router, useForm } from '@inertiajs/vue3';
 import UsuarioController from '@/actions/App/Http/Controllers/Admin/UsuarioController';
 import Heading from '@/components/Heading.vue';
@@ -51,6 +52,9 @@ function alternarAtivo(usuario: Usuario): void {
         { preserveScroll: true },
     );
 }
+
+/** The reset of the form does not reach the date field, so a new key renders it empty again. */
+const usuariosCriados = ref(0);
 
 const editandoEmailDe = ref<number | null>(null);
 
@@ -123,6 +127,7 @@ function alternarAdministrador(usuario: Usuario): void {
             <Form
                 v-bind="UsuarioController.store.form()"
                 reset-on-success
+                @success="usuariosCriados++"
                 class="grid gap-4 sm:grid-cols-[1fr_1fr_auto_auto] sm:items-end"
                 v-slot="{ errors, processing }"
             >
@@ -140,11 +145,12 @@ function alternarAdministrador(usuario: Usuario): void {
                     <Label for="data_nascimento">
                         Data de nascimento (opcional)
                     </Label>
-                    <Input
+                    <CampoData
                         id="data_nascimento"
+                        :key="usuariosCriados"
                         name="data_nascimento"
-                        type="date"
                         min="1900-01-01"
+                        limpavel
                         :max="hoje"
                     />
                     <InputError :message="errors.data_nascimento" />
@@ -279,10 +285,9 @@ function alternarAdministrador(usuario: Usuario): void {
                         <Label for="nova_data_nascimento">
                             Nova data de nascimento
                         </Label>
-                        <Input
+                        <CampoData
                             id="nova_data_nascimento"
                             v-model="formularioData.data_nascimento"
-                            type="date"
                             min="1900-01-01"
                             :max="hoje"
                         />

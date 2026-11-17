@@ -1,12 +1,10 @@
 <script setup lang="ts">
 import { Link, usePage } from '@inertiajs/vue3';
-import { House, Inbox, Menu, Plus, Settings, Users } from '@lucide/vue';
+import { ChartPie, House, Inbox, Menu, Plus } from '@lucide/vue';
 import { useSidebar } from '@/components/ui/sidebar';
 import { useModoSimples } from '@/composables/useModoSimples';
 import { useNovoLancamento } from '@/composables/useNovoLancamento';
-import { home } from '@/routes';
-import { index as contatosIndex } from '@/routes/contatos';
-import { edit as perfilEdit } from '@/routes/profile';
+import { home, relatorio } from '@/routes';
 import { index as recebidasIndex } from '@/routes/recebidas';
 
 const page = usePage();
@@ -16,9 +14,11 @@ const modoSimples = useModoSimples();
 </script>
 
 <template>
+    <!-- Same bar in both modes (RN-163, RN-189, DEC-075): Início, Recebidas, (+), Relatório and
+         Mais; Contatos is in "Mais", whose badge counts the pending invitations. The simple menu
+         has no Contatos, so it shows no badge there. Frosted glass over the page (DEC-076). -->
     <nav
-        class="fixed inset-x-3 bottom-[max(0.75rem,env(safe-area-inset-bottom))] z-20 grid rounded-2xl border bg-card/95 shadow-lg backdrop-blur md:hidden"
-        :class="modoSimples ? 'grid-cols-4' : 'grid-cols-5'"
+        class="fixed inset-x-3 bottom-[max(0.75rem,env(safe-area-inset-bottom))] z-20 grid grid-cols-5 rounded-2xl border border-white/40 bg-card/60 shadow-lg ring-1 shadow-black/10 ring-black/5 backdrop-blur-xl backdrop-saturate-150 md:hidden dark:border-white/10 dark:bg-card/55 dark:ring-white/5"
         aria-label="Navegação principal"
         data-tutorial="menu"
         data-tutorial-fixo
@@ -56,36 +56,25 @@ const modoSimples = useModoSimples();
                 <Plus class="size-6" />
             </span>
         </button>
-        <!-- The simple mode bar is Início, Recebidas, (+) and Configurações (RN-163). -->
         <Link
-            v-if="modoSimples"
-            :href="perfilEdit()"
+            :href="relatorio()"
             class="flex flex-col items-center gap-0.5 py-2 text-xs"
-            data-tutorial="configuracoes"
         >
-            <Settings class="size-5" /> Configurações
+            <ChartPie class="size-5" /> Relatório
         </Link>
-        <template v-else>
-            <Link
-                :href="contatosIndex()"
-                class="relative flex flex-col items-center gap-0.5 py-2 text-xs"
+        <button
+            type="button"
+            class="relative flex flex-col items-center gap-0.5 py-2 text-xs"
+            data-tutorial="mais"
+            @click="setOpenMobile(true)"
+        >
+            <Menu class="size-5" /> Mais
+            <span
+                v-if="!modoSimples && page.props.contadores.convites > 0"
+                class="absolute top-1 right-1/4 rounded-full bg-destaque px-1.5 text-[10px] text-destaque-foreground"
+                :aria-label="`${page.props.contadores.convites} convites pendentes`"
+                >{{ page.props.contadores.convites }}</span
             >
-                <Users class="size-5" /> Contatos
-                <span
-                    v-if="page.props.contadores.convites > 0"
-                    class="absolute top-1 right-1/4 rounded-full bg-destaque px-1.5 text-[10px] text-destaque-foreground"
-                    :aria-label="`${page.props.contadores.convites} convites pendentes`"
-                    >{{ page.props.contadores.convites }}</span
-                >
-            </Link>
-            <button
-                type="button"
-                class="flex flex-col items-center gap-0.5 py-2 text-xs"
-                data-tutorial="mais"
-                @click="setOpenMobile(true)"
-            >
-                <Menu class="size-5" /> Mais
-            </button>
-        </template>
+        </button>
     </nav>
 </template>

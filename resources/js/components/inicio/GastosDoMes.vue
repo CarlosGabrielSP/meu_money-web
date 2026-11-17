@@ -1,11 +1,14 @@
 <script setup lang="ts">
+import { Link } from '@inertiajs/vue3';
 import CategoriaIcone from '@/components/categorias/CategoriaIcone.vue';
 import { formatarMoeda } from '@/lib/dinheiro';
+import { relatorio } from '@/routes';
 import type { GastoDoMes } from '@/types';
 
 const props = defineProps<{
     gastos: GastoDoMes[];
     totalDespesas: number;
+    carteiraId: number;
 }>();
 
 function proporcao(valor: number): string {
@@ -15,7 +18,8 @@ function proporcao(valor: number): string {
 
 <template>
     <!-- The month's three largest expense categories, with a bar against the month's expenses
-         (RN-174). Hidden when the month has none. -->
+         (RN-174). Hidden when the month has none. "Ver relatório" opens this month of the wallet
+         in the report. -->
     <section
         v-if="gastos.length > 0"
         class="grid gap-3 rounded-2xl border bg-card p-4"
@@ -45,5 +49,13 @@ function proporcao(valor: number): string {
                 </span>
             </li>
         </ul>
+        <Link
+            :href="
+                relatorio({ query: { carteira: carteiraId, periodo: 'mes' } })
+            "
+            class="justify-self-end text-sm font-medium underline underline-offset-4 hover:text-muted-foreground"
+        >
+            Ver relatório
+        </Link>
     </section>
 </template>

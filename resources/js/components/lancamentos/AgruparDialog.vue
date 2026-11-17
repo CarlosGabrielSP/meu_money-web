@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import CampoSelecao from '@/components/CampoSelecao.vue';
 import { useForm } from '@inertiajs/vue3';
 import { computed, ref, watch } from 'vue';
 import InputError from '@/components/InputError.vue';
@@ -128,19 +129,16 @@ function confirmar(): void {
                 </div>
                 <div v-else class="grid gap-2">
                     <Label for="grupo_existente">Grupo</Label>
-                    <select
+                    <CampoSelecao
                         id="grupo_existente"
                         v-model="form.grupo_id"
-                        class="h-9 rounded-md border bg-transparent px-2"
-                    >
-                        <option
-                            v-for="grupo in compativeis"
-                            :key="grupo.id"
-                            :value="grupo.id"
-                        >
-                            {{ grupo.nome }}
-                        </option>
-                    </select>
+                        :opcoes="
+                            compativeis.map((grupo) => ({
+                                valor: grupo.id,
+                                rotulo: grupo.nome,
+                            }))
+                        "
+                    />
                     <InputError :message="form.errors.grupo_id" />
                 </div>
 

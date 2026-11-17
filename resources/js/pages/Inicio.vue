@@ -9,6 +9,8 @@ import {
 } from '@lucide/vue';
 import { useIntersectionObserver } from '@vueuse/core';
 import { computed, onMounted, ref, useTemplateRef, watch } from 'vue';
+import CampoSelecao from '@/components/CampoSelecao.vue';
+import type { OpcaoSelecao } from '@/components/CampoSelecao.vue';
 import CarteiraIcone from '@/components/carteiras/CarteiraIcone.vue';
 import AvisosPendencias from '@/components/inicio/AvisosPendencias.vue';
 import CardSaldos from '@/components/inicio/CardSaldos.vue';
@@ -181,12 +183,38 @@ function navegar(
     );
 }
 
-function filtrar(campo: keyof Filtros, valor: string): void {
-    navegar({
-        [campo]:
-            valor === '' ? null : campo === 'categoria' ? Number(valor) : valor,
-    });
+function filtrarValor(
+    campo: keyof Filtros,
+    valor: string | number | null,
+): void {
+    navegar({ [campo]: valor });
 }
+
+const opcoesTipo: OpcaoSelecao<string>[] = [
+    { valor: null, rotulo: 'Todos' },
+    { valor: 'receita', rotulo: 'Receitas' },
+    { valor: 'despesa', rotulo: 'Despesas' },
+];
+
+const opcoesCategoria = computed<OpcaoSelecao<number>[]>(() => [
+    { valor: null, rotulo: 'Todas' },
+    ...props.categorias.map((categoria) => ({
+        valor: categoria.id,
+        rotulo: categoria.nome,
+    })),
+]);
+
+const opcoesStatus: OpcaoSelecao<string>[] = [
+    { valor: null, rotulo: 'Todos' },
+    { valor: 'executado', rotulo: 'Executado' },
+    { valor: 'pendente', rotulo: 'Pendente' },
+];
+
+const opcoesCompartilhado: OpcaoSelecao<string>[] = [
+    { valor: null, rotulo: 'Todos' },
+    { valor: 'sim', rotulo: 'Sim' },
+    { valor: 'nao', rotulo: 'Não' },
+];
 
 const nomesDosMeses = Array.from({ length: 12 }, (_, indice) =>
     new Intl.DateTimeFormat('pt-BR', { month: 'short' })
@@ -407,7 +435,7 @@ onMounted(() => {
                     :saldos="destaques.saldosCarteiras"
                     @escolher="navegar({ carteira: $event })"
                 />
-                <label
+                <div
                     v-else
                     class="flex min-w-0 items-center gap-2"
                     data-tutorial="carteira"
@@ -416,27 +444,21 @@ onMounted(() => {
                         :cor="carteira.cor"
                         :icone="carteira.icone"
                     />
-                    <span class="sr-only">Carteira</span>
-                    <select
-                        :value="carteira.id"
-                        class="h-9 min-w-0 rounded-md border bg-transparent px-2 text-sm font-medium"
-                        @change="
-                            navegar({
-                                carteira: Number(
-                                    ($event.target as HTMLSelectElement).value,
-                                ),
-                            })
+                    <CampoSelecao
+                        :model-value="carteira.id"
+                        :opcoes="
+                            carteiras.map((opcao) => ({
+                                valor: opcao.id,
+                                rotulo: opcao.nome,
+                            }))
                         "
-                    >
-                        <option
-                            v-for="opcao in carteiras"
-                            :key="opcao.id"
-                            :value="opcao.id"
-                        >
-                            {{ opcao.nome }}
-                        </option>
-                    </select>
-                </label>
+                        rotulo="Carteira"
+                        class="font-medium"
+                        @update:model-value="
+                            (id) => id !== null && navegar({ carteira: id })
+                        "
+                    />
+                </div>
                 <Button
                     class="ml-auto hidden shrink-0 md:inline-flex"
                     data-test="adicionar-lancamento"
@@ -483,26 +505,22 @@ onMounted(() => {
                     </Button>
                 </div>
                 <div class="ml-auto flex items-center gap-1">
-                    <label>
-                        <span class="sr-only">Mês</span>
-                        <select
-                            :value="mes.slice(5, 7)"
-                            class="h-8 rounded-md border bg-transparent px-2 text-sm"
-                            @change="
-                                navegar({
-                                    mes: `${mes.slice(0, 4)}-${($event.target as HTMLSelectElement).value}`,
-                                })
-                            "
-                        >
-                            <option
-                                v-for="(nome, indice) in nomesDosMeses"
-                                :key="nome"
-                                :value="String(indice + 1).padStart(2, '0')"
-                            >
-                                {{ nome }}
-                            </option>
-                        </select>
-                    </label>
+                    <CampoSelecao
+                        :model-value="mes.slice(5, 7)"
+                        :opcoes="
+                            nomesDosMeses.map((nome, indice) => ({
+                                valor: String(indice + 1).padStart(2, '0'),
+                                rotulo: nome,
+                            }))
+                        "
+                        rotulo="Mês"
+                        class="h-8 w-auto"
+                        @update:model-value="
+                            (numero) =>
+                                numero !== null &&
+                                navegar({ mes: `${mes.slice(0, 4)}-${numero}` })
+                        "
+                    />
                     <label>
                         <span class="sr-only">Ano</span>
                         <input
@@ -541,6 +559,7 @@ onMounted(() => {
                     <GastosDoMes
                         :gastos="destaques.gastosDoMes"
                         :total-despesas="saldos.despesas"
+                        :carteira-id="carteira.id"
                     />
                 </div>
             </div>
@@ -579,79 +598,50 @@ onMounted(() => {
                 v-if="mostrarFiltros && !modoSimples"
                 class="grid grid-cols-2 gap-3 md:grid-cols-4"
             >
-                <label class="grid gap-1 text-sm">
-                    Tipo
-                    <select
-                        :value="filtros.tipo ?? ''"
-                        class="h-9 rounded-md border bg-transparent px-2"
-                        @change="
-                            filtrar(
-                                'tipo',
-                                ($event.target as HTMLSelectElement).value,
-                            )
+                <div class="grid gap-1 text-sm">
+                    <span aria-hidden="true">Tipo</span>
+                    <CampoSelecao
+                        :model-value="filtros.tipo"
+                        :opcoes="opcoesTipo"
+                        rotulo="Tipo"
+                        @update:model-value="
+                            (valor) => filtrarValor('tipo', valor)
                         "
-                    >
-                        <option value="">Todos</option>
-                        <option value="receita">Receitas</option>
-                        <option value="despesa">Despesas</option>
-                    </select>
-                </label>
-                <label class="grid gap-1 text-sm">
-                    Categoria
-                    <select
-                        :value="filtros.categoria ?? ''"
-                        class="h-9 rounded-md border bg-transparent px-2"
-                        @change="
-                            filtrar(
-                                'categoria',
-                                ($event.target as HTMLSelectElement).value,
-                            )
+                    />
+                </div>
+                <div class="grid gap-1 text-sm">
+                    <span aria-hidden="true">Categoria</span>
+                    <CampoSelecao
+                        :model-value="filtros.categoria"
+                        :opcoes="opcoesCategoria"
+                        rotulo="Categoria"
+                        @update:model-value="
+                            (valor) => filtrarValor('categoria', valor)
                         "
-                    >
-                        <option value="">Todas</option>
-                        <option
-                            v-for="categoria in categorias"
-                            :key="categoria.id"
-                            :value="categoria.id"
-                        >
-                            {{ categoria.nome }}
-                        </option>
-                    </select>
-                </label>
-                <label class="grid gap-1 text-sm">
-                    Status
-                    <select
-                        :value="filtros.status ?? ''"
-                        class="h-9 rounded-md border bg-transparent px-2"
-                        @change="
-                            filtrar(
-                                'status',
-                                ($event.target as HTMLSelectElement).value,
-                            )
+                    />
+                </div>
+                <div class="grid gap-1 text-sm">
+                    <span aria-hidden="true">Status</span>
+                    <CampoSelecao
+                        :model-value="filtros.status"
+                        :opcoes="opcoesStatus"
+                        rotulo="Status"
+                        @update:model-value="
+                            (valor) => filtrarValor('status', valor)
                         "
-                    >
-                        <option value="">Todos</option>
-                        <option value="executado">Executado</option>
-                        <option value="pendente">Pendente</option>
-                    </select>
-                </label>
-                <label class="grid gap-1 text-sm">
-                    Compartilhado
-                    <select
-                        :value="filtros.compartilhado ?? ''"
-                        class="h-9 rounded-md border bg-transparent px-2"
-                        @change="
-                            filtrar(
-                                'compartilhado',
-                                ($event.target as HTMLSelectElement).value,
-                            )
+                    />
+                </div>
+                <div class="grid gap-1 text-sm">
+                    <span aria-hidden="true">Compartilhado</span>
+                    <CampoSelecao
+                        :model-value="filtros.compartilhado"
+                        :opcoes="opcoesCompartilhado"
+                        rotulo="Compartilhado"
+                        @update:model-value="
+                            (valor) => filtrarValor('compartilhado', valor)
                         "
-                    >
-                        <option value="">Todos</option>
-                        <option value="sim">Sim</option>
-                        <option value="nao">Não</option>
-                    </select>
-                </label>
+                    />
+                </div>
             </div>
 
             <div

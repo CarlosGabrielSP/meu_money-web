@@ -6,8 +6,10 @@ const name = usePage().props.name;
 </script>
 
 <template>
-    <AppLogoIcon class="size-8 shrink-0" />
-    <div class="ml-1 grid flex-1 text-left text-sm">
+    <AppLogoIcon
+        class="size-10 shrink-0 group-data-[collapsible=icon]:size-8"
+    />
+    <div class="ml-1 grid flex-1 text-left text-base">
         <span class="mb-0.5 truncate leading-tight font-semibold">{{
             name
         }}</span>

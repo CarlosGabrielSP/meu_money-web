@@ -41,7 +41,7 @@ export const passosModoCompleto: PassoTutorial[] = [
     },
     {
         alvos: ['menu'],
-        texto: 'No menu ficam Carteiras, Categorias, Contatos (para dividir) e Recebidas (cotas que dividiram com você).',
+        texto: 'No menu ficam Relatório (gráficos e previsão), Carteiras, Categorias, Contatos (para dividir) e Recebidas (cotas que dividiram com você).',
     },
     {
         alvos: ['configuracoes', 'mais'],
@@ -71,7 +71,7 @@ export const passosModoSimples: PassoTutorial[] = [
         texto: 'Em Recebidas ficam as despesas que outras pessoas dividiram com você.',
     },
     {
-        alvos: ['configuracoes'],
+        alvos: ['configuracoes', 'mais'],
         texto: 'Em Configurações você desliga o modo simples e revê este tutorial.',
     },
 ];

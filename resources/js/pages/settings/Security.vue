@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Form, Head, usePage } from '@inertiajs/vue3';
+import { Form, Head, Link, usePage } from '@inertiajs/vue3';
 import { computed } from 'vue';
 import SecurityController from '@/actions/App/Http/Controllers/Settings/SecurityController';
 import Heading from '@/components/Heading.vue';
@@ -7,6 +7,7 @@ import InputError from '@/components/InputError.vue';
 import PasswordInput from '@/components/PasswordInput.vue';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
+import { edit as editProfile } from '@/routes/profile';
 import { edit } from '@/routes/security';
 
 // oxfmt-ignore
@@ -23,7 +24,7 @@ defineOptions({
     layout: {
         breadcrumbs: [
             {
-                title: 'Segurança',
+                title: 'Alterar senha',
                 href: edit(),
             },
         ],
@@ -32,9 +33,9 @@ defineOptions({
 </script>
 
 <template>
-    <Head title="Segurança" />
+    <Head title="Alterar senha" />
 
-    <h1 class="sr-only">Segurança</h1>
+    <h1 class="sr-only">Alterar senha</h1>
 
     <div class="space-y-6">
         <Heading
@@ -105,6 +106,10 @@ defineOptions({
                     data-test="update-password-button"
                 >
                     Salvar
+                </Button>
+                <!-- Back to Configurações without saving (DEC-076). -->
+                <Button variant="outline" as-child>
+                    <Link :href="editProfile()">Cancelar</Link>
                 </Button>
             </div>
         </Form>

@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import CampoData from '@/components/CampoData.vue';
+import CampoSelecao from '@/components/CampoSelecao.vue';
 import { router, useForm, usePage } from '@inertiajs/vue3';
 import { computed, ref, watch } from 'vue';
 import LancamentoController from '@/actions/App/Http/Controllers/LancamentoController';
@@ -467,11 +469,9 @@ function removerAnexo(): void {
                         </div>
                         <div class="grid gap-2">
                             <Label for="data">Data</Label>
-                            <Input
+                            <CampoData
                                 id="data"
                                 v-model="form.dataLancamento"
-                                type="date"
-                                required
                             />
                             <InputError :message="erros.data" />
                         </div>
@@ -479,39 +479,33 @@ function removerAnexo(): void {
 
                     <div class="grid gap-2">
                         <Label for="categoria_id">Categoria</Label>
-                        <select
+                        <CampoSelecao
                             id="categoria_id"
                             v-model="form.categoria_id"
                             required
-                            class="h-9 rounded-md border bg-transparent px-3 text-sm"
-                        >
-                            <option :value="null" disabled>Selecione</option>
-                            <option
-                                v-for="categoria in categoriasDoTipo"
-                                :key="categoria.id"
-                                :value="categoria.id"
-                            >
-                                {{ categoria.nome }}
-                            </option>
-                        </select>
+                            placeholder="Selecione"
+                            :opcoes="
+                                categoriasDoTipo.map((categoria) => ({
+                                    valor: categoria.id,
+                                    rotulo: categoria.nome,
+                                }))
+                            "
+                        />
                         <InputError :message="form.errors.categoria_id" />
                     </div>
 
                     <div v-if="mostrarCarteira" class="grid gap-2">
                         <Label for="carteira_id">Carteira</Label>
-                        <select
+                        <CampoSelecao
                             id="carteira_id"
                             v-model="form.carteira_id"
-                            class="h-9 rounded-md border bg-transparent px-3 text-sm"
-                        >
-                            <option
-                                v-for="carteira in carteiras"
-                                :key="carteira.id"
-                                :value="carteira.id"
-                            >
-                                {{ carteira.nome }}
-                            </option>
-                        </select>
+                            :opcoes="
+                                carteiras.map((carteira) => ({
+                                    valor: carteira.id,
+                                    rotulo: carteira.nome,
+                                }))
+                            "
+                        />
                         <InputError :message="form.errors.carteira_id" />
                     </div>
 
@@ -572,19 +566,18 @@ function removerAnexo(): void {
                                     <Label for="periodicidade"
                                         >Periodicidade</Label
                                     >
-                                    <select
+                                    <CampoSelecao
                                         id="periodicidade"
                                         v-model="form.periodicidade"
-                                        class="h-9 rounded-md border bg-transparent px-3 text-sm"
-                                    >
-                                        <option
-                                            v-for="periodicidade in periodicidades"
-                                            :key="periodicidade.valor"
-                                            :value="periodicidade.valor"
-                                        >
-                                            {{ periodicidade.titulo }}
-                                        </option>
-                                    </select>
+                                        :opcoes="
+                                            periodicidades.map(
+                                                (periodicidade) => ({
+                                                    valor: periodicidade.valor,
+                                                    rotulo: periodicidade.titulo,
+                                                }),
+                                            )
+                                        "
+                                    />
                                     <InputError
                                         :message="erros.periodicidade"
                                     />
