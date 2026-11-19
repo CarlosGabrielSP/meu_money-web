@@ -15,7 +15,10 @@ use Illuminate\Validation\ValidationException;
 
 class SalvarCartao
 {
-    public function __construct(private AtribuirFaturas $atribuirFaturas) {}
+    public function __construct(
+        private AtribuirFaturas $atribuirFaturas,
+        private Espelhos $espelhos,
+    ) {}
 
     /**
      * Create a card: a wallet of type `cartao`, never the default, plus its row in `cartoes`
@@ -39,7 +42,9 @@ class SalvarCartao
      * open and future invoices, except those edited one by one, and purchases change invoice by date;
      * closed invoices never change. A new linked wallet goes to the open and future invoices; payments
      * already made keep their wallet. A new competence rule only renames the invoices; no data
-     * changes (RN-253, CA-177.8).
+     * changes (RN-253, CA-177.8). The mirrors of the card copy due day, closing days, competence rule
+     * and invoice dates, and their shares move the same way (RN-238, CA-181.3). A mirror's own due
+     * day, closing days and competence rule never change here (the request keeps them).
      *
      * @param  array{dia_vencimento: int, dias_fechamento: int, competencia: CompetenciaFatura, carteira_vinculada_id: int|null}  $dados
      */
@@ -52,6 +57,7 @@ class SalvarCartao
             $abertaAntes = FaturasDoCartao::carregar($carteira)->aberta($hoje)->referencia;
             $cartao->fill($dados);
             $mudouDatas = $cartao->isDirty(['dia_vencimento', 'dias_fechamento']);
+            $mudouCompetencia = $cartao->isDirty('competencia');
             $mudouVinculo = $cartao->isDirty('carteira_vinculada_id');
             $cartao->save();
 
@@ -62,10 +68,14 @@ class SalvarCartao
             }
 
             if (! $mudouDatas) {
+                if ($mudouCompetencia) {
+                    $this->espelhos->copiarDatas($carteira, $hoje);
+                }
+
                 return;
             }
 
-            $cotas = $this->cotasNaoFechadas($carteira, $hoje);
+            $cotas = [...$this->cotasNaoFechadas($carteira, $hoje), ...$this->espelhos->cotasNaoFechadas($carteira, $hoje)];
 
             (clone $naoFechadas)->where('datas_editadas', false)->get()->each(function (Fatura $fatura) use ($cartao): void {
                 $fatura->update([
@@ -75,6 +85,7 @@ class SalvarCartao
             });
 
             $this->garantirOrdem($carteira, $abertaAntes, $hoje);
+            $this->espelhos->copiarDatas($carteira, $hoje);
             $this->atribuirFaturas->handle($cotas, permitirFechadas: true);
         });
     }

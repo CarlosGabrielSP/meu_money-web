@@ -12,6 +12,7 @@ class EditarDatasFatura
     public function __construct(
         private SalvarCartao $salvarCartao,
         private AtribuirFaturas $atribuirFaturas,
+        private Espelhos $espelhos,
     ) {}
 
     /**
@@ -20,7 +21,9 @@ class EditarDatasFatura
      * invoice keeps these dates when the card changes (RN-220, R2), and purchases move between
      * invoices by date. A closed invoice never changes (CA-163.4). The closing is not before today
      * (/code-review da Fase 14). Both dates stay in the months of the competence window, and the due
-     * date stays between the due dates of the previous and the next invoice (RN-193).
+     * date stays between the due dates of the previous and the next invoice (RN-193). The mirrors of
+     * the card copy the new dates and their shares move the same way (RN-238); a mirror's own dates
+     * never change (CA-181.4).
      *
      * @throws ValidationException
      */
@@ -29,6 +32,7 @@ class EditarDatasFatura
         DB::transaction(function () use ($cartao, $referencia, $fechamento, $vencimento): void {
             $hoje = CarbonImmutable::today();
             $calendario = FaturasDoCartao::carregar($cartao);
+            $this->impedirNoEspelho($calendario);
             $fatura = $calendario->daReferencia($referencia);
 
             if ($fatura->isFechada($hoje)) {
@@ -72,13 +76,32 @@ class EditarDatasFatura
                 ]);
             }
 
-            $cotas = $this->salvarCartao->cotasNaoFechadas($cartao, $hoje);
+            $cotas = [...$this->salvarCartao->cotasNaoFechadas($cartao, $hoje), ...$this->espelhos->cotasNaoFechadas($cartao, $hoje)];
 
             $fatura->fill(['fechamento' => $fechamento, 'vencimento' => $vencimento]);
             $fatura->datas_editadas = true;
             $fatura->save();
 
+            $this->espelhos->copiarDatas($cartao, $hoje);
             $this->atribuirFaturas->handle($cotas, permitirFechadas: true);
         });
+    }
+
+    /**
+     * A mirror follows the dates of the author's card (RN-203, RN-238, CA-181.4).
+     *
+     * @throws ValidationException
+     */
+    private function impedirNoEspelho(FaturasDoCartao $calendario): void
+    {
+        if ($calendario->origem === null) {
+            return;
+        }
+
+        $autor = Carteira::autorDoEspelho($calendario->cartao->carteira_id);
+
+        throw ValidationException::withMessages([
+            'fechamento' => "Definidos pelo cartão de {$autor}.",
+        ]);
     }
 }

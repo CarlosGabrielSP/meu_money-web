@@ -12,6 +12,8 @@ use Illuminate\Validation\ValidationException;
 
 class AtribuirFaturas
 {
+    public function __construct(private Espelhos $espelhos) {}
+
     /**
      * Bring the invoice and status of shares in line with their wallet and date, inside the caller's
      * transaction (RN-192, RN-194, RN-228, RN-232).
@@ -94,7 +96,9 @@ class AtribuirFaturas
     }
 
     /**
-     * The same for every share of the entries.
+     * The same for every share of the entries, after the contact shares follow the entry's wallet into
+     * or out of the mirrors (RN-203, RN-254). Mirrors left without shares and payments are deleted
+     * (RN-237, RN-261 c).
      *
      * @param  iterable<int>  $lancamentoIds
      *
@@ -102,11 +106,12 @@ class AtribuirFaturas
      */
     public function porLancamentos(iterable $lancamentoIds, ?User $ator = null, bool $permitirFechadas = false): void
     {
-        $this->handle(
-            Cota::query()->whereIn('lancamento_id', collect($lancamentoIds)->values()->all())->pluck('id'),
-            $ator,
-            $permitirFechadas,
-        );
+        $ids = collect($lancamentoIds)->values()->all();
+        $deixadas = $this->espelhos->acompanharLancamentos($ids);
+
+        $this->handle(Cota::query()->whereIn('lancamento_id', $ids)->pluck('id'), $ator, $permitirFechadas);
+
+        $this->espelhos->excluirVazios($deixadas);
     }
 
     /**
@@ -118,15 +123,22 @@ class AtribuirFaturas
     private function calendarios(Collection $cotas): array
     {
         $cartoes = $cotas->filter(fn (Cota $cota): bool => $cota->carteira->isCartao())->pluck('carteira_id')->unique()->values()->all();
-        $faturas = Fatura::query()->whereIn('carteira_id', $cartoes)->get()->groupBy('carteira_id');
+        $dados = Cartao::query()->whereIn('carteira_id', $cartoes)->get();
+        $origens = $dados->pluck('cartao_origem_id')->filter()->unique()->diff($cartoes)->values()->all();
+        $dados = $dados->concat(Cartao::query()->whereIn('carteira_id', $origens)->get())->keyBy('carteira_id');
+        $faturas = Fatura::query()->whereIn('carteira_id', $dados->keys()->all())->get()->groupBy('carteira_id');
+        $calendarios = [];
 
-        return Cartao::query()
-            ->whereIn('carteira_id', $cartoes)
-            ->get()
-            ->mapWithKeys(fn (Cartao $cartao): array => [
-                $cartao->carteira_id => new FaturasDoCartao($cartao, $faturas->get($cartao->carteira_id, collect())),
-            ])
-            ->all();
+        // Origin cards first, so each mirror shares the calendar of its origin (RN-238).
+        foreach ($dados->sortBy(fn (Cartao $cartao): int => $cartao->cartao_origem_id === null ? 0 : 1) as $cartao) {
+            $calendarios[$cartao->carteira_id] = new FaturasDoCartao(
+                $cartao,
+                $faturas->get($cartao->carteira_id, collect()),
+                $cartao->cartao_origem_id === null ? null : $calendarios[$cartao->cartao_origem_id] ?? null,
+            );
+        }
+
+        return $calendarios;
     }
 
     /**

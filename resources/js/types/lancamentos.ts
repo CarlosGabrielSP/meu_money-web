@@ -8,6 +8,8 @@ export type CarteiraResumo = {
     tipo: TipoCarteira;
     cor: string;
     icone: string;
+    /** A contact's mirror of an author's card: never offered in the entry form (RN-262). */
+    espelho?: boolean;
 };
 
 /** What the entry form needs to tell the invoice of a date in a card (RN-192, RN-232). */
@@ -39,8 +41,11 @@ export type FaturaDoMes = {
     fechamento: string;
     vencimento: string;
     saldoAnterior: number;
+    /** The user's own part; the contacts' parts come apart (RN-239). */
     compras: number;
     receitas: number;
+    comprasContatos: number;
+    receitasContatos: number;
     pagamentos: number;
     aPagar: number;
     editavel: boolean;
@@ -53,6 +58,19 @@ export type FaturaDoMes = {
     };
     pagaPor: string | null;
     pagamentosLista: PagamentoFatura[];
+    /** "Partes" block: the user first, then each contact; empty without shared purchases (RN-244). */
+    partes: ParteDaFatura[];
+};
+
+/** A line of the "Partes" block (RN-202, RN-244, RN-257). */
+export type ParteDaFatura = {
+    userId: number;
+    nome: string;
+    voce: boolean;
+    parte: number;
+    quitadoPeloContato: number;
+    quitadoPeloAutor: number;
+    aberto: number;
 };
 
 export type SituacaoFatura = 'a_pagar' | 'parcial' | 'quitada';

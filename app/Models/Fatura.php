@@ -84,6 +84,16 @@ class Fatura extends Model
     }
 
     /**
+     * Settlements of contacts' parts on this invoice of the author (RN-202, Fase 15).
+     *
+     * @return HasMany<QuitacaoContato, $this>
+     */
+    public function quitacoes(): HasMany
+    {
+        return $this->hasMany(QuitacaoContato::class);
+    }
+
+    /**
      * Closed invoices: closing before today (RN-200, RN-221). Dates are compared with bare "Y-m-d"
      * strings, since the date cast stores "Y-m-d 00:00:00".
      *

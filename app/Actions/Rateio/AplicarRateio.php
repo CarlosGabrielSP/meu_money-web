@@ -2,8 +2,8 @@
 
 namespace App\Actions\Rateio;
 
+use App\Actions\Cartoes\Espelhos;
 use App\Enums\ModoRateio;
-use App\Models\Carteira;
 use App\Models\Categoria;
 use App\Models\Cota;
 use App\Models\Lancamento;
@@ -12,17 +12,21 @@ use Illuminate\Validation\ValidationException;
 
 class AplicarRateio
 {
-    public function __construct(private CalcularCotas $calcularCotas) {}
+    public function __construct(
+        private CalcularCotas $calcularCotas,
+        private Espelhos $espelhos,
+    ) {}
 
     /**
      * Bring the shares of an entry in line with its split (RN-027, RN-070 to RN-077, RN-082, RN-087).
      *
      * Without a mode the entry is simple: a single share of the author with the full amount. The
-     * author's share follows the form (RN-077); a new participant's share goes to their default wallet
-     * with the author's category when global, else "Outros", the initial status by date and not seen
+     * author's share follows the form (RN-077); a new participant's share goes to their default wallet,
+     * or to their mirror of the card for a card purchase (RN-203), with the author's category when global, else "Outros", the initial status by date and not seen
      * yet (RN-076, RN-082, RN-013, RN-114). Existing participant shares keep wallet, category, status
      * and seen date (RN-080). Participants left out lose their share (CA-072.3). An author share moved
-     * to another wallet leaves its group (RN-130).
+     * to another wallet leaves its group (RN-130). A mirror left without shares and payments is
+     * deleted (RN-237, CA-182.5).
      *
      * When a participant already executed a share, or has it in a closed card invoice, amounts and
      * split cannot change (RN-089, RN-200); internal
@@ -53,7 +57,7 @@ class AplicarRateio
         $data = $lancamento->data;
         $executadoPorData = $lancamento->tipo->executadoPorPadrao($data, $agora);
         $participantesNovos = array_diff(array_keys($novas), $atuais->keys()->all(), [$autorId]);
-        $carteirasPadrao = Carteira::query()->whereIn('user_id', $participantesNovos)->where('padrao', true)->pluck('id', 'user_id');
+        $carteirasNovas = $this->espelhos->carteirasDosParticipantes($autor['carteira_id'], array_values($participantesNovos));
         $categoriaDoParticipante = $participantesNovos === [] ? null : $this->categoriaDoParticipante($autor['categoria_id']);
 
         foreach ($novas as $userId => $nova) {
@@ -72,7 +76,7 @@ class AplicarRateio
             } elseif ($cota === null) {
                 $cota = new Cota([
                     'user_id' => $userId,
-                    'carteira_id' => $carteirasPadrao[$userId],
+                    'carteira_id' => $carteirasNovas[$userId],
                     'categoria_id' => $categoriaDoParticipante,
                     'vista_em' => null,
                 ]);
@@ -86,6 +90,7 @@ class AplicarRateio
 
         $removidas = $atuais->keys()->diff(array_keys($novas))->all();
         $lancamento->cotas()->whereIn('user_id', $removidas)->delete();
+        $this->espelhos->excluirVazios($atuais->whereIn('user_id', $removidas)->pluck('carteira_id'));
 
         if ($lancamento->modo_rateio !== $modo) {
             $lancamento->modo_rateio = $modo;

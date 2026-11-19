@@ -204,10 +204,17 @@ const rotuloExecutado = computed(() => {
                             id="participacao_carteira"
                             v-model="form.carteira_id"
                             :opcoes="
-                                carteiras.map((carteira) => ({
-                                    valor: carteira.id,
-                                    rotulo: carteira.nome,
-                                }))
+                                carteiras
+                                    .filter(
+                                        (carteira) =>
+                                            !carteira.espelho ||
+                                            carteira.id ===
+                                                item?.participacao?.carteiraId,
+                                    )
+                                    .map((carteira) => ({
+                                        valor: carteira.id,
+                                        rotulo: carteira.nome,
+                                    }))
                             "
                         />
                         <InputError :message="form.errors.carteira_id" />

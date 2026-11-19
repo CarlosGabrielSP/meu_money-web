@@ -19,10 +19,12 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * @property int $dias_fechamento
  * @property CompetenciaFatura $competencia
  * @property int|null $carteira_vinculada_id
+ * @property int|null $cartao_origem_id
  * @property CarbonImmutable|null $created_at
  * @property CarbonImmutable|null $updated_at
  * @property-read Carteira $carteira
  * @property-read Carteira|null $carteiraVinculada
+ * @property-read Carteira|null $cartaoOrigem
  */
 #[Fillable(['dia_vencimento', 'dias_fechamento', 'competencia', 'carteira_vinculada_id'])]
 class Cartao extends Model
@@ -73,6 +75,22 @@ class Cartao extends Model
     public function carteiraVinculada(): BelongsTo
     {
         return $this->belongsTo(Carteira::class, 'carteira_vinculada_id');
+    }
+
+    /**
+     * The author's card a mirror receives the shares from; null for a card of the user's own (RN-203,
+     * Fase 15).
+     *
+     * @return BelongsTo<Carteira, $this>
+     */
+    public function cartaoOrigem(): BelongsTo
+    {
+        return $this->belongsTo(Carteira::class, 'cartao_origem_id');
+    }
+
+    public function isEspelho(): bool
+    {
+        return $this->cartao_origem_id !== null;
     }
 
     /**

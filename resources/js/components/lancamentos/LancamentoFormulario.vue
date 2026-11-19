@@ -536,10 +536,12 @@ function removerAnexo(): void {
                             v-model="form.carteira_id"
                             :disabled="faturaFechada"
                             :opcoes="
-                                carteiras.map((carteira) => ({
-                                    valor: carteira.id,
-                                    rotulo: carteira.nome,
-                                }))
+                                carteiras
+                                    .filter((carteira) => !carteira.espelho)
+                                    .map((carteira) => ({
+                                        valor: carteira.id,
+                                        rotulo: carteira.nome,
+                                    }))
                             "
                         />
                         <InputError :message="form.errors.carteira_id" />

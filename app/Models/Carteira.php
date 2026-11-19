@@ -110,4 +110,22 @@ class Carteira extends Model
     {
         return $this->tipo === TipoCarteira::Cartao;
     }
+
+    /**
+     * Name of the author whose card the wallet mirrors; null when it is no mirror (RN-203).
+     */
+    public static function autorDoEspelho(mixed $carteiraId): ?string
+    {
+        if (! is_numeric($carteiraId)) {
+            return null;
+        }
+
+        $nome = User::query()
+            ->join('carteiras', 'carteiras.user_id', '=', 'users.id')
+            ->join('cartoes', 'cartoes.cartao_origem_id', '=', 'carteiras.id')
+            ->where('cartoes.carteira_id', (int) $carteiraId)
+            ->value('users.name');
+
+        return is_string($nome) ? $nome : null;
+    }
 }

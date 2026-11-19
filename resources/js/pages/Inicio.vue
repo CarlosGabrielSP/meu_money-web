@@ -12,6 +12,7 @@ import { computed, onMounted, ref, useTemplateRef, watch } from 'vue';
 import CampoSelecao from '@/components/CampoSelecao.vue';
 import CardFatura from '@/components/cartoes/CardFatura.vue';
 import PagamentosFatura from '@/components/cartoes/PagamentosFatura.vue';
+import PartesFatura from '@/components/cartoes/PartesFatura.vue';
 import FaturaVinculadaItem from '@/components/cartoes/FaturaVinculadaItem.vue';
 import type { OpcaoSelecao } from '@/components/CampoSelecao.vue';
 import CarteiraIcone from '@/components/carteiras/CarteiraIcone.vue';
@@ -582,6 +583,7 @@ onMounted(() => {
                     />
                 </div>
                 <div v-if="destaques" class="grid gap-4">
+                    <PartesFatura v-if="fatura" :partes="fatura.partes" />
                     <PagamentosFatura v-if="fatura" :fatura="fatura" />
                     <AvisosPendencias
                         v-if="destaques.vencidas && destaques.proximas"

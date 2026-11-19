@@ -2,6 +2,7 @@
 
 namespace App\Actions\Lancamentos;
 
+use App\Actions\Cartoes\Espelhos;
 use App\Models\Cota;
 use App\Models\Lancamento;
 use Carbon\CarbonImmutable;
@@ -10,6 +11,8 @@ use Illuminate\Validation\ValidationException;
 
 class RemoverLancamentos
 {
+    public function __construct(private Espelhos $espelhos) {}
+
     /**
      * Delete entries inside the caller's transaction and return their attachment files, to be
      * removed after the commit.
@@ -17,7 +20,7 @@ class RemoverLancamentos
      * Every share is locked first, so a concurrent status change waits. Deletion is refused when a
      * participant already executed a share, or has it in a closed card invoice (RN-086, RN-200). With
      * $somentePendentes, entries whose author's share became executed meanwhile are kept (RN-049,
-     * RN-056).
+     * RN-056). Mirrors left without shares and payments are deleted (RN-237, RN-261 c).
      *
      * @param  Collection<int, Lancamento>  $lancamentos
      * @return array<int, string>
@@ -35,7 +38,7 @@ class RemoverLancamentos
             ->whereIn('lancamento_id', $lancamentos->modelKeys())
             ->lockForUpdate()
             ->with(['user:id,name', 'fatura:id,fechamento'])
-            ->get(['id', 'lancamento_id', 'user_id', 'fatura_id', 'executado']);
+            ->get(['id', 'lancamento_id', 'user_id', 'carteira_id', 'fatura_id', 'executado']);
         $hoje = CarbonImmutable::today();
 
         if ($somentePendentes) {
@@ -62,6 +65,7 @@ class RemoverLancamentos
         }
 
         Lancamento::query()->whereKey($lancamentos->modelKeys())->delete();
+        $this->espelhos->excluirVazios($cotas->pluck('carteira_id'));
 
         return $lancamentos->map(fn (Lancamento $lancamento): ?string => $lancamento->anexo_caminho)->filter()->values()->all();
     }

@@ -29,12 +29,33 @@ class SalvarCarteiraRequest extends FormRequest
      * to a card (CA-160.5): due day 1 to 31, closing 1 to 25 days before it, the invoice competence
      * rule and an optional linked wallet that is a common wallet of the user (RN-191, RN-253,
      * CA-160.3, CA-160.4, CA-177.8). The simple mode never changes the competence rule (RN-253).
+     * A mirror keeps the due day, closing days and competence rule of the author's card and always has
+     * a linked wallet (RN-205, RN-237, CA-181.4, CA-182.2).
      *
      * @return array<string, ValidationRule|array<mixed>|string>
      */
     public function rules(): array
     {
         $cartao = $this->isCartao() ? [] : ['exclude'];
+
+        if ($this->autorDoEspelho() !== null) {
+            return [
+                'nome' => ['required', 'string', 'max:100'],
+                'cor' => ['nullable', Rule::enum(CorCarteira::class)],
+                'icone' => ['nullable', Rule::enum(IconeCarteira::class)],
+                'tipo' => ['exclude'],
+                'dia_vencimento' => ['prohibited'],
+                'dias_fechamento' => ['prohibited'],
+                'competencia' => ['prohibited'],
+                'carteira_vinculada_id' => [
+                    'required',
+                    'integer',
+                    Rule::exists(Carteira::class, 'id')
+                        ->where('user_id', $this->user()?->id)
+                        ->where('tipo', TipoCarteira::Comum->value),
+                ],
+            ];
+        }
 
         return [
             'nome' => ['required', 'string', 'max:100'],
@@ -88,6 +109,17 @@ class SalvarCarteiraRequest extends FormRequest
         }
 
         $vinculada = $this->validated('carteira_vinculada_id');
+        $atual = $this->carteiraAtual()?->cartao;
+
+        if ($atual !== null && $this->autorDoEspelho() !== null) {
+            return [
+                'dia_vencimento' => $atual->dia_vencimento,
+                'dias_fechamento' => $atual->dias_fechamento,
+                'competencia' => $atual->competencia,
+                'carteira_vinculada_id' => (int) $vinculada,
+            ];
+        }
+
         $fechamento = $this->validated('dias_fechamento');
         $competencia = $this->validated('competencia');
 
@@ -126,6 +158,10 @@ class SalvarCarteiraRequest extends FormRequest
             'dia_vencimento.between' => 'O dia do vencimento vai de 1 a 31.',
             'dias_fechamento.between' => 'O fechamento vai de 1 a 25 dias antes do vencimento.',
             'carteira_vinculada_id.exists' => 'Escolha uma carteira comum sua para pagar a fatura.',
+            'carteira_vinculada_id.required' => 'Escolha uma carteira comum sua para pagar a fatura.',
+            'dia_vencimento.prohibited' => "Definidos pelo cartão de {$this->autorDoEspelho()}.",
+            'dias_fechamento.prohibited' => "Definidos pelo cartão de {$this->autorDoEspelho()}.",
+            'competencia.prohibited' => "Definidos pelo cartão de {$this->autorDoEspelho()}.",
         ];
     }
 
@@ -137,6 +173,18 @@ class SalvarCarteiraRequest extends FormRequest
     private function tipo(): TipoCarteira
     {
         return TipoCarteira::tryFrom((string) $this->input('tipo')) ?? TipoCarteira::Comum;
+    }
+
+    /**
+     * Author of the card the edited wallet mirrors; null when it is no mirror. Queried once per request.
+     */
+    private function autorDoEspelho(): ?string
+    {
+        return once(function (): ?string {
+            $carteira = $this->carteiraAtual();
+
+            return $carteira === null ? null : Carteira::autorDoEspelho($carteira->id);
+        });
     }
 
     private function carteiraAtual(): ?Carteira

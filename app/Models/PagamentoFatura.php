@@ -8,6 +8,7 @@ use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 /**
  * Payment of an invoice; the source wallet is null for an independent card (RN-195 to RN-197).
@@ -54,5 +55,26 @@ class PagamentoFatura extends Model
     public function carteira(): BelongsTo
     {
         return $this->belongsTo(Carteira::class);
+    }
+
+    /**
+     * Settlements this payment made: of origin `autor` for the author's payment, `contato` for the
+     * contact's mirror payment (RN-240, RN-241).
+     *
+     * @return HasMany<QuitacaoContato, $this>
+     */
+    public function quitacoes(): HasMany
+    {
+        return $this->hasMany(QuitacaoContato::class);
+    }
+
+    /**
+     * Automatic receipts this mirror payment made (RN-217, RN-242).
+     *
+     * @return HasMany<RecebimentoContato, $this>
+     */
+    public function recebimentos(): HasMany
+    {
+        return $this->hasMany(RecebimentoContato::class);
     }
 }

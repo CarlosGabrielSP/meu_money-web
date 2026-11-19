@@ -85,6 +85,7 @@ class SalvarLancamentoRequest extends FormRequest
                 'required',
                 'integer',
                 Rule::exists(Carteira::class, 'id')->where('user_id', $this->user()?->id),
+                $this->foraDoEspelho(...),
             ],
             'observacao' => ['nullable', 'string', 'max:1000'],
             'executado' => ['nullable', 'boolean'],
@@ -95,7 +96,7 @@ class SalvarLancamentoRequest extends FormRequest
             'modo_valor' => ['nullable', 'required_if:repeticao,parcelado', 'prohibited_if:repeticao,recorrente', Rule::in(['total', 'parcela'])],
             'escopo' => [Rule::requiredIf(fn (): bool => $this->parcela()), 'nullable', Rule::enum(EscopoSerie::class)],
             'dia_vencimento' => ['nullable', 'integer', 'between:1,31'],
-            'rateio' => ['nullable', 'array', $this->rateioValido(...), $this->rateioForaDoCartao(...)],
+            'rateio' => ['nullable', 'array', $this->rateioValido(...)],
             'rateio.modo' => ['required_with:rateio', Rule::enum(ModoRateio::class)],
             'rateio.participantes' => ['required_with:rateio', 'array', 'min:1'],
             'rateio.participantes.*.user_id' => ['required', 'integer', 'distinct'],
@@ -105,17 +106,14 @@ class SalvarLancamentoRequest extends FormRequest
     }
 
     /**
-     * Until Fase 15 a card purchase is never shared with a contact (RN-231, CA-167.4, CA-167.5).
+     * A mirror only receives the shares of the author's card purchases (RN-262, CA-182.8).
      */
-    private function rateioForaDoCartao(string $attribute, mixed $value, Closure $fail): void
+    private function foraDoEspelho(string $attribute, mixed $value, Closure $fail): void
     {
-        $carteira = Carteira::query()->whereKey($this->input('carteira_id'))->where('user_id', $this->user()?->id)->first();
-        $participantes = data_get($value, 'participantes');
-        $autorId = (int) $this->user()?->id;
-        $comContato = is_array($participantes) && collect($participantes)->contains(fn (mixed $participante): bool => (int) data_get($participante, 'user_id') !== $autorId);
+        $autor = Carteira::autorDoEspelho($value);
 
-        if ($carteira?->isCartao() && $comContato) {
-            $fail('Ainda não é possível dividir compras do cartão com contatos.');
+        if ($autor !== null) {
+            $fail("Este cartão recebe só as compras divididas com {$autor}.");
         }
     }
 

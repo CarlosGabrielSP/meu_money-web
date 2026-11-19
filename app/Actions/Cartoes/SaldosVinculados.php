@@ -18,11 +18,12 @@ class SaldosVinculados
      * - pagamentosAte / pagamentosNoMes: invoice payments that left the wallet until that day, and in
      *   the month;
      * - aPagar: for each card, the positive to pay on that day of the last invoice paid by the wallet
-     *   with due date until that day (payments after that day do not count);
+     *   with due date until that day (payments after that day do not count), without the contacts'
+     *   open parts, which never weigh on the author's wallet (RN-245);
      * - receitas / despesas: income and purchases of the invoices paid by the wallet that are due in
-     *   the month.
+     *   the month, the author's own part only (RN-216).
      *
-     * @param  array<int, list<array{fatura: Fatura, compras: int, receitas: int, aPagarAte: int}>>|null  $faturas  CalcularFaturas computed until the last day of the month, to reuse in the request
+     * @param  array<int, list<array{fatura: Fatura, compras: int, receitas: int, aPagarAutorAte: int}>>|null  $faturas  CalcularFaturas computed until the last day of the month, to reuse in the request
      * @return array<int, array{pagamentosAte: int, pagamentosNoMes: int, aPagar: int, receitas: int, despesas: int}> by common wallet id
      */
     public function handle(User $user, CarbonImmutable $mes, ?array $faturas = null): array
@@ -58,7 +59,7 @@ class SaldosVinculados
                     continue;
                 }
 
-                $ultimaVencida[$vinculada] = $linha['aPagarAte'];
+                $ultimaVencida[$vinculada] = $linha['aPagarAutorAte'];
 
                 if ($fatura->vencimento->greaterThanOrEqualTo($inicio)) {
                     $saldos[$vinculada] ??= $vazio;

@@ -22,6 +22,17 @@ const emit = defineEmits<{
 }>();
 
 const selecionavel = computed(() => props.item.cotaId !== null);
+
+/**
+ * A shared purchase in the author's card shows the purchase total and, below, the author's part
+ * (RN-244, CA-183.4).
+ */
+const suaParteNoCartao = computed(
+    () =>
+        props.item.cartao &&
+        props.item.compartilhado &&
+        props.item.autor === null,
+);
 let temporizador: ReturnType<typeof setTimeout> | null = null;
 let pressionouLongo = false;
 
@@ -164,7 +175,18 @@ function alternar(marcado: boolean): void {
                     >
                 </span>
             </span>
-            <span class="shrink-0 text-right tabular-nums">
+            <span
+                v-if="suaParteNoCartao"
+                class="shrink-0 text-right tabular-nums"
+            >
+                <span class="block font-medium">{{
+                    formatarMoeda(item.total)
+                }}</span>
+                <span class="block text-xs text-muted-foreground"
+                    >sua parte {{ formatarMoeda(item.valor) }}</span
+                >
+            </span>
+            <span v-else class="shrink-0 text-right tabular-nums">
                 <span class="block font-medium">{{
                     formatarMoeda(item.valor)
                 }}</span>

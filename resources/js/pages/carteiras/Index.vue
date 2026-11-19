@@ -30,7 +30,13 @@ type Carteira = {
     cor: string;
     icone: string;
     temConteudo: boolean;
-    cartao: (DadosCartao & { carteiraVinculadaNome: string | null }) | null;
+    temCotas: boolean;
+    cartao:
+        | (DadosCartao & {
+              carteiraVinculadaNome: string | null;
+              autorDoEspelho: string | null;
+          })
+        | null;
 };
 
 const props = defineProps<{
@@ -58,12 +64,14 @@ const carteirasComuns = computed(() =>
 );
 
 /**
- * A common wallet moves only to another common wallet; a card to any other (DEC-087).
+ * A common wallet moves only to another common wallet; a card to any other except a mirror
+ * (DEC-087, RN-262).
  */
 function destinosDe(carteira: Carteira): Carteira[] {
     return props.carteiras.filter(
         (outra) =>
             outra.id !== carteira.id &&
+            !outra.cartao?.autorDoEspelho &&
             (carteira.tipo === 'cartao' || outra.tipo === 'comum'),
     );
 }
@@ -86,6 +94,13 @@ function resumoDoCartao(carteira: Carteira): string {
     }
 
     return `Vence dia ${cartao.diaVencimento} · ${cartao.carteiraVinculadaNome === null ? 'independente' : `paga por ${cartao.carteiraVinculadaNome}`}`;
+}
+
+/**
+ * The contact never deletes a mirror with parts (RN-237, nota 07).
+ */
+function espelhoComPartes(carteira: Carteira): boolean {
+    return Boolean(carteira.cartao?.autorDoEspelho) && carteira.temCotas;
 }
 
 function tornarPadrao(carteira: Carteira): void {
@@ -111,7 +126,7 @@ function tornarPadrao(carteira: Carteira): void {
             <li
                 v-for="carteira in carteiras"
                 :key="carteira.id"
-                class="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between"
+                class="flex flex-col gap-3 p-4 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between"
             >
                 <div class="flex min-w-0 items-center gap-3">
                     <CarteiraIcone
@@ -130,7 +145,14 @@ function tornarPadrao(carteira: Carteira): void {
                     <Badge v-if="carteira.padrao" variant="secondary"
                         >Padrão</Badge
                     >
-                    <Badge v-if="carteira.tipo === 'cartao'" variant="outline"
+                    <Badge
+                        v-if="carteira.cartao?.autorDoEspelho"
+                        variant="outline"
+                        >Cartão de {{ carteira.cartao.autorDoEspelho }}</Badge
+                    >
+                    <Badge
+                        v-else-if="carteira.tipo === 'cartao'"
+                        variant="outline"
                         >Cartão</Badge
                     >
                 </div>
@@ -154,11 +176,19 @@ function tornarPadrao(carteira: Carteira): void {
                         v-if="!carteira.padrao"
                         variant="destructive"
                         size="sm"
+                        :disabled="espelhoComPartes(carteira)"
                         @click="abrirExclusao(carteira)"
                     >
                         Excluir
                     </Button>
                 </div>
+                <p
+                    v-if="espelhoComPartes(carteira)"
+                    class="text-sm text-muted-foreground sm:basis-full"
+                >
+                    Este cartão tem compras divididas com
+                    {{ carteira.cartao?.autorDoEspelho }}.
+                </p>
             </li>
         </ul>
     </div>
@@ -213,6 +243,7 @@ function tornarPadrao(carteira: Carteira): void {
                     :cartao="editando.cartao"
                     :carteiras-comuns="carteirasComuns"
                     :simples="modoSimples"
+                    :autor-do-espelho="editando.cartao?.autorDoEspelho ?? null"
                 />
                 <DialogFooter>
                     <Button :disabled="processing">Salvar</Button>

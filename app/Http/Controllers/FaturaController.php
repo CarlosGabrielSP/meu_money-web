@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Actions\Cartoes\EditarDatasFatura;
+use App\Actions\Cartoes\Espelhos;
 use App\Actions\Cartoes\PagarFatura;
 use App\Http\Requests\Cartoes\EditarDatasFaturaRequest;
 use App\Http\Requests\Cartoes\PagarFaturaRequest;
@@ -10,6 +11,7 @@ use App\Models\Carteira;
 use App\Models\PagamentoFatura;
 use Carbon\CarbonImmutable;
 use Illuminate\Http\RedirectResponse;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
 use Inertia\Inertia;
 
@@ -45,13 +47,17 @@ class FaturaController extends Controller
     }
 
     /**
-     * Delete a payment; payments are never edited (RF-166, RN-222).
+     * Delete a payment; payments are never edited (RF-166, RN-222). A mirror left without shares and
+     * payments is deleted (RN-261 c).
      */
-    public function excluirPagamento(PagamentoFatura $pagamentoFatura): RedirectResponse
+    public function excluirPagamento(PagamentoFatura $pagamentoFatura, Espelhos $espelhos): RedirectResponse
     {
         Gate::authorize('update', $pagamentoFatura->fatura->carteira);
 
-        $pagamentoFatura->delete();
+        DB::transaction(function () use ($pagamentoFatura, $espelhos): void {
+            $pagamentoFatura->delete();
+            $espelhos->excluirVazios([$pagamentoFatura->fatura->carteira_id]);
+        });
 
         Inertia::flash('toast', ['type' => 'success', 'message' => 'Pagamento excluído.']);
 

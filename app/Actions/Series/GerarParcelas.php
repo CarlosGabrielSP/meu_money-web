@@ -3,6 +3,7 @@
 namespace App\Actions\Series;
 
 use App\Actions\Cartoes\AtribuirFaturas;
+use App\Actions\Cartoes\Espelhos;
 use App\Actions\Rateio\CalcularCotas;
 use App\Enums\TipoCarteira;
 use App\Models\Carteira;
@@ -19,6 +20,7 @@ class GerarParcelas
     public function __construct(
         private CalcularCotas $calcularCotas,
         private AtribuirFaturas $atribuirFaturas,
+        private Espelhos $espelhos,
     ) {}
 
     /**
@@ -28,7 +30,8 @@ class GerarParcelas
      *
      * A shared series replicates its model split on each installment (RN-084, CA-052.5): the
      * author's share uses the series wallet and category, participants get their default wallet and
-     * the category by RN-082, not seen yet (RN-114). Shares are born in the group of the model:
+     * the category by RN-082, not seen yet (RN-114); in a card they get their mirror of it instead
+     * (RN-203, RN-261 b). Shares are born in the group of the model:
      * the series group for the author, the model share group for a participant (RN-126, RN-148).
      *
      * Rows are inserted in bulk; dates use the model storage format so queries compare them alike.
@@ -69,8 +72,11 @@ class GerarParcelas
         $modelo = array_values($cotasDoModelo
             ->map(fn (ParcelamentoCota $cota): array => ['user_id' => $cota->user_id, 'percentual' => $cota->percentual, 'valor' => $cota->valor])
             ->all());
-        $carteiras = Carteira::query()->whereIn('user_id', array_column($modelo, 'user_id'))->where('padrao', true)->pluck('id', 'user_id');
-        $grupos = $this->gruposDosParticipantes($serie, $cotasDoModelo->pluck('grupo_id', 'user_id')->all(), $carteiras->all());
+        $carteiras = $this->espelhos->carteirasDosParticipantes(
+            $serie->carteira_id,
+            array_values(array_diff(array_column($modelo, 'user_id'), [$serie->user_id])),
+        );
+        $grupos = $this->gruposDosParticipantes($serie, $cotasDoModelo->pluck('grupo_id', 'user_id')->all(), $carteiras);
         $categoriaParticipante = $modelo === [] ? null : $this->categoriaDoParticipante($serie);
         $noCartao = Carteira::query()->whereKey($serie->carteira_id)->where('tipo', TipoCarteira::Cartao->value)->exists();
         $geradas = [];

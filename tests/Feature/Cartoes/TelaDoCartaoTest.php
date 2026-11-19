@@ -161,26 +161,24 @@ it('CA-167.3 changes only the installments of open and future invoices in a mass
         ->toBe([10000, 15000, 15000]);
 });
 
-it('CA-167.4 CA-167.5 refuses sharing a card purchase with a contact', function () {
+it('CA-180.3 accepts sharing a card purchase with a contact in every mode, replacing CA-167.4 and CA-167.5 (RN-251)', function (string $modo, array $divisao) {
     $contato = User::factory()->create();
     Carteira::factory()->for($contato)->padrao()->create();
     Contato::factory()->aceito()->create(['solicitante_id' => $this->user->id, 'convidado_id' => $contato->id]);
     $this->seed(CategoriasGlobaisSeeder::class);
-    $participantes = [['user_id' => $this->user->id], ['user_id' => $contato->id]];
+    $participantes = [['user_id' => $this->user->id, ...$divisao[0]], ['user_id' => $contato->id, ...$divisao[1]]];
 
     $this->actingAs($this->user)
-        ->post(route('lancamentos.store'), dadosRateio($this->nubank, $this->mercado, 'iguais', $participantes))
-        ->assertSessionHasErrors(['rateio' => 'Ainda não é possível dividir compras do cartão com contatos.']);
+        ->post(route('lancamentos.store'), dadosRateio($this->nubank, $this->mercado, $modo, $participantes))
+        ->assertSessionHasNoErrors();
 
-    $this->actingAs($this->user)->post(route('lancamentos.store'), dadosRateio($this->x, $this->mercado, 'iguais', $participantes))->assertSessionHasNoErrors();
-    $rateado = $this->user->lancamentos()->where('descricao', 'Jantar')->sole();
-
-    $this->actingAs($this->user)
-        ->put(route('lancamentos.update', $rateado), dadosRateio($this->nubank, $this->mercado, 'iguais', $participantes))
-        ->assertSessionHasErrors('rateio');
-
-    expect($rateado->cotas()->where('user_id', $this->user->id)->sole()->carteira_id)->toBe($this->x->id);
-});
+    $cotaDoContato = $this->user->lancamentos()->where('descricao', 'Jantar')->sole()->cotas()->where('user_id', $contato->id)->sole();
+    expect($cotaDoContato->carteira->cartao->cartao_origem_id)->toBe($this->nubank->id);
+})->with([
+    'iguais' => ['iguais', [[], []]],
+    'percentual' => ['percentual', [['percentual' => '70'], ['percentual' => '30']]],
+    'fixo' => ['fixo', [['valor' => 6000], ['valor' => 4000]]],
+]);
 
 it('CA-168.1 CA-168.2 moves a purchase between the card and a common wallet', function () {
     $this->actingAs($this->user)

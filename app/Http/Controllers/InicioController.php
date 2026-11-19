@@ -74,6 +74,7 @@ class InicioController extends Controller
                 ->orderByDesc('padrao')
                 ->orderBy('tipo', 'desc')
                 ->orderBy('nome')
+                ->with('cartao:id,carteira_id,cartao_origem_id')
                 ->get(['id', 'nome', 'tipo', 'cor', 'icone'])
                 ->map($this->carteira(...)),
             'cartoes' => (object) $cartoesDoFormulario->handle($user, $hoje),
@@ -145,7 +146,9 @@ class InicioController extends Controller
     }
 
     /**
-     * @return array{id: int, nome: string, tipo: string, cor: string, icone: string}
+     * A mirror is flagged so the entry form leaves it out (RN-262).
+     *
+     * @return array{id: int, nome: string, tipo: string, cor: string, icone: string, espelho: bool}
      */
     private function carteira(Carteira $carteira): array
     {
@@ -155,6 +158,7 @@ class InicioController extends Controller
             'tipo' => $carteira->tipo->value,
             'cor' => $carteira->cor->value,
             'icone' => $carteira->icone->value,
+            'espelho' => $carteira->cartao?->cartao_origem_id !== null,
         ];
     }
 }

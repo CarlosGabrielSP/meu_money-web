@@ -26,7 +26,8 @@ const credito = computed(() => props.fatura.aPagar < 0);
 </script>
 
 <template>
-    <!-- Invoice card of the card screen (RN-198, RN-223), in place of the balances card. -->
+    <!-- Invoice card of the card screen (RN-198, RN-223), in place of the balances card. Purchases and
+         income are the invoice totals, with the contacts' parts (RN-239, CA-183.1). -->
     <section
         class="rounded-3xl bg-saldo p-5 text-saldo-foreground shadow-sm md:p-6 dark:border dark:border-saldo-borda"
         aria-label="Fatura"
@@ -85,13 +86,21 @@ const credito = computed(() => props.fatura.aPagar < 0);
                 <div class="grid gap-0.5">
                     <dt class="text-saldo-foreground/75">Compras</dt>
                     <dd class="font-medium text-red-300 tabular-nums">
-                        {{ formatarMoeda(fatura.compras) }}
+                        {{
+                            formatarMoeda(
+                                fatura.compras + fatura.comprasContatos,
+                            )
+                        }}
                     </dd>
                 </div>
                 <div class="grid gap-0.5">
                     <dt class="text-saldo-foreground/75">Receitas</dt>
                     <dd class="font-medium text-emerald-300 tabular-nums">
-                        {{ formatarMoeda(fatura.receitas) }}
+                        {{
+                            formatarMoeda(
+                                fatura.receitas + fatura.receitasContatos,
+                            )
+                        }}
                     </dd>
                 </div>
                 <div class="grid gap-0.5">

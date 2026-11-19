@@ -10,7 +10,10 @@ use Carbon\CarbonImmutable;
 
 /**
  * The invoices of one card, stored or not yet created (RN-192, RN-221). An invoice is created only
- * when needed (data model 05); until then the month has the default dates of the card.
+ * when needed (data model 05); until then the month has the default dates of the card. A mirror
+ * takes the dates of the origin card's invoice of the same reference month instead, and storing a
+ * mirror invoice stores that one too, so the author's invoice always sees the contact's part (RN-238,
+ * RN-261 a).
  */
 final class FaturasDoCartao
 {
@@ -21,8 +24,9 @@ final class FaturasDoCartao
 
     /**
      * @param  iterable<Fatura>  $faturas  stored invoices of the card
+     * @param  FaturasDoCartao|null  $origem  invoices of the origin card, for a mirror
      */
-    public function __construct(public readonly Cartao $cartao, iterable $faturas)
+    public function __construct(public readonly Cartao $cartao, iterable $faturas, public readonly ?FaturasDoCartao $origem = null)
     {
         foreach ($faturas as $fatura) {
             $this->porReferencia[$fatura->referencia->format('Y-m')] = $fatura;
@@ -33,8 +37,11 @@ final class FaturasDoCartao
     {
         /** @var Cartao $cartao */
         $cartao = $carteira->cartao()->firstOrFail();
+        $origem = $cartao->cartao_origem_id === null
+            ? null
+            : self::carregar(Carteira::query()->whereKey($cartao->cartao_origem_id)->firstOrFail());
 
-        return new self($cartao, $carteira->faturas()->get());
+        return new self($cartao, $carteira->faturas()->get(), $origem);
     }
 
     /**
@@ -44,7 +51,25 @@ final class FaturasDoCartao
     {
         $chave = $referencia->format('Y-m');
 
-        return $this->porReferencia[$chave] ??= $this->cartao->novaFatura($referencia);
+        return $this->porReferencia[$chave] ??= $this->nova($referencia);
+    }
+
+    /**
+     * A new invoice with the default dates, or for a mirror with the dates of the origin card's
+     * invoice of the month (RN-238).
+     */
+    private function nova(CarbonImmutable $referencia): Fatura
+    {
+        $fatura = $this->cartao->novaFatura($referencia);
+
+        if ($this->origem !== null) {
+            $modelo = $this->origem->daReferencia($referencia);
+            $fatura->fechamento = $modelo->fechamento;
+            $fatura->vencimento = $modelo->vencimento;
+            $fatura->datas_editadas = $modelo->datas_editadas;
+        }
+
+        return $fatura;
     }
 
     /**
@@ -116,6 +141,8 @@ final class FaturasDoCartao
             return $fatura;
         }
 
+        $this->origem?->salvar($this->origem->daReferencia($fatura->referencia));
+
         $gravada = Fatura::query()->createOrFirst(
             ['carteira_id' => $fatura->carteira_id, 'referencia' => $fatura->referencia],
             [
@@ -124,6 +151,10 @@ final class FaturasDoCartao
                 'carteira_vinculada_id' => $fatura->carteira_vinculada_id,
             ],
         );
+
+        if ($gravada->wasRecentlyCreated && $fatura->datas_editadas) {
+            $gravada->forceFill(['datas_editadas' => true])->save();
+        }
 
         return $this->porReferencia[$gravada->referencia->format('Y-m')] = $gravada;
     }

@@ -20,7 +20,7 @@ class CarteiraController extends Controller
 {
     /**
      * List the user's own wallets (RF-020), cards after the common ones, each card with its due day
-     * and the wallet that pays it (RF-160, nota 07).
+     * and the wallet that pays it (RF-160, nota 07). A mirror carries the author's name (RF-182).
      */
     public function index(Request $request): Response
     {
@@ -30,7 +30,7 @@ class CarteiraController extends Controller
                 ->orderBy('tipo', 'desc')
                 ->orderBy('nome')
                 ->withCount(['cotas', 'parcelamentos', 'grupos'])
-                ->with('cartao.carteiraVinculada:id,nome')
+                ->with(['cartao.carteiraVinculada:id,nome', 'cartao.cartaoOrigem.user:id,name'])
                 ->get(['id', 'nome', 'tipo', 'padrao', 'cor', 'icone'])
                 ->map(fn (Carteira $carteira): array => [
                     'id' => $carteira->id,
@@ -40,12 +40,14 @@ class CarteiraController extends Controller
                     'cor' => $carteira->cor->value,
                     'icone' => $carteira->icone->value,
                     'temConteudo' => $carteira->cotas_count + $carteira->parcelamentos_count + $carteira->grupos_count > 0,
+                    'temCotas' => $carteira->cotas_count > 0,
                     'cartao' => $carteira->cartao === null ? null : [
                         'diaVencimento' => $carteira->cartao->dia_vencimento,
                         'diasFechamento' => $carteira->cartao->dias_fechamento,
                         'competencia' => $carteira->cartao->competencia->value,
                         'carteiraVinculadaId' => $carteira->cartao->carteira_vinculada_id,
                         'carteiraVinculadaNome' => $carteira->cartao->carteiraVinculada?->nome,
+                        'autorDoEspelho' => $carteira->cartao->cartaoOrigem?->user->name,
                     ],
                 ]),
             'cores' => array_column(CorCarteira::cases(), 'value'),

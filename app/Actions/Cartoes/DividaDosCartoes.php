@@ -2,9 +2,11 @@
 
 namespace App\Actions\Cartoes;
 
+use App\Enums\OrigemQuitacao;
 use App\Enums\TipoCarteira;
 use App\Models\Cota;
 use App\Models\PagamentoFatura;
+use App\Models\QuitacaoContato;
 use App\Models\User;
 use Carbon\CarbonImmutable;
 
@@ -18,7 +20,9 @@ class DividaDosCartoes
     /**
      * Debt of each card of the user at the end of each given day, as a negative amount (RN-227, R9,
      * DEC-087): purchases minus income dated until that day, by purchase date, minus the payments
-     * dated until that day. Two queries whatever the number of cards and days (RNF-030).
+     * dated until that day. The contacts' parts count too, since the bank charges the author, minus
+     * what the contacts settled until that day (RN-245, data model 05). Four queries whatever the
+     * number of cards and days (RNF-030).
      *
      * @param  list<CarbonImmutable>  $datas  at most 14
      * @param  list<int>|null  $cartoes  card wallet ids, or every card of the user
@@ -46,22 +50,40 @@ class DividaDosCartoes
             ->groupBy('faturas.carteira_id')
             ->select('faturas.carteira_id as cartao_id');
 
+        $contatos = Cota::query()
+            ->join('lancamentos', 'lancamentos.id', '=', 'cotas.lancamento_id')
+            ->join('cartoes as espelho', 'espelho.carteira_id', '=', 'cotas.carteira_id')
+            ->join('carteiras', 'carteiras.id', '=', 'espelho.cartao_origem_id')
+            ->where('carteiras.user_id', $user->id)
+            ->whereColumn('lancamentos.user_id', 'carteiras.user_id')
+            ->when($cartoes !== null, fn ($query) => $query->whereIn('espelho.cartao_origem_id', $cartoes))
+            ->groupBy('espelho.cartao_origem_id')
+            ->select('espelho.cartao_origem_id as cartao_id');
+
+        $quitacoes = QuitacaoContato::query()
+            ->join('pagamentos_fatura', 'pagamentos_fatura.id', '=', 'quitacoes_contato.pagamento_fatura_id')
+            ->join('faturas', 'faturas.id', '=', 'quitacoes_contato.fatura_id')
+            ->join('carteiras', 'carteiras.id', '=', 'faturas.carteira_id')
+            ->where('carteiras.user_id', $user->id)
+            ->where('quitacoes_contato.origem', OrigemQuitacao::Contato->value)
+            ->when($cartoes !== null, fn ($query) => $query->whereIn('faturas.carteira_id', $cartoes))
+            ->groupBy('faturas.carteira_id')
+            ->select('faturas.carteira_id as cartao_id');
+
         foreach ($limites as $indice => $limite) {
+            $contatos->selectRaw("coalesce(sum(case when lancamentos.data < ? then (case when lancamentos.tipo = 'despesa' then cotas.valor else -cotas.valor end) else 0 end), 0) as ".self::DIAS[$indice], [$limite]);
+            $quitacoes->selectRaw('coalesce(sum(case when pagamentos_fatura.data < ? then quitacoes_contato.valor else 0 end), 0) as '.self::DIAS[$indice], [$limite]);
             $cotas->selectRaw("coalesce(sum(case when lancamentos.data < ? then (case when lancamentos.tipo = 'despesa' then cotas.valor else -cotas.valor end) else 0 end), 0) as ".self::DIAS[$indice], [$limite]);
             $pagamentos->selectRaw('coalesce(sum(case when pagamentos_fatura.data < ? then pagamentos_fatura.valor else 0 end), 0) as '.self::DIAS[$indice], [$limite]);
         }
 
         $dividas = [];
 
-        foreach ($cotas->toBase()->get() as $linha) {
-            foreach (array_keys($limites) as $indice) {
-                $dividas[(int) $linha->cartao_id][$indice] = -(int) $linha->{self::DIAS[$indice]};
-            }
-        }
-
-        foreach ($pagamentos->toBase()->get() as $linha) {
-            foreach (array_keys($limites) as $indice) {
-                $dividas[(int) $linha->cartao_id][$indice] = ($dividas[(int) $linha->cartao_id][$indice] ?? 0) + (int) $linha->{self::DIAS[$indice]};
+        foreach ([[$cotas, -1], [$contatos, -1], [$pagamentos, 1], [$quitacoes, 1]] as [$consulta, $sinal]) {
+            foreach ($consulta->toBase()->get() as $linha) {
+                foreach (array_keys($limites) as $indice) {
+                    $dividas[(int) $linha->cartao_id][$indice] = ($dividas[(int) $linha->cartao_id][$indice] ?? 0) + $sinal * (int) $linha->{self::DIAS[$indice]};
+                }
             }
         }
 

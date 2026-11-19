@@ -28,6 +28,8 @@ const props = withDefaults(
         cartao?: DadosCartao | null;
         carteirasComuns?: { id: number; nome: string }[];
         simples?: boolean;
+        /** Author of the card a mirror follows; null for any other wallet (RF-182). */
+        autorDoEspelho?: string | null;
     }>(),
     {
         nome: '',
@@ -37,6 +39,7 @@ const props = withDefaults(
         cartao: null,
         carteirasComuns: () => [],
         simples: false,
+        autorDoEspelho: null,
     },
 );
 
@@ -157,7 +160,18 @@ watch(tipoEscolhido, (tipo) => {
         </fieldset>
         <input v-else type="hidden" name="icone" :value="iconeEscolhido" />
 
-        <template v-if="ehCartao">
+        <!-- A mirror shows the author's dates as text and is always paid by a common wallet (RF-182, nota 07). -->
+        <div v-if="ehCartao && autorDoEspelho !== null" class="grid gap-1">
+            <p class="text-sm">
+                Vence dia {{ cartao?.diaVencimento }} · fecha
+                {{ cartao?.diasFechamento }} dias antes
+            </p>
+            <p class="text-sm text-muted-foreground">
+                Definidos pelo cartão de {{ autorDoEspelho }}.
+            </p>
+        </div>
+
+        <template v-if="ehCartao && autorDoEspelho === null">
             <div class="grid gap-2">
                 <Label for="dia_vencimento">Dia do vencimento</Label>
                 <CampoSelecao
@@ -223,7 +237,9 @@ watch(tipoEscolhido, (tipo) => {
                 </p>
                 <InputError :message="errors.competencia" />
             </fieldset>
+        </template>
 
+        <template v-if="ehCartao">
             <div class="grid gap-2">
                 <Label for="carteira_vinculada"
                     >Carteira que paga a fatura</Label
@@ -236,7 +252,14 @@ watch(tipoEscolhido, (tipo) => {
                             valor: carteira.id,
                             rotulo: carteira.nome,
                         })),
-                        { valor: null, rotulo: 'Nenhuma, cartão independente' },
+                        ...(autorDoEspelho === null
+                            ? [
+                                  {
+                                      valor: null,
+                                      rotulo: 'Nenhuma, cartão independente',
+                                  },
+                              ]
+                            : []),
                     ]"
                 />
                 <input
@@ -244,7 +267,10 @@ watch(tipoEscolhido, (tipo) => {
                     name="carteira_vinculada_id"
                     :value="vinculadaId ?? ''"
                 />
-                <p class="text-sm text-muted-foreground">
+                <p
+                    v-if="autorDoEspelho === null"
+                    class="text-sm text-muted-foreground"
+                >
                     Sem carteira, o pagamento da fatura não mexe em nenhum
                     saldo.
                 </p>
