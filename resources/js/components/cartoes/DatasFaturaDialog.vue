@@ -23,12 +23,15 @@ const props = defineProps<{
     hoje: string;
 }>();
 
-/** Last day of the invoice month, the latest due date (RN-193). */
-const fimDoMes = computed(() => {
-    const [ano, mes] = props.fatura.referencia.split('-').map(Number);
-
-    return new Date(Date.UTC(ano, mes, 0)).toISOString().slice(0, 10);
-});
+/**
+ * The due date starts at the chosen closing or at the server limit (RN-193); the server sends the
+ * other limits and checks them again.
+ */
+const vencimentoMin = computed(() =>
+    form.fechamento > props.fatura.limites.vencimentoMin
+        ? form.fechamento
+        : props.fatura.limites.vencimentoMin,
+);
 
 const aberto = defineModel<boolean>('open', { required: true });
 
@@ -63,7 +66,7 @@ function salvar(): void {
                 <DialogHeader>
                     <DialogTitle>
                         Datas da fatura de
-                        {{ mesPorExtenso(fatura.referencia, false) }}
+                        {{ mesPorExtenso(fatura.competencia, false) }}
                     </DialogTitle>
                     <DialogDescription>
                         Compras depois do fechamento passam para a próxima
@@ -75,7 +78,8 @@ function salvar(): void {
                     <CampoData
                         id="fechamento-fatura"
                         v-model="form.fechamento"
-                        :min="hoje"
+                        :min="fatura.limites.fechamentoMin"
+                        :max="fatura.limites.fechamentoMax"
                     />
                     <InputError :message="form.errors.fechamento" />
                 </div>
@@ -84,8 +88,8 @@ function salvar(): void {
                     <CampoData
                         id="vencimento-fatura"
                         v-model="form.vencimento"
-                        :min="form.fechamento"
-                        :max="fimDoMes"
+                        :min="vencimentoMin"
+                        :max="fatura.limites.vencimentoMax"
                     />
                     <InputError :message="form.errors.vencimento" />
                 </div>

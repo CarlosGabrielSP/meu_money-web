@@ -43,6 +43,7 @@ class CarteiraController extends Controller
                     'cartao' => $carteira->cartao === null ? null : [
                         'diaVencimento' => $carteira->cartao->dia_vencimento,
                         'diasFechamento' => $carteira->cartao->dias_fechamento,
+                        'competencia' => $carteira->cartao->competencia->value,
                         'carteiraVinculadaId' => $carteira->cartao->carteira_vinculada_id,
                         'carteiraVinculadaNome' => $carteira->cartao->carteiraVinculada?->nome,
                     ],

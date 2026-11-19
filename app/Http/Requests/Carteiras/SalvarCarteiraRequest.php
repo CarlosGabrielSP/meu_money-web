@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests\Carteiras;
 
+use App\Enums\CompetenciaFatura;
 use App\Enums\CorCarteira;
 use App\Enums\IconeCarteira;
 use App\Enums\TipoCarteira;
@@ -25,8 +26,9 @@ class SalvarCarteiraRequest extends FormRequest
 
     /**
      * The type is chosen only on create and never changes (RN-190, CA-161.1). Card fields apply only
-     * to a card (CA-160.5): due day 1 to 31, closing 1 to 25 days before it, and an optional linked
-     * wallet that is a common wallet of the user (RN-191, CA-160.3, CA-160.4).
+     * to a card (CA-160.5): due day 1 to 31, closing 1 to 25 days before it, the invoice competence
+     * rule and an optional linked wallet that is a common wallet of the user (RN-191, RN-253,
+     * CA-160.3, CA-160.4, CA-177.8). The simple mode never changes the competence rule (RN-253).
      *
      * @return array<string, ValidationRule|array<mixed>|string>
      */
@@ -41,6 +43,7 @@ class SalvarCarteiraRequest extends FormRequest
             'tipo' => $this->carteiraAtual() === null ? ['nullable', Rule::enum(TipoCarteira::class)] : ['exclude'],
             'dia_vencimento' => [...$cartao, 'required', 'integer', 'between:1,31'],
             'dias_fechamento' => [...$cartao, 'nullable', 'integer', 'between:1,25'],
+            'competencia' => $this->user()?->modo_simples ? ['exclude'] : [...$cartao, 'nullable', Rule::enum(CompetenciaFatura::class)],
             'carteira_vinculada_id' => [
                 ...$cartao,
                 'nullable',
@@ -73,10 +76,10 @@ class SalvarCarteiraRequest extends FormRequest
     }
 
     /**
-     * Card data, or null for a common wallet. A missing closing keeps the current one, or the default
-     * of 10 days on create (RN-191, RN-212, DEC-085).
+     * Card data, or null for a common wallet. A missing closing or competence rule keeps the current
+     * one, or the default on create: 10 days and `fechamento` (RN-191, RN-212, RN-253, DEC-085).
      *
-     * @return array{dia_vencimento: int, dias_fechamento: int, carteira_vinculada_id: int|null}|null
+     * @return array{dia_vencimento: int, dias_fechamento: int, competencia: CompetenciaFatura, carteira_vinculada_id: int|null}|null
      */
     public function cartao(): ?array
     {
@@ -86,12 +89,16 @@ class SalvarCarteiraRequest extends FormRequest
 
         $vinculada = $this->validated('carteira_vinculada_id');
         $fechamento = $this->validated('dias_fechamento');
+        $competencia = $this->validated('competencia');
 
         return [
             'dia_vencimento' => (int) $this->validated('dia_vencimento'),
             'dias_fechamento' => $fechamento !== null
                 ? (int) $fechamento
                 : ($this->carteiraAtual()?->cartao->dias_fechamento ?? Cartao::DIAS_FECHAMENTO_PADRAO),
+            'competencia' => $competencia !== null
+                ? CompetenciaFatura::from($competencia)
+                : ($this->carteiraAtual()?->cartao->competencia ?? CompetenciaFatura::Fechamento),
             'carteira_vinculada_id' => $vinculada === null ? null : (int) $vinculada,
         ];
     }
@@ -105,6 +112,7 @@ class SalvarCarteiraRequest extends FormRequest
             'icone' => 'ícone',
             'dia_vencimento' => 'dia do vencimento',
             'dias_fechamento' => 'dias de fechamento',
+            'competencia' => 'nome da fatura',
             'carteira_vinculada_id' => 'carteira que paga a fatura',
         ];
     }

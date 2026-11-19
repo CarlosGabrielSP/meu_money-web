@@ -30,7 +30,10 @@ export type PagamentoFatura = {
 /** Invoice card of the card screen (RN-198, RN-223). */
 export type FaturaDoMes = {
     id: number | null;
+    /** Due month, the key of the invoice routes. */
     referencia: string;
+    /** Month that names the invoice (RN-253). */
+    competencia: string;
     estado: EstadoFatura;
     inicio: string;
     fechamento: string;
@@ -41,7 +44,13 @@ export type FaturaDoMes = {
     pagamentos: number;
     aPagar: number;
     editavel: boolean;
-    limites: { fechamentoAnterior: string; fechamentoProximo: string };
+    /** Date picker limits (RN-193). */
+    limites: {
+        fechamentoMin: string;
+        fechamentoMax: string;
+        vencimentoMin: string;
+        vencimentoMax: string;
+    };
     pagaPor: string | null;
     pagamentosLista: PagamentoFatura[];
 };

@@ -2,6 +2,7 @@
 
 use App\Actions\Cartoes\AtribuirFaturas;
 use App\Actions\Cartoes\PagarFatura;
+use App\Enums\CompetenciaFatura;
 use App\Enums\IconeCarteira;
 use App\Enums\TipoCarteira;
 use App\Enums\TipoCategoria;
@@ -188,12 +189,13 @@ function cenarioCartao(bool $comPagamento = true): void
 }
 
 /**
- * A card of the user (RN-190, RN-191).
+ * A card of the user (RN-190, RN-191). Módulo 16 names invoices by the due month (RN-253), so that is
+ * the default here.
  */
-function cartaoDe(User $user, string $nome, ?Carteira $vinculada = null, int $diaVencimento = 10, int $diasFechamento = 10): Carteira
+function cartaoDe(User $user, string $nome, ?Carteira $vinculada = null, int $diaVencimento = 10, int $diasFechamento = 10, CompetenciaFatura $competencia = CompetenciaFatura::Vencimento): Carteira
 {
     $cartao = Carteira::factory()->for($user)->create(['nome' => $nome, 'tipo' => TipoCarteira::Cartao, 'icone' => IconeCarteira::CreditCard]);
-    $cartao->cartao()->create(['dia_vencimento' => $diaVencimento, 'dias_fechamento' => $diasFechamento, 'carteira_vinculada_id' => $vinculada?->id]);
+    $cartao->cartao()->create(['dia_vencimento' => $diaVencimento, 'dias_fechamento' => $diasFechamento, 'competencia' => $competencia, 'carteira_vinculada_id' => $vinculada?->id]);
 
     return $cartao;
 }

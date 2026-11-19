@@ -34,7 +34,7 @@ const credito = computed(() => props.fatura.aPagar < 0);
     >
         <div class="flex items-center justify-between gap-3">
             <p class="text-sm text-saldo-foreground/75">
-                Fatura de {{ mesPorExtenso(fatura.referencia, false) }}
+                Fatura de {{ mesPorExtenso(fatura.competencia, false) }}
             </p>
             <span
                 v-if="!simples"

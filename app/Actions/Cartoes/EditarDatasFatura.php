@@ -18,8 +18,9 @@ class EditarDatasFatura
      * Change closing and due date of an open or future invoice (RN-193, DEC-085). The closing stays
      * after the previous closing and before the next one; the due date is not before the closing. The
      * invoice keeps these dates when the card changes (RN-220, R2), and purchases move between
-     * invoices by date. A closed invoice never changes (CA-163.4). The closing is not before today and
-     * the due date stays in the invoice month (/code-review da Fase 14).
+     * invoices by date. A closed invoice never changes (CA-163.4). The closing is not before today
+     * (/code-review da Fase 14). Both dates stay in the months of the competence window, and the due
+     * date stays between the due dates of the previous and the next invoice (RN-193).
      *
      * @throws ValidationException
      */
@@ -34,8 +35,10 @@ class EditarDatasFatura
                 throw ValidationException::withMessages(['fechamento' => 'Fatura fechada não muda de datas.']);
             }
 
-            $anterior = $calendario->anterior($fatura)->fechamento;
-            $proximo = $calendario->proxima($fatura)->fechamento;
+            $faturaAnterior = $calendario->anterior($fatura);
+            $faturaProxima = $calendario->proxima($fatura);
+            $anterior = $faturaAnterior->fechamento;
+            $proximo = $faturaProxima->fechamento;
 
             if ($fechamento->lessThanOrEqualTo($anterior) || $fechamento->greaterThanOrEqualTo($proximo)) {
                 throw ValidationException::withMessages([
@@ -47,12 +50,26 @@ class EditarDatasFatura
                 throw ValidationException::withMessages(['fechamento' => 'O fechamento não pode ser antes de hoje.']);
             }
 
+            [$inicio, $fim] = $calendario->cartao->janelaDeDatas($fatura->referencia);
+            $meses = $inicio->translatedFormat('F').' ou '.$fim->translatedFormat('F');
+
+            foreach (['fechamento' => $fechamento, 'vencimento' => $vencimento] as $campo => $data) {
+                if ($data->lessThan($inicio) || $data->greaterThan($fim)) {
+                    throw ValidationException::withMessages([$campo => "O {$campo} precisa ficar em {$meses}."]);
+                }
+            }
+
             if ($vencimento->lessThan($fechamento)) {
                 throw ValidationException::withMessages(['vencimento' => 'O vencimento não pode ser antes do fechamento.']);
             }
 
-            if ($vencimento->greaterThan($fatura->referencia->endOfMonth())) {
-                throw ValidationException::withMessages(['vencimento' => 'O vencimento precisa ficar no mês da fatura.']);
+            $vencimentoAnterior = $faturaAnterior->vencimento;
+            $vencimentoProximo = $faturaProxima->vencimento;
+
+            if ($vencimento->lessThanOrEqualTo($vencimentoAnterior) || $vencimento->greaterThanOrEqualTo($vencimentoProximo)) {
+                throw ValidationException::withMessages([
+                    'vencimento' => "O vencimento precisa ficar entre {$vencimentoAnterior->format('d/m/Y')} e {$vencimentoProximo->format('d/m/Y')}.",
+                ]);
             }
 
             $cotas = $this->salvarCartao->cotasNaoFechadas($cartao, $hoje);

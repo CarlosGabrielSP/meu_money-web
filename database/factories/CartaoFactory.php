@@ -2,6 +2,7 @@
 
 namespace Database\Factories;
 
+use App\Enums\CompetenciaFatura;
 use App\Enums\IconeCarteira;
 use App\Enums\TipoCarteira;
 use App\Models\Cartao;
@@ -24,6 +25,7 @@ class CartaoFactory extends Factory
             'carteira_id' => Carteira::factory()->state(['tipo' => TipoCarteira::Cartao, 'icone' => IconeCarteira::CreditCard]),
             'dia_vencimento' => 10,
             'dias_fechamento' => Cartao::DIAS_FECHAMENTO_PADRAO,
+            'competencia' => CompetenciaFatura::Fechamento,
             'carteira_vinculada_id' => null,
         ];
     }

@@ -29,9 +29,9 @@ class InicioController extends Controller
      * the highlights: wallet balances, overdue and upcoming shares and the month's top categories; the
      * panel lists load only on request (RN-171 to RN-175).
      *
-     * A card shows its invoice instead of balances (RN-223): the month is the due month, the open
-     * invoice's without a month in the URL (R3); the list has the invoice purchases; overdue and
-     * upcoming highlights are hidden (RN-224). A common wallet also gets one row per invoice it pays
+     * A card shows its invoice instead of balances (RN-223): the month is the invoice competence, the
+     * open invoice's without a month in the URL (R3, RN-253); the list and the spending have the
+     * invoice purchases; overdue and upcoming highlights are hidden (RN-224). A common wallet also gets one row per invoice it pays
      * in the month (RN-219).
      */
     public function __invoke(
@@ -118,7 +118,7 @@ class InicioController extends Controller
             'destaques' => fn (): ?array => $user->modo_simples ? null : [
                 'saldosCarteiras' => (object) $saldosDasCarteiras->handle($user, $mes, $faturas, $vinculados),
                 ...($noCartao ? ['vencidas' => null, 'proximas' => null] : $pendencias->resumo($user, $carteira, $hoje)),
-                'gastosDoMes' => $gastosDoMes->handle($user, $carteira, $mes),
+                'gastosDoMes' => $gastosDoMes->handle($user, $carteira, $mes, $fatura['id'] ?? null),
             ],
             'cotasVencidas' => Inertia::optional(fn (): array => $noCartao ? [] : $pendencias->listaVencidas($user, $carteira, $hoje)),
             'cotasProximas' => Inertia::optional(fn (): array => $noCartao ? [] : $pendencias->listaProximas($user, $carteira, $hoje)),

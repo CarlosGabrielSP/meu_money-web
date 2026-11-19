@@ -6,9 +6,12 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { coresCarteira, iconesCarteira } from './aparencia';
 
+export type CompetenciaFatura = 'fechamento' | 'vencimento';
+
 export type DadosCartao = {
     diaVencimento: number;
     diasFechamento: number;
+    competencia: CompetenciaFatura;
     carteiraVinculadaId: number | null;
 };
 
@@ -186,6 +189,40 @@ watch(tipoEscolhido, (tipo) => {
                 />
                 <InputError :message="errors.dias_fechamento" />
             </div>
+
+            <fieldset v-if="!simples" class="grid gap-2">
+                <legend class="mb-2 text-sm font-medium">
+                    Nome da fatura pelo mês
+                </legend>
+                <div class="flex flex-wrap gap-4">
+                    <label class="flex items-center gap-2">
+                        <input
+                            type="radio"
+                            name="competencia"
+                            value="fechamento"
+                            :checked="
+                                (cartao?.competencia ?? 'fechamento') ===
+                                'fechamento'
+                            "
+                        />
+                        do fechamento
+                    </label>
+                    <label class="flex items-center gap-2">
+                        <input
+                            type="radio"
+                            name="competencia"
+                            value="vencimento"
+                            :checked="cartao?.competencia === 'vencimento'"
+                        />
+                        do vencimento
+                    </label>
+                </div>
+                <p class="text-sm text-muted-foreground">
+                    Use o mesmo do seu banco. Fechamento 25/10 e vencimento
+                    05/11: fatura de outubro ou de novembro.
+                </p>
+                <InputError :message="errors.competencia" />
+            </fieldset>
 
             <div class="grid gap-2">
                 <Label for="carteira_vinculada"

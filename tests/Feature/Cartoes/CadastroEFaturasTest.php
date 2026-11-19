@@ -1,5 +1,6 @@
 <?php
 
+use App\Enums\CompetenciaFatura;
 use App\Enums\CorCarteira;
 use App\Enums\IconeCarteira;
 use App\Enums\TipoCarteira;
@@ -35,6 +36,7 @@ it('CA-160.1 creates a card wallet with its card row and the defaults', function
         ->and($carteira->cartao)
         ->dia_vencimento->toBe(10)
         ->dias_fechamento->toBe(10)
+        ->competencia->toBe(CompetenciaFatura::Fechamento)
         ->carteira_vinculada_id->toBe($this->x->id);
 });
 
@@ -264,16 +266,40 @@ it('CA-166.1 CA-166.2 deletes a payment, which has no edit route', function () {
         ->and(collect(app('router')->getRoutes()->getRoutes())->contains(fn ($rota) => str_contains($rota->uri(), 'pagamentos-fatura') && in_array('PUT', $rota->methods(), true)))->toBeFalse();
 });
 
-it('RN-193 keeps the closing from today on and the due date in the invoice month', function (array $datas, string $campo, string $mensagem) {
+it('RN-193 keeps the closing from today on', function () {
     $this->actingAs($this->user)
-        ->put(route('faturas.datas', [$this->nubank, '2026-12']), $datas)
-        ->assertSessionHasErrors([$campo => $mensagem]);
+        ->put(route('faturas.datas', [$this->nubank, '2026-12']), ['fechamento' => '2026-11-13', 'vencimento' => '2026-12-10'])
+        ->assertSessionHasErrors(['fechamento' => 'O fechamento não pode ser antes de hoje.']);
 
     expect(faturaDe($this->nubank, '2026-12')->datas_editadas)->toBeFalse();
-})->with([
-    'closing before today' => [['fechamento' => '2026-11-13', 'vencimento' => '2026-12-10'], 'fechamento', 'O fechamento não pode ser antes de hoje.'],
-    'due date after the month' => [['fechamento' => '2026-11-30', 'vencimento' => '2027-01-02'], 'vencimento', 'O vencimento precisa ficar no mês da fatura.'],
-]);
+});
+
+it('CA-163.6 keeps the dates in the months of the competence window', function () {
+    $this->actingAs($this->user)
+        ->put(route('faturas.datas', [$this->nubank, '2026-12']), ['fechamento' => '2026-11-30', 'vencimento' => '2027-01-02'])
+        ->assertSessionHasErrors(['vencimento' => 'O vencimento precisa ficar em novembro ou dezembro.']);
+
+    $inter = cartaoDe($this->user, 'Inter', $this->x, diaVencimento: 15, competencia: CompetenciaFatura::Fechamento);
+
+    $this->actingAs($this->user)
+        ->put(route('faturas.datas', [$inter, '2026-12']), ['fechamento' => '2026-11-20', 'vencimento' => '2026-12-15'])
+        ->assertSessionHasErrors(['fechamento' => 'O fechamento precisa ficar em dezembro ou janeiro.']);
+    $this->actingAs($this->user)
+        ->put(route('faturas.datas', [$inter, '2026-12']), ['fechamento' => '2026-12-05', 'vencimento' => '2027-01-05'])
+        ->assertSessionHasNoErrors();
+
+    expect(faturaDe($inter, '2026-12'))
+        ->vencimento->toDateString()->toBe('2027-01-05')
+        ->datas_editadas->toBeTrue();
+});
+
+it('CA-163.7 keeps the due date between the due dates of the previous and the next invoice', function () {
+    $inter = cartaoDe($this->user, 'Inter', $this->x, diaVencimento: 15, competencia: CompetenciaFatura::Fechamento);
+
+    $this->actingAs($this->user)
+        ->put(route('faturas.datas', [$inter, '2026-12']), ['fechamento' => '2026-12-05', 'vencimento' => '2027-01-20'])
+        ->assertSessionHasErrors(['vencimento' => 'O vencimento precisa ficar entre 15/11/2026 e 15/01/2027.']);
+});
 
 it('RN-220 refuses a card change that would close the open invoice before today or out of order', function () {
     $this->actingAs($this->user)

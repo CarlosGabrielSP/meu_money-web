@@ -187,7 +187,8 @@ class ListarLancamentosDoMes
      * (RN-219, DEC-087): card name, due date, purchases minus income of the invoice, the situation
      * ("a pagar" without payment, "parcial" with payment, "quitada" when nothing is left to pay) and
      * the items, without status. Invoices without shares have no row. With any filter active except
-     * type = expense, there is no row. The card shares never appear as items of the wallet.
+     * type = expense, there is no row. The card shares never appear as items of the wallet. Tapping
+     * opens the card in the invoice competence month (RN-253).
      *
      * @param  array{tipo: string|null, categoria: int|null, status: string|null, compartilhado: string|null}  $filtros
      * @param  array<int, list<array{fatura: Fatura, pagamentos: int, aPagar: int}>>  $faturas  amounts of the user's invoices (CalcularFaturas)
@@ -214,8 +215,9 @@ class ListarLancamentosDoMes
             ->where('faturas.vencimento', '<', $fim)
             ->with([
                 'categoria:id,nome,icone',
-                'fatura:id,carteira_id,fechamento,vencimento',
+                'fatura:id,carteira_id,referencia,fechamento,vencimento',
                 'fatura.carteira:id,nome,cor,icone',
+                'fatura.carteira.cartao:id,carteira_id,dia_vencimento,dias_fechamento,competencia',
                 'lancamento.parcelamento:id,categoria_id,total_parcelas,dia_vencimento,encerrado_em',
                 'lancamento.user:id,name',
                 'lancamento.cotas:id,lancamento_id,user_id,categoria_id,valor,percentual,executado',
@@ -242,7 +244,7 @@ class ListarLancamentosDoMes
                     'nome' => $fatura->carteira->nome,
                     'cor' => $fatura->carteira->cor->value,
                     'icone' => $fatura->carteira->icone->value,
-                    'mes' => $fatura->vencimento->format('Y-m'),
+                    'mes' => $fatura->carteira->cartao?->competenciaDa($fatura->referencia)->format('Y-m') ?? $fatura->referencia->format('Y-m'),
                     'vencimento' => $fatura->vencimento->toDateString(),
                     'valor' => $valor,
                     'situacao' => match (true) {

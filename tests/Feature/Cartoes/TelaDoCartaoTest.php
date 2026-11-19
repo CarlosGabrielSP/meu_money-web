@@ -2,6 +2,7 @@
 
 use App\Actions\Cartoes\AtribuirFaturas;
 use App\Actions\Cartoes\PagarFatura;
+use App\Enums\CompetenciaFatura;
 use App\Enums\ModoRateio;
 use App\Models\Carteira;
 use App\Models\Contato;
@@ -251,6 +252,32 @@ it('CA-169.4 hides overdue and upcoming and shows the invoice categories', funct
         ->where('destaques.gastosDoMes', fn ($gastos) => collect($gastos)->map(fn ($gasto) => [$gasto['nome'], $gasto['valor']])->all() === [['Lazer', 20000], ['Mercado', 10000]]));
 });
 
+it('RN-193 sends the date picker limits of the invoice', function () {
+    inicioDe($this->nubank, ['mes' => '2026-12'])->assertInertia(fn (Assert $page) => $page
+        ->where('fatura.limites', [
+            'fechamentoMin' => '2026-11-14',
+            'fechamentoMax' => '2026-12-30',
+            'vencimentoMin' => '2026-11-11',
+            'vencimentoMax' => '2026-12-31',
+        ]));
+});
+
+it('RN-224 shows the purchases of the invoice on screen when its due date moved to the next month', function () {
+    $inter = cartaoDe($this->user, 'Inter', $this->x, diaVencimento: 15, competencia: CompetenciaFatura::Fechamento);
+    compraNoCartao('2026-11-20', 20000, $this->lazer, cartao: $inter);
+    compraNoCartao('2026-12-10', 5000, $this->mercado, cartao: $inter);
+    $this->actingAs($this->user)
+        ->put(route('faturas.datas', [$inter, '2026-12']), ['fechamento' => '2026-12-05', 'vencimento' => '2027-01-05'])
+        ->assertSessionHasNoErrors();
+
+    $gastos = fn ($esperado) => fn ($lista) => collect($lista)->map(fn ($gasto) => [$gasto['nome'], $gasto['valor']])->all() === $esperado;
+
+    inicioDe($inter, ['mes' => '2026-12'])->assertInertia(fn (Assert $page) => $page
+        ->where('destaques.gastosDoMes', $gastos([['Lazer', 20000]])));
+    inicioDe($inter, ['mes' => '2027-01'])->assertInertia(fn (Assert $page) => $page
+        ->where('destaques.gastosDoMes', $gastos([['Mercado', 5000]])));
+});
+
 it('CA-169.5 shows the to pay of the month invoice in the card wallet tile', function (string $mes, int $valor) {
     inicioDe($this->nubank, ['mes' => $mes])->assertInertia(fn (Assert $page) => $page->where("destaques.saldosCarteiras.{$this->nubank->id}", $valor));
 })->with([['2026-12', 30000], ['2026-11', 0]]);
@@ -370,14 +397,16 @@ it('CA-174.1 shows a group in the card without aggregated status', function () {
         ->assertSessionHasErrors('executado');
 });
 
-it('CA-176.1 creates a card in simple mode with the default closing', function () {
+it('CA-176.1 creates a card in simple mode with the default closing and competence', function () {
     $this->user->update(['modo_simples' => true]);
 
     $this->actingAs($this->user)
         ->post(route('carteiras.store'), ['nome' => 'Inter', 'tipo' => 'cartao', 'dia_vencimento' => 5, 'carteira_vinculada_id' => $this->x->id])
         ->assertSessionHasNoErrors();
 
-    expect($this->user->carteiras()->where('nome', 'Inter')->sole()->cartao->dias_fechamento)->toBe(10);
+    expect($this->user->carteiras()->where('nome', 'Inter')->sole()->cartao)
+        ->dias_fechamento->toBe(10)
+        ->competencia->toBe(CompetenciaFatura::Fechamento);
 });
 
 it('CA-176.2 shows the card in the simple mode selector with its invoice and purchases', function () {

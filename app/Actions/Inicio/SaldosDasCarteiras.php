@@ -5,6 +5,7 @@ namespace App\Actions\Inicio;
 use App\Actions\Cartoes\CalcularFaturas;
 use App\Actions\Cartoes\SaldosVinculados;
 use App\Enums\TipoCarteira;
+use App\Models\Cartao;
 use App\Models\Carteira;
 use App\Models\Fatura;
 use App\Models\User;
@@ -20,7 +21,8 @@ class SaldosDasCarteiras
 
     /**
      * Current accumulated balance of every common wallet of the user until the last day of the month,
-     * and the to pay of the invoice of the month for each card (RN-022, RN-023, RN-171, RN-225). A
+     * and the to pay of the invoice of the month for each card, by its competence (RN-022, RN-023,
+     * RN-171, RN-225, RN-253). A
      * constant number of queries whatever the number of wallets (RNF-030).
      *
      * @param  array<int, list<array{fatura: Fatura, aPagar: int}>>|null  $faturas  CalcularFaturas, to reuse in the request
@@ -31,8 +33,15 @@ class SaldosDasCarteiras
     {
         $saldos = array_map(fn (array $saldos): int => $saldos['atual'], $this->atuaisEEstimados($user, $mes, $vinculados));
 
-        foreach ($faturas ?? $this->calcularFaturas->handle($user) as $cartaoId => $doCartao) {
-            $saldos[$cartaoId] = CalcularFaturas::aPagarNoMes($doCartao, $mes);
+        $faturas ??= $this->calcularFaturas->handle($user);
+        $cartoes = $faturas === [] ? collect() : Cartao::query()
+            ->whereIn('carteira_id', array_keys($faturas))
+            ->get(['carteira_id', 'dia_vencimento', 'dias_fechamento', 'competencia'])
+            ->keyBy('carteira_id');
+
+        foreach ($faturas as $cartaoId => $doCartao) {
+            $cartao = $cartoes->get($cartaoId);
+            $saldos[$cartaoId] = CalcularFaturas::aPagarNoMes($doCartao, $cartao?->referenciaDa($mes) ?? $mes);
         }
 
         return $saldos;

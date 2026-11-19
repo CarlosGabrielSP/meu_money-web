@@ -2,6 +2,7 @@
 
 namespace App\Actions\Cartoes;
 
+use App\Enums\CompetenciaFatura;
 use App\Models\Cartao;
 use App\Models\Carteira;
 use App\Models\Cota;
@@ -21,7 +22,7 @@ class SalvarCartao
      * (RN-190, RN-191, DEC-084).
      *
      * @param  array{nome: string, cor: mixed, icone: mixed, tipo: mixed}  $carteira
-     * @param  array{dia_vencimento: int, dias_fechamento: int, carteira_vinculada_id: int|null}  $dados
+     * @param  array{dia_vencimento: int, dias_fechamento: int, competencia: CompetenciaFatura, carteira_vinculada_id: int|null}  $dados
      */
     public function criar(User $user, array $carteira, array $dados): Carteira
     {
@@ -37,9 +38,10 @@ class SalvarCartao
      * Change the card data (RN-220, RN-229). A new due day or closing recalculates the dates of the
      * open and future invoices, except those edited one by one, and purchases change invoice by date;
      * closed invoices never change. A new linked wallet goes to the open and future invoices; payments
-     * already made keep their wallet.
+     * already made keep their wallet. A new competence rule only renames the invoices; no data
+     * changes (RN-253, CA-177.8).
      *
-     * @param  array{dia_vencimento: int, dias_fechamento: int, carteira_vinculada_id: int|null}  $dados
+     * @param  array{dia_vencimento: int, dias_fechamento: int, competencia: CompetenciaFatura, carteira_vinculada_id: int|null}  $dados
      */
     public function atualizar(Carteira $carteira, array $dados): void
     {

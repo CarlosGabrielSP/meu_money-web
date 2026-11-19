@@ -66,7 +66,7 @@ function enviar(): void {
             <SheetHeader>
                 <SheetTitle class="font-display text-lg">
                     Pagar fatura de
-                    {{ mesPorExtenso(fatura.referencia, false) }} ({{
+                    {{ mesPorExtenso(fatura.competencia, false) }} ({{
                         cartaoNome
                     }})
                 </SheetTitle>
