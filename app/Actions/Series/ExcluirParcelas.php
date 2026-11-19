@@ -6,6 +6,7 @@ use App\Actions\Lancamentos\RemoverLancamentos;
 use App\Enums\EscopoSerie;
 use App\Models\Lancamento;
 use App\Models\Parcelamento;
+use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
@@ -18,7 +19,7 @@ class ExcluirParcelas
     /**
      * Delete installments with a scope (RF-054).
      *
-     * "Esta" removes only the open installment. The other scopes remove only pending installments
+     * "Esta" removes only the open installment, never one in a closed card invoice (RN-200). The other scopes remove only pending installments
      * (RN-056); numbers are never reused (RN-057). "Esta e próximas" on a recurring series ends it on
      * the installment date. A series left without installments is removed (CA-054.4); otherwise
      * "todas" ends a recurring series on the last executed installment (RN-139).
@@ -31,6 +32,10 @@ class ExcluirParcelas
         $serie = $parcela->parcelamento;
 
         $anexos = DB::transaction(function () use ($parcela, $serie, $escopo): array {
+            if ($escopo === EscopoSerie::Esta && $parcela->emFaturaFechada(CarbonImmutable::today())) {
+                throw ValidationException::withMessages(['lancamento' => 'Compra em fatura fechada não pode ser excluída.']);
+            }
+
             if ($escopo === EscopoSerie::Esta) {
                 $anexos = $this->removerLancamentos->handle(new Collection([$parcela]));
             } else {

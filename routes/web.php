@@ -5,6 +5,7 @@ use App\Http\Controllers\CarteiraController;
 use App\Http\Controllers\CategoriaController;
 use App\Http\Controllers\ContatoController;
 use App\Http\Controllers\CotaController;
+use App\Http\Controllers\FaturaController;
 use App\Http\Controllers\GrupoController;
 use App\Http\Controllers\InicioController;
 use App\Http\Controllers\LancamentoAnexoController;
@@ -40,6 +41,13 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
     Route::resource('carteiras', CarteiraController::class)->only(['index', 'store', 'update', 'destroy']);
     Route::post('carteiras/{carteira}/padrao', [CarteiraController::class, 'definirPadrao'])->name('carteiras.padrao');
+    Route::post('cartoes/{carteira}/faturas/{referencia}/pagamentos', [FaturaController::class, 'pagar'])
+        ->where('referencia', '\d{4}-(0[1-9]|1[0-2])')
+        ->name('faturas.pagar');
+    Route::put('cartoes/{carteira}/faturas/{referencia}', [FaturaController::class, 'atualizarDatas'])
+        ->where('referencia', '\d{4}-(0[1-9]|1[0-2])')
+        ->name('faturas.datas');
+    Route::delete('pagamentos-fatura/{pagamentoFatura}', [FaturaController::class, 'excluirPagamento'])->name('faturas.pagamentos.destroy');
 
     Route::resource('categorias', CategoriaController::class)->only(['index', 'store', 'update', 'destroy']);
 

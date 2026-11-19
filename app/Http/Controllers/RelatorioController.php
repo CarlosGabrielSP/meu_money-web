@@ -21,6 +21,7 @@ class RelatorioController extends Controller
     /**
      * Report of one wallet in one period (RF-140 to RF-148). The simple mode gets only the summary,
      * the expenses by category and the forecast, for the last used or the default wallet (RN-188).
+     * Cards are listed apart from the common wallets, with their debt (RN-227).
      */
     public function __invoke(
         RelatorioRequest $request,
@@ -56,18 +57,20 @@ class RelatorioController extends Controller
             'carteira' => [
                 'id' => $carteira->id,
                 'nome' => $carteira->nome,
+                'tipo' => $carteira->tipo->value,
                 'cor' => $carteira->cor->value,
                 'icone' => $carteira->icone->value,
             ],
             'periodo' => $periodo->value,
+            'visao' => $request->visao(),
             'intervalo' => ['inicio' => $inicio->format('Y-m'), 'fim' => $fim->subMonth()->format('Y-m')],
             'hoje' => $hoje->toDateString(),
             ...$blocosDoModoSimples,
             ...($user->modo_simples ? [] : [
+                ...$saldoPorCarteira->handle($user, $hoje),
                 'evolucao' => $evolucaoMensal->handle($user, $carteira, $periodo->meses($hoje)),
                 'despesasPorTipo' => $despesasPorTipo->handle($user, $carteira, $inicio, $fim),
                 'compromissos' => $compromissos->handle($user, $carteira, $hoje),
-                'carteiras' => $saldoPorCarteira->handle($user, $hoje),
                 'rateio' => $rateio->handle($user, $carteira, $inicio, $fim),
             ]),
         ]);

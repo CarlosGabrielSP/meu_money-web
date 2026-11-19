@@ -12,6 +12,7 @@ use App\Models\ParcelamentoCota;
 use App\Models\User;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 
 class SairDoRateio
 {
@@ -27,10 +28,17 @@ class SairDoRateio
      * recalculation does not change the shares of who stayed (RN-146). On an installment, "esta e próximas" and "todas" also apply to later or all installments and remove
      * the participant from the series model (CA-073.4). Other installments where the leaving share or
      * the author's share is already executed stay as they are (RN-147).
+     *
+     * A share in a closed card invoice counts as executed and never leaves the split (RN-200): the open
+     * installment fails, others in the scope stay. $permitirFechadas lifts this when the card or the
+     * account is deleted (RN-113, RN-233).
+     *
+     * @throws ValidationException
      */
-    public function handle(User $participante, Lancamento $lancamento, EscopoSerie $escopo = EscopoSerie::Esta): void
+    public function handle(User $participante, Lancamento $lancamento, EscopoSerie $escopo = EscopoSerie::Esta, bool $permitirFechadas = false): void
     {
-        DB::transaction(function () use ($participante, $lancamento, $escopo): void {
+        DB::transaction(function () use ($participante, $lancamento, $escopo, $permitirFechadas): void {
+            $hoje = CarbonImmutable::today();
             $serie = $lancamento->parcelamento;
 
             $lancamentos = $serie === null || $escopo === EscopoSerie::Esta
@@ -40,11 +48,11 @@ class SairDoRateio
                     ->whereHas('cotas', fn ($query) => $query->where('user_id', $participante->id))
                     ->where(fn ($query) => $query->whereKey($lancamento->id)->orWhereDoesntHave('cotas', fn ($cotas) => $cotas
                         ->whereIn('user_id', [$participante->id, $serie->user_id])
-                        ->where('executado', true)))
+                        ->travadas($hoje)))
                     ->get();
 
             foreach ($lancamentos as $item) {
-                $this->sairDoLancamento($participante, $item);
+                $this->sairDoLancamento($participante, $item, $permitirFechadas ? null : $hoje);
             }
 
             if ($serie !== null && $escopo !== EscopoSerie::Esta) {
@@ -53,15 +61,24 @@ class SairDoRateio
         });
     }
 
-    private function sairDoLancamento(User $participante, Lancamento $lancamento): void
+    /**
+     * @param  CarbonImmutable|null  $hoje  today, to refuse a share in a closed invoice; null allows it
+     *
+     * @throws ValidationException
+     */
+    private function sairDoLancamento(User $participante, Lancamento $lancamento, ?CarbonImmutable $hoje): void
     {
-        $cotas = $lancamento->cotas()->lockForUpdate()->get()->keyBy('user_id');
+        $cotas = $lancamento->cotas()->with('fatura:id,fechamento')->lockForUpdate()->get()->keyBy('user_id');
 
         /** @var Cota|null $saindo */
         $saindo = $cotas->get($participante->id);
 
         if ($saindo === null) {
             return;
+        }
+
+        if ($hoje !== null && $saindo->fatura !== null && $saindo->fatura->isFechada($hoje)) {
+            throw ValidationException::withMessages(['cota' => 'Fatura fechada: a cota não pode sair da divisão.']);
         }
 
         /** @var Cota|null $doAutor */

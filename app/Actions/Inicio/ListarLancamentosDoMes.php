@@ -2,9 +2,11 @@
 
 namespace App\Actions\Inicio;
 
+use App\Enums\TipoLancamento;
 use App\Models\Carteira;
 use App\Models\Categoria;
 use App\Models\Cota;
+use App\Models\Fatura;
 use App\Models\Grupo;
 use App\Models\Lancamento;
 use App\Models\Parcelamento;
@@ -34,11 +36,19 @@ class ListarLancamentosDoMes
      * visible items, their sum and the aggregated status; with a filter that hides some of the
      * group's items in the month the row is marked as filtered (RN-122 to RN-124, RN-129).
      *
+     * A card lists the shares of the invoice due in the month instead of the month dates, without
+     * status nor status filter; groups have no aggregated status (RN-194, RN-211, RN-223).
+     *
      * @param  array{tipo: string|null, categoria: int|null, status: string|null, compartilhado: string|null}  $filtros
+     * @param  int|null  $faturaId  invoice of the month, for a card; null when it was never created
      * @return array{receita: array<string, list<array<string, mixed>>>, despesa: array<string, list<array<string, mixed>>>}
      */
-    public function handle(User $user, Carteira $carteira, CarbonImmutable $mes, array $filtros, CarbonImmutable $hoje): array
+    public function handle(User $user, Carteira $carteira, CarbonImmutable $mes, array $filtros, CarbonImmutable $hoje, ?int $faturaId = null): array
     {
+        if ($carteira->isCartao()) {
+            $filtros['status'] = null;
+        }
+
         $secoes = [];
 
         foreach (['receita', 'despesa'] as $tipo) {
@@ -46,7 +56,7 @@ class ListarLancamentosDoMes
         }
 
         [$inicio, $fim] = $this->limites($mes);
-        $itens = $this->itens($user, $carteira, $inicio, $fim, $filtros, comGrupo: true);
+        $itens = $this->itens($user, $carteira, $inicio, $fim, $filtros, comGrupo: true, faturaId: $faturaId);
         $categoriasVisiveis = $this->categoriasVisiveis($user, $itens);
 
         $grupos = [];
@@ -77,15 +87,18 @@ class ListarLancamentosDoMes
                 ->where('cotas.user_id', $user->id)
                 ->where('cotas.carteira_id', $carteira->id)
                 ->whereNotNull('cotas.grupo_id')
-                ->where('lancamentos.data', '>=', $inicio)
-                ->where('lancamentos.data', '<', $fim)
+                ->when(
+                    $carteira->isCartao(),
+                    fn ($query) => $query->where('cotas.fatura_id', $faturaId ?? 0),
+                    fn ($query) => $query->where('lancamentos.data', '>=', $inicio)->where('lancamentos.data', '<', $fim),
+                )
                 ->groupBy('cotas.grupo_id')
                 ->selectRaw('cotas.grupo_id, count(*) as total')
                 ->pluck('total', 'grupo_id');
 
         foreach ($grupos as $tipo => $doTipo) {
             foreach ($doTipo as $linha) {
-                $secoes[$tipo]['grupos'][] = $this->grupo($linha['grupo'], $linha['itens'], $totaisNoMes);
+                $secoes[$tipo]['grupos'][] = $this->grupo($linha['grupo'], $linha['itens'], $totaisNoMes, $carteira->isCartao());
             }
         }
 
@@ -96,13 +109,14 @@ class ListarLancamentosDoMes
      * The month list of the simple mode: Receitas and Despesas without subsections, by date and, on
      * the same day, by creation. Grouped items are plain items and filters never apply (RN-161).
      *
+     * @param  int|null  $faturaId  invoice of the month, for a card (RN-212)
      * @return array{receita: list<array<string, mixed>>, despesa: list<array<string, mixed>>}
      */
-    public function semSubsecoes(User $user, Carteira $carteira, CarbonImmutable $mes, CarbonImmutable $hoje): array
+    public function semSubsecoes(User $user, Carteira $carteira, CarbonImmutable $mes, CarbonImmutable $hoje, ?int $faturaId = null): array
     {
         $secoes = ['receita' => [], 'despesa' => []];
         [$inicio, $fim] = $this->limites($mes);
-        $itens = $this->itens($user, $carteira, $inicio, $fim, self::SEM_FILTROS, comGrupo: false);
+        $itens = $this->itens($user, $carteira, $inicio, $fim, self::SEM_FILTROS, comGrupo: false, faturaId: $faturaId);
         $categoriasVisiveis = $this->categoriasVisiveis($user, $itens);
 
         foreach ($itens as [$lancamento, $cota]) {
@@ -115,13 +129,15 @@ class ListarLancamentosDoMes
     /**
      * The user's shares in the month plus the entries they authored here without a share of their
      * own, sorted by date and creation (RN-093, RN-145). The group is loaded only for the
-     * subsections of the full mode (RN-122).
+     * subsections of the full mode (RN-122). A card takes the shares of its invoice (RN-223).
      *
      * @param  array{tipo: string|null, categoria: int|null, status: string|null, compartilhado: string|null}  $filtros
      * @return Collection<int, array{0: Lancamento, 1: Cota|null}>
      */
-    private function itens(User $user, Carteira $carteira, string $inicio, string $fim, array $filtros, bool $comGrupo): Collection
+    private function itens(User $user, Carteira $carteira, string $inicio, string $fim, array $filtros, bool $comGrupo, ?int $faturaId = null): Collection
     {
+        $noCartao = $carteira->isCartao();
+
         $relacoes = [
             'parcelamento:id,categoria_id,total_parcelas,dia_vencimento,encerrado_em',
             'user:id,name',
@@ -134,18 +150,21 @@ class ListarLancamentosDoMes
             ->join('lancamentos', 'lancamentos.id', '=', 'cotas.lancamento_id')
             ->where('cotas.user_id', $user->id)
             ->where('cotas.carteira_id', $carteira->id)
-            ->where('lancamentos.data', '>=', $inicio)
-            ->where('lancamentos.data', '<', $fim)
+            ->when(
+                $noCartao,
+                fn ($query) => $query->where('cotas.fatura_id', $faturaId ?? 0),
+                fn ($query) => $query->where('lancamentos.data', '>=', $inicio)->where('lancamentos.data', '<', $fim),
+            )
             ->when($filtros['tipo'], fn ($query, string $tipo) => $query->where('lancamentos.tipo', $tipo))
             ->when($filtros['categoria'], fn ($query, int $categoria) => $query->where('cotas.categoria_id', $categoria))
             ->when($filtros['status'], fn ($query, string $status) => $query->where('cotas.executado', $status === 'executado'))
             ->when($filtros['compartilhado'], fn ($query, string $compartilhado) => $compartilhado === 'sim'
                 ? $query->whereNotNull('lancamentos.modo_rateio')
                 : $query->whereNull('lancamentos.modo_rateio'))
-            ->with(['categoria:id,nome,icone', ...($comGrupo ? ['grupo:id,nome'] : []), ...array_map(fn (string $relacao): string => "lancamento.{$relacao}", $relacoes)])
+            ->with(['categoria:id,nome,icone', 'fatura:id,fechamento', ...($comGrupo ? ['grupo:id,nome'] : []), ...array_map(fn (string $relacao): string => "lancamento.{$relacao}", $relacoes)])
             ->get();
 
-        $semCota = $filtros['categoria'] !== null || $filtros['status'] !== null || $filtros['compartilhado'] === 'nao'
+        $semCota = $noCartao || $filtros['categoria'] !== null || $filtros['status'] !== null || $filtros['compartilhado'] === 'nao'
             ? collect()
             : Lancamento::query()
                 ->where('user_id', $user->id)
@@ -161,6 +180,81 @@ class ListarLancamentosDoMes
             ->concat($semCota->map(fn (Lancamento $lancamento): array => [$lancamento, null]))
             ->sortBy(fn (array $par): array => [$par[0]->data->toDateString(), $par[0]->created_at?->toDateTimeString(), $par[0]->id])
             ->values();
+    }
+
+    /**
+     * One row per invoice paid by the common wallet and due in the month, with the user's shares
+     * (RN-219, DEC-087): card name, due date, purchases minus income of the invoice, the situation
+     * ("a pagar" without payment, "parcial" with payment, "quitada" when nothing is left to pay) and
+     * the items, without status. Invoices without shares have no row. With any filter active except
+     * type = expense, there is no row. The card shares never appear as items of the wallet.
+     *
+     * @param  array{tipo: string|null, categoria: int|null, status: string|null, compartilhado: string|null}  $filtros
+     * @param  array<int, list<array{fatura: Fatura, pagamentos: int, aPagar: int}>>  $faturas  amounts of the user's invoices (CalcularFaturas)
+     * @return list<array<string, mixed>>
+     */
+    public function faturasVinculadas(User $user, Carteira $carteira, CarbonImmutable $mes, array $filtros, CarbonImmutable $hoje, array $faturas): array
+    {
+        $outros = array_filter([$filtros['categoria'], $filtros['status'], $filtros['compartilhado']], fn (mixed $valor): bool => $valor !== null);
+
+        if ($carteira->isCartao() || $outros !== [] || ($filtros['tipo'] !== null && $filtros['tipo'] !== 'despesa')) {
+            return [];
+        }
+
+        [$inicio, $fim] = $this->limites($mes);
+        $situacoes = collect($faturas)->flatten(1)->keyBy(fn (array $linha): int => $linha['fatura']->id);
+
+        $cotas = Cota::query()
+            ->select('cotas.*')
+            ->join('faturas', 'faturas.id', '=', 'cotas.fatura_id')
+            ->join('lancamentos', 'lancamentos.id', '=', 'cotas.lancamento_id')
+            ->where('cotas.user_id', $user->id)
+            ->where('faturas.carteira_vinculada_id', $carteira->id)
+            ->where('faturas.vencimento', '>=', $inicio)
+            ->where('faturas.vencimento', '<', $fim)
+            ->with([
+                'categoria:id,nome,icone',
+                'fatura:id,carteira_id,fechamento,vencimento',
+                'fatura.carteira:id,nome,cor,icone',
+                'lancamento.parcelamento:id,categoria_id,total_parcelas,dia_vencimento,encerrado_em',
+                'lancamento.user:id,name',
+                'lancamento.cotas:id,lancamento_id,user_id,categoria_id,valor,percentual,executado',
+                'lancamento.cotas.user:id,name',
+            ])
+            ->orderBy('lancamentos.data')
+            ->orderBy('lancamentos.id')
+            ->get();
+
+        return array_values($cotas
+            ->groupBy('fatura_id')
+            ->map(function (Collection $doCartao) use ($user, $hoje, $situacoes): array {
+                /** @var Cota $primeira */
+                $primeira = $doCartao->first();
+                /** @var Fatura $fatura */
+                $fatura = $primeira->fatura;
+                $situacao = $situacoes->get($fatura->id);
+                $aPagar = (int) ($situacao['aPagar'] ?? 0);
+                $valor = $doCartao->sum(fn (Cota $cota): int => $cota->lancamento->tipo === TipoLancamento::Receita ? -$cota->valor : $cota->valor);
+
+                return [
+                    'chave' => "f{$fatura->id}",
+                    'carteiraId' => $fatura->carteira_id,
+                    'nome' => $fatura->carteira->nome,
+                    'cor' => $fatura->carteira->cor->value,
+                    'icone' => $fatura->carteira->icone->value,
+                    'mes' => $fatura->vencimento->format('Y-m'),
+                    'vencimento' => $fatura->vencimento->toDateString(),
+                    'valor' => $valor,
+                    'situacao' => match (true) {
+                        $aPagar <= 0 => 'quitada',
+                        (int) ($situacao['pagamentos'] ?? 0) > 0 => 'parcial',
+                        default => 'a_pagar',
+                    },
+                    'itens' => $doCartao->map(fn (Cota $cota): array => $this->item($user, $cota->lancamento, $cota, $hoje, collect()))->values()->all(),
+                ];
+            })
+            ->sortBy(fn (array $linha): array => [$linha['vencimento'], $linha['nome']])
+            ->all());
     }
 
     /**
@@ -194,7 +288,7 @@ class ListarLancamentosDoMes
      * @param  Collection<int, mixed>|null  $totaisNoMes  shares of each group in the month without filters, when a filter is active
      * @return array<string, mixed>
      */
-    private function grupo(Grupo $grupo, array $itens, ?Collection $totaisNoMes): array
+    private function grupo(Grupo $grupo, array $itens, ?Collection $totaisNoMes, bool $noCartao = false): array
     {
         $executados = count(array_filter($itens, fn (array $item): bool => $item['executado'] === true));
 
@@ -204,9 +298,10 @@ class ListarLancamentosDoMes
             'nome' => $grupo->nome,
             'quantidade' => count($itens),
             'valor' => array_sum(array_column($itens, 'valor')),
-            'status' => match ($executados) {
-                0 => 'pendente',
-                count($itens) => 'executado',
+            'status' => match (true) {
+                $noCartao => null,
+                $executados === 0 => 'pendente',
+                $executados === count($itens) => 'executado',
                 default => 'parcial',
             },
             'filtrado' => $totaisNoMes !== null && (int) $totaisNoMes->get($grupo->id, 0) > count($itens),
@@ -222,6 +317,7 @@ class ListarLancamentosDoMes
     {
         $serie = $lancamento->parcelamento_id !== null ? $lancamento->parcelamento : null;
         $autor = $lancamento->user_id === $user->id;
+        $noCartao = $cota?->fatura_id !== null;
 
         return [
             'chave' => $cota === null ? "l{$lancamento->id}" : "c{$cota->id}",
@@ -236,7 +332,9 @@ class ListarLancamentosDoMes
             'total' => $lancamento->valor,
             'autor' => $autor ? null : $lancamento->user->name,
             'executado' => $cota !== null && $cota->executado,
-            'vencido' => $cota !== null && ! $cota->executado && $lancamento->data->lessThan($hoje),
+            'vencido' => $cota !== null && ! $noCartao && ! $cota->executado && $lancamento->data->lessThan($hoje),
+            'cartao' => $noCartao,
+            'faturaFechada' => $noCartao && $cota->fatura !== null && $cota->fatura->isFechada($hoje),
             'parcela' => match (true) {
                 $serie === null => null,
                 $serie->isRecorrente() => (string) $lancamento->numero_parcela,

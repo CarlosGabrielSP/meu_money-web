@@ -5,6 +5,7 @@ namespace App\Actions\Series;
 use App\Actions\Lancamentos\RemoverLancamentos;
 use App\Models\Cota;
 use App\Models\Parcelamento;
+use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\ValidationException;
@@ -19,7 +20,8 @@ class AlterarTotalParcelas
     /**
      * Change the number of installments (RN-058): more installments are added at the end with the
      * model amount; fewer removes pending installments from the end, never below the highest
-     * executed number (CA-056.1 to CA-056.3). Shares are locked before the check.
+     * executed number (CA-056.1 to CA-056.3). An author installment in a closed card invoice counts as
+     * executed (RN-200). Shares are locked before the check.
      *
      * @throws ValidationException
      */
@@ -32,8 +34,9 @@ class AlterarTotalParcelas
                 ->whereIn('lancamento_id', $serie->lancamentos()->select('id'))
                 ->where('user_id', $serie->user_id)
                 ->lockForUpdate()
-                ->get(['lancamento_id', 'executado'])
-                ->where('executado', true)
+                ->with('fatura:id,fechamento')
+                ->get(['lancamento_id', 'fatura_id', 'executado'])
+                ->filter(fn (Cota $cota): bool => $cota->isTravada(CarbonImmutable::today()))
                 ->pluck('lancamento_id');
 
             $maiorExecutada = (int) $serie->lancamentos()->whereKey($executadas)->max('numero_parcela');

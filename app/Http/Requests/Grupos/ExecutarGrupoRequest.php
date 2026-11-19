@@ -2,8 +2,10 @@
 
 namespace App\Http\Requests\Grupos;
 
+use App\Enums\TipoCarteira;
 use App\Models\Cota;
 use App\Models\Grupo;
+use Closure;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
@@ -19,14 +21,19 @@ class ExecutarGrupoRequest extends FormRequest
     }
 
     /**
-     * The shares of the group visible in the month, sent by the list (RN-128, RN-129).
+     * The shares of the group visible in the month, sent by the list (RN-128, RN-129). A group in a
+     * card has no status (RN-211).
      *
      * @return array<string, ValidationRule|array<mixed>|string>
      */
     public function rules(): array
     {
         return [
-            'executado' => ['required', 'boolean'],
+            'executado' => ['required', 'boolean', function (string $attribute, mixed $value, Closure $fail): void {
+                if ($this->grupo()->carteira()->where('tipo', TipoCarteira::Cartao->value)->exists()) {
+                    $fail('Grupo no cartão não tem pago: a fatura controla o pagamento.');
+                }
+            }],
             'cotas' => ['required', 'array', 'min:1'],
             'cotas.*' => ['integer', 'distinct', Rule::exists(Cota::class, 'id')->where('grupo_id', $this->grupo()->id)],
         ];

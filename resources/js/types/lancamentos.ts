@@ -1,10 +1,65 @@
 export type TipoLancamento = 'receita' | 'despesa';
 
+export type TipoCarteira = 'comum' | 'cartao';
+
 export type CarteiraResumo = {
     id: number;
     nome: string;
+    tipo: TipoCarteira;
     cor: string;
     icone: string;
+};
+
+/** What the entry form needs to tell the invoice of a date in a card (RN-192, RN-232). */
+export type CartaoDoFormulario = {
+    diaVencimento: number;
+    diasFechamento: number;
+    abertaDesde: string;
+    editadas: { referencia: string; fechamento: string; vencimento: string }[];
+};
+
+export type EstadoFatura = 'fechada' | 'aberta' | 'futura';
+
+export type PagamentoFatura = {
+    id: number;
+    data: string;
+    valor: number;
+    origem: string | null;
+};
+
+/** Invoice card of the card screen (RN-198, RN-223). */
+export type FaturaDoMes = {
+    id: number | null;
+    referencia: string;
+    estado: EstadoFatura;
+    inicio: string;
+    fechamento: string;
+    vencimento: string;
+    saldoAnterior: number;
+    compras: number;
+    receitas: number;
+    pagamentos: number;
+    aPagar: number;
+    editavel: boolean;
+    limites: { fechamentoAnterior: string; fechamentoProximo: string };
+    pagaPor: string | null;
+    pagamentosLista: PagamentoFatura[];
+};
+
+export type SituacaoFatura = 'a_pagar' | 'parcial' | 'quitada';
+
+/** Row of an invoice in the list of the wallet that pays it (RN-219). */
+export type FaturaVinculada = {
+    chave: string;
+    carteiraId: number;
+    nome: string;
+    cor: string;
+    icone: string;
+    mes: string;
+    vencimento: string;
+    valor: number;
+    situacao: SituacaoFatura;
+    itens: ItemLancamento[];
 };
 
 export type CategoriaOpcao = {
@@ -82,6 +137,10 @@ export type ItemLancamento = {
     autor: string | null;
     executado: boolean;
     vencido: boolean;
+    /** Share in a card: no status (RN-194). */
+    cartao: boolean;
+    /** Share in a closed invoice: amount, date, wallet and split are read only (RN-200). */
+    faturaFechada: boolean;
     parcela: string | null;
     recorrente: boolean;
     compartilhado: boolean;
@@ -99,7 +158,8 @@ export type GrupoLinha = {
     nome: string;
     quantidade: number;
     valor: number;
-    status: StatusGrupo;
+    /** Null in a card, which has no status (RN-211). */
+    status: StatusGrupo | null;
     filtrado: boolean;
     itens: ItemLancamento[];
 };
@@ -147,7 +207,8 @@ export type GastoDoMes = {
 /** Highlights of the main screen in the full mode (RN-171 to RN-174). */
 export type DestaquesInicio = {
     saldosCarteiras: Record<string, number>;
-    vencidas: { quantidade: number; receitas: number; despesas: number };
-    proximas: { quantidade: number; total: number };
+    /** Null for a card (RN-224). */
+    vencidas: { quantidade: number; receitas: number; despesas: number } | null;
+    proximas: { quantidade: number; total: number } | null;
     gastosDoMes: GastoDoMes[];
 };

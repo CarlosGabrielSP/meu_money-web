@@ -65,8 +65,9 @@ const administracao = computed<NavItem[]>(() =>
 );
 
 /**
- * The simple mode keeps only Início, Adicionar, Relatório and Recebidas; the other pages stay
- * reachable by address. Configurações is in the user menu, as in the full mode (RN-163, DEC-075).
+ * The simple mode keeps only Início, Adicionar, Relatório, Carteiras (to create a card, DEC-087) and
+ * Recebidas; the other pages stay reachable by address. Configurações is in the user menu, as in the
+ * full mode (RN-163, DEC-075).
  */
 const navSimples = computed<NavItem[]>(() => [
     {
@@ -84,6 +85,11 @@ const navSimples = computed<NavItem[]>(() => [
         title: 'Relatório',
         href: relatorio(),
         icon: ChartPie,
+    },
+    {
+        title: 'Carteiras',
+        href: carteirasIndex(),
+        icon: Wallet,
     },
     {
         title: 'Recebidas',

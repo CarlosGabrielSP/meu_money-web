@@ -6,7 +6,9 @@ defineProps<{
     visivel: boolean;
     carteira: string;
     mes: string;
-    saldos: SaldosInicio;
+    /** Null on a card, which shows the invoice to pay instead (RN-223). */
+    saldos: SaldosInicio | null;
+    aPagar?: number | null;
     simples: boolean;
 }>();
 </script>
@@ -29,13 +31,22 @@ defineProps<{
             <span class="min-w-0 truncate text-saldo-foreground/75">
                 {{ carteira }}, {{ mes }}
             </span>
-            <span class="ml-auto shrink-0 tabular-nums">
+            <span v-if="saldos === null" class="ml-auto shrink-0 tabular-nums">
+                <span class="text-saldo-foreground/75">A pagar </span>
+                <strong class="font-semibold">{{
+                    formatarMoeda(aPagar ?? 0)
+                }}</strong>
+            </span>
+            <span v-else class="ml-auto shrink-0 tabular-nums">
                 <span class="text-saldo-foreground/75">Atual </span>
                 <strong class="font-semibold">{{
                     formatarMoeda(saldos.acumulado.atual)
                 }}</strong>
             </span>
-            <span v-if="!simples" class="shrink-0 tabular-nums">
+            <span
+                v-if="!simples && saldos !== null"
+                class="shrink-0 tabular-nums"
+            >
                 <span class="text-saldo-foreground/75">Previsto </span>
                 <strong class="font-semibold">{{
                     formatarMoeda(saldos.acumulado.estimado)

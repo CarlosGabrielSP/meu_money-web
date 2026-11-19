@@ -8,6 +8,8 @@ defineProps<{
     /** "Junho a novembro de 2026", the months of the period. */
     rotuloPeriodo: string;
     simples: boolean;
+    /** A card has no savings rate (RN-227, R7). */
+    semTaxa?: boolean;
 }>();
 </script>
 
@@ -71,6 +73,7 @@ defineProps<{
                 </dd>
             </div>
             <div
+                v-if="!semTaxa"
                 :class="
                     simples
                         ? 'flex items-baseline justify-between gap-4'

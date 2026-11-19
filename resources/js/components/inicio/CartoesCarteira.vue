@@ -43,8 +43,12 @@ const emit = defineEmits<{
                     }"
                     >{{ carteira.nome }}</span
                 >
-                <span
-                    class="text-sm font-semibold text-foreground tabular-nums"
+                <!-- A card shows the to pay of the month invoice (RN-225). -->
+                <span class="text-sm font-semibold text-foreground tabular-nums"
+                    ><span
+                        v-if="carteira.tipo === 'cartao'"
+                        class="font-normal text-muted-foreground"
+                        >a pagar </span
                     >{{ formatarMoeda(saldos[carteira.id] ?? 0) }}</span
                 >
             </span>

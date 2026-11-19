@@ -479,3 +479,11 @@ it('CA-149.2 ignores the wallet of the URL in the simple mode', function () {
 
     expect($this->user->fresh()->ultima_carteira_id)->toBe($this->x->id);
 });
+
+it('CA-193.1 CA-193.2 sends the view of the URL, the accumulated balance by default', function (?string $visao, string $esperada) {
+    relatorioDeX($visao === null ? [] : ['visao' => $visao])->assertInertia(fn (Assert $page) => $page->where('visao', $esperada));
+})->with([
+    'missing' => [null, 'acumulado'],
+    'invalid' => ['outra', 'acumulado'],
+    'month' => ['mes', 'mes'],
+]);

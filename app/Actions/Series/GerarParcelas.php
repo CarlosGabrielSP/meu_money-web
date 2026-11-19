@@ -2,7 +2,9 @@
 
 namespace App\Actions\Series;
 
+use App\Actions\Cartoes\AtribuirFaturas;
 use App\Actions\Rateio\CalcularCotas;
+use App\Enums\TipoCarteira;
 use App\Models\Carteira;
 use App\Models\Categoria;
 use App\Models\Cota;
@@ -14,7 +16,10 @@ use Carbon\CarbonImmutable;
 
 class GerarParcelas
 {
-    public function __construct(private CalcularCotas $calcularCotas) {}
+    public function __construct(
+        private CalcularCotas $calcularCotas,
+        private AtribuirFaturas $atribuirFaturas,
+    ) {}
 
     /**
      * Create installments numbered from $de to $ate from the series model, each with the author's
@@ -27,6 +32,7 @@ class GerarParcelas
      * the series group for the author, the model share group for a participant (RN-126, RN-148).
      *
      * Rows are inserted in bulk; dates use the model storage format so queries compare them alike.
+     * In a card, each installment then enters the invoice of its own date (RN-192, CA-175.1).
      *
      * @param  array<int, int>  $valores  amount per installment number, overriding the model amount
      */
@@ -66,6 +72,8 @@ class GerarParcelas
         $carteiras = Carteira::query()->whereIn('user_id', array_column($modelo, 'user_id'))->where('padrao', true)->pluck('id', 'user_id');
         $grupos = $this->gruposDosParticipantes($serie, $cotasDoModelo->pluck('grupo_id', 'user_id')->all(), $carteiras->all());
         $categoriaParticipante = $modelo === [] ? null : $this->categoriaDoParticipante($serie);
+        $noCartao = Carteira::query()->whereKey($serie->carteira_id)->where('tipo', TipoCarteira::Cartao->value)->exists();
+        $geradas = [];
 
         foreach (array_chunk($novas, 200, preserve_keys: true) as $lote) {
             Lancamento::query()->insert(array_map(fn (int $numero, array $parcela): array => [
@@ -83,6 +91,7 @@ class GerarParcelas
             ], array_keys($lote), $lote));
 
             $ids = $serie->lancamentos()->whereIn('numero_parcela', array_keys($lote))->pluck('id', 'numero_parcela');
+            array_push($geradas, ...$ids->values()->all());
 
             $cotas = [];
 
@@ -112,6 +121,10 @@ class GerarParcelas
             }
 
             Cota::query()->insert($cotas);
+        }
+
+        if ($noCartao) {
+            $this->atribuirFaturas->porLancamentos($geradas);
         }
 
         $serie->save();

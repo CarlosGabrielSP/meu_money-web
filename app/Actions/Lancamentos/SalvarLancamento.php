@@ -2,6 +2,7 @@
 
 namespace App\Actions\Lancamentos;
 
+use App\Actions\Cartoes\AtribuirFaturas;
 use App\Actions\Rateio\AplicarRateio;
 use App\Enums\ModoRateio;
 use App\Enums\TipoLancamento;
@@ -15,7 +16,10 @@ use Throwable;
 
 class SalvarLancamento
 {
-    public function __construct(private AplicarRateio $aplicarRateio) {}
+    public function __construct(
+        private AplicarRateio $aplicarRateio,
+        private AtribuirFaturas $atribuirFaturas,
+    ) {}
 
     /**
      * Create or update an entry and its shares (RN-010 to RN-017, RN-027, RF-070, RF-072).
@@ -25,6 +29,8 @@ class SalvarLancamento
      * one, a new share gets the initial status by date (RN-013) and an existing one keeps its own.
      * A new attachment replaces the previous one, whose file is removed only after the save commits (CA-044.2).
      * $depois runs inside the same transaction with the saved entry (series creation, mass edits).
+     * Shares in cards then enter the invoice of the date and lose the status; shares that left a card
+     * get the status by date (RN-192, RN-194, RN-228).
      *
      * @param  (Closure(Lancamento): void)|null  $depois
      * @param  array{tipo: TipoLancamento, descricao: string, valor: int, data: string, categoria_id: int, carteira_id: int, observacao: string|null, executado: bool|null, rateio?: array{modo: ModoRateio, participantes: list<array{user_id: int, percentual: string|null, valor: int|null}>}|null}  $dados
@@ -65,6 +71,8 @@ class SalvarLancamento
                     'categoria_id' => $dados['categoria_id'],
                     'executado' => $dados['executado'],
                 ]);
+
+                $this->atribuirFaturas->porLancamentos([$lancamento->id], $autor);
 
                 if ($depois !== null) {
                     $depois($lancamento);

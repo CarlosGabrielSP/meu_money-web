@@ -2,6 +2,7 @@
 
 namespace App\Actions\Relatorio;
 
+use App\Actions\Cartoes\DividaDosCartoes;
 use App\Models\Carteira;
 use App\Models\Cota;
 use App\Models\User;
@@ -16,12 +17,16 @@ class EvolucaoMensal
 
     private const array DESPESAS = ['despesas_0', 'despesas_1', 'despesas_2', 'despesas_3', 'despesas_4', 'despesas_5', 'despesas_6', 'despesas_7', 'despesas_8', 'despesas_9', 'despesas_10', 'despesas_11'];
 
-    private const string NO_MES = 'lancamentos.data >= ? and lancamentos.data < ?';
+    private const string NO_MES = Cota::DATA_EFETIVA.' >= ? and '.Cota::DATA_EFETIVA.' < ?';
+
+    public function __construct(private DividaDosCartoes $dividaDosCartoes) {}
 
     /**
      * Estimated income and expenses of each month and the estimated accumulated balance on its last
      * day, for the user's shares in the wallet (RN-178, RN-181, RN-184). One query whatever the number
      * of months: one pair of sums per month and the balance before the first one (RNF-030, RNF-031).
+     * Card purchases count on the due date of their invoice (RN-199, RN-209); for a card the line is
+     * its debt at the end of each month, by purchase date (RN-227, R7, DEC-087).
      *
      * @param  non-empty-list<CarbonImmutable>  $meses  first day of each month, in order, at most 12
      * @return list<array{mes: string, receitas: int, despesas: int, acumulado: int}>
@@ -32,11 +37,10 @@ class EvolucaoMensal
         $fim = end($meses)->startOfMonth()->addMonth()->toDateString();
 
         $consulta = Cota::query()
-            ->join('lancamentos', 'lancamentos.id', '=', 'cotas.lancamento_id')
+            ->naCarteiraPorVencimento($carteira)
             ->where('cotas.user_id', $user->id)
-            ->where('cotas.carteira_id', $carteira->id)
-            ->where('lancamentos.data', '<', $fim)
-            ->selectRaw("coalesce(sum(case when lancamentos.data < ? then (case when lancamentos.tipo = 'receita' then cotas.valor else -cotas.valor end) else 0 end), 0) as anterior", [$primeiro]);
+            ->whereRaw(Cota::DATA_EFETIVA.' < ?', [$fim])
+            ->selectRaw('coalesce(sum(case when '.Cota::DATA_EFETIVA." < ? then (case when lancamentos.tipo = 'receita' then cotas.valor else -cotas.valor end) else 0 end), 0) as anterior", [$primeiro]);
 
         foreach ($meses as $indice => $mes) {
             $intervalo = [$mes->startOfMonth()->toDateString(), $mes->startOfMonth()->addMonth()->toDateString()];
@@ -49,6 +53,9 @@ class EvolucaoMensal
         $totais = (array) $consulta->toBase()->first();
         $acumulado = (int) ($totais['anterior'] ?? 0);
         $evolucao = [];
+        $dividas = $carteira->isCartao()
+            ? ($this->dividaDosCartoes->handle($user, array_map(fn (CarbonImmutable $mes): CarbonImmutable => $mes->endOfMonth(), $meses), [$carteira->id])[$carteira->id] ?? [])
+            : null;
 
         foreach ($meses as $indice => $mes) {
             $receitas = (int) ($totais[self::RECEITAS[$indice]] ?? 0);
@@ -59,7 +66,7 @@ class EvolucaoMensal
                 'mes' => $mes->format('Y-m'),
                 'receitas' => $receitas,
                 'despesas' => $despesas,
-                'acumulado' => $acumulado,
+                'acumulado' => $dividas === null ? $acumulado : ($dividas[$indice] ?? 0),
             ];
         }
 

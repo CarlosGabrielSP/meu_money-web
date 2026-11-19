@@ -2,6 +2,10 @@
 
 namespace App\Http\Controllers;
 
+use App\Actions\Cartoes\CalcularFaturas;
+use App\Actions\Cartoes\CartoesDoFormulario;
+use App\Actions\Cartoes\FaturaDoMes;
+use App\Actions\Cartoes\SaldosVinculados;
 use App\Actions\Inicio\CalcularSaldos;
 use App\Actions\Inicio\GastosDoMes;
 use App\Actions\Inicio\ListarLancamentosDoMes;
@@ -24,6 +28,11 @@ class InicioController extends Controller
      * opens while it was never seen, or again with "?tutorial=1" (RN-165, RN-167). The full mode also gets
      * the highlights: wallet balances, overdue and upcoming shares and the month's top categories; the
      * panel lists load only on request (RN-171 to RN-175).
+     *
+     * A card shows its invoice instead of balances (RN-223): the month is the due month, the open
+     * invoice's without a month in the URL (R3); the list has the invoice purchases; overdue and
+     * upcoming highlights are hidden (RN-224). A common wallet also gets one row per invoice it pays
+     * in the month (RN-219).
      */
     public function __invoke(
         InicioRequest $request,
@@ -32,13 +41,27 @@ class InicioController extends Controller
         SaldosDasCarteiras $saldosDasCarteiras,
         PendenciasDaCarteira $pendencias,
         GastosDoMes $gastosDoMes,
+        FaturaDoMes $faturaDoMes,
+        CalcularFaturas $calcularFaturas,
+        CartoesDoFormulario $cartoesDoFormulario,
+        SaldosVinculados $saldosVinculados,
     ): Response {
         /** @var User $user */
         $user = $request->user();
         $carteira = $request->carteira();
-        $mes = $request->mes();
         $hoje = CarbonImmutable::today();
+        $noCartao = $carteira->isCartao();
+        $mesHoje = $noCartao ? $faturaDoMes->mesDaAberta($carteira, $hoje) : $hoje->startOfMonth();
+        $mes = $request->mesInformado() ? $request->mes() : $mesHoje;
         $filtros = $user->modo_simples ? ListarLancamentosDoMes::SEM_FILTROS : $request->filtros();
+        // Invoice amounts and card changes of the wallets, computed once for the whole screen.
+        $faturas = $calcularFaturas->handle($user, ate: $mes->endOfMonth());
+        $vinculados = $saldosVinculados->handle($user, $mes, $faturas);
+        $fatura = $noCartao ? $faturaDoMes->handle($user, $carteira, $mes, $hoje, $faturas) : null;
+
+        if ($noCartao) {
+            $filtros['status'] = null;
+        }
         $perguntarModoSimples = $this->perguntarModoSimples($user, $hoje);
 
         if ($request->carteiraInformada() === $carteira->id && $user->ultima_carteira_id !== $carteira->id) {
@@ -49,9 +72,11 @@ class InicioController extends Controller
             'carteira' => $this->carteira($carteira),
             'carteiras' => $user->carteiras()
                 ->orderByDesc('padrao')
+                ->orderBy('tipo', 'desc')
                 ->orderBy('nome')
-                ->get(['id', 'nome', 'cor', 'icone'])
+                ->get(['id', 'nome', 'tipo', 'cor', 'icone'])
                 ->map($this->carteira(...)),
+            'cartoes' => (object) $cartoesDoFormulario->handle($user, $hoje),
             'categorias' => Categoria::query()
                 ->visiveisPara($user)
                 ->orderBy('nome')
@@ -72,21 +97,31 @@ class InicioController extends Controller
                 ->get(['id', 'nome', 'tipo'])
                 ->map(fn (Grupo $grupo): array => ['id' => $grupo->id, 'nome' => $grupo->nome, 'tipo' => $grupo->tipo->value]),
             'mes' => $mes->format('Y-m'),
+            'mesHoje' => $mesHoje->format('Y-m'),
             'hoje' => $hoje->toDateString(),
             'filtros' => $filtros,
-            'saldos' => $calcularSaldos->handle($user, $carteira, $mes),
+            'saldos' => $noCartao ? null : $calcularSaldos->handle($user, $carteira, $mes, $vinculados),
+            'fatura' => $fatura,
             'lancamentos' => $user->modo_simples
-                ? $listarLancamentos->semSubsecoes($user, $carteira, $mes, $hoje)
-                : $listarLancamentos->handle($user, $carteira, $mes, $filtros, $hoje),
+                ? $listarLancamentos->semSubsecoes($user, $carteira, $mes, $hoje, $fatura['id'] ?? null)
+                : $listarLancamentos->handle($user, $carteira, $mes, $filtros, $hoje, $fatura['id'] ?? null),
+            'faturasVinculadas' => $noCartao ? [] : $listarLancamentos->faturasVinculadas(
+                $user,
+                $carteira,
+                $mes,
+                $filtros,
+                $hoje,
+                $faturas,
+            ),
             'perguntarModoSimples' => $perguntarModoSimples,
             'mostrarTutorial' => $user->tutorial_visto_em === null || $request->query('tutorial') === '1',
             'destaques' => fn (): ?array => $user->modo_simples ? null : [
-                'saldosCarteiras' => (object) $saldosDasCarteiras->handle($user, $mes),
-                ...$pendencias->resumo($user, $carteira, $hoje),
+                'saldosCarteiras' => (object) $saldosDasCarteiras->handle($user, $mes, $faturas, $vinculados),
+                ...($noCartao ? ['vencidas' => null, 'proximas' => null] : $pendencias->resumo($user, $carteira, $hoje)),
                 'gastosDoMes' => $gastosDoMes->handle($user, $carteira, $mes),
             ],
-            'cotasVencidas' => Inertia::optional(fn (): array => $pendencias->listaVencidas($user, $carteira, $hoje)),
-            'cotasProximas' => Inertia::optional(fn (): array => $pendencias->listaProximas($user, $carteira, $hoje)),
+            'cotasVencidas' => Inertia::optional(fn (): array => $noCartao ? [] : $pendencias->listaVencidas($user, $carteira, $hoje)),
+            'cotasProximas' => Inertia::optional(fn (): array => $noCartao ? [] : $pendencias->listaProximas($user, $carteira, $hoje)),
         ]);
     }
 
@@ -110,13 +145,14 @@ class InicioController extends Controller
     }
 
     /**
-     * @return array{id: int, nome: string, cor: string, icone: string}
+     * @return array{id: int, nome: string, tipo: string, cor: string, icone: string}
      */
     private function carteira(Carteira $carteira): array
     {
         return [
             'id' => $carteira->id,
             'nome' => $carteira->nome,
+            'tipo' => $carteira->tipo->value,
             'cor' => $carteira->cor->value,
             'icone' => $carteira->icone->value,
         ];

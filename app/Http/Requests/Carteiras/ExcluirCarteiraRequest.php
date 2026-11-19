@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests\Carteiras;
 
+use App\Enums\TipoCarteira;
 use App\Models\Carteira;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
@@ -15,7 +16,8 @@ class ExcluirCarteiraRequest extends FormRequest
     }
 
     /**
-     * Destination must be another wallet of the same user (RN-006, CA-024.7).
+     * Destination must be another wallet of the same user (RN-006, CA-024.7); a common wallet moves
+     * only to another common wallet, a card to any other wallet (RN-233, DEC-087).
      *
      * @return array<string, ValidationRule|array<mixed>|string>
      */
@@ -32,7 +34,8 @@ class ExcluirCarteiraRequest extends FormRequest
                 'integer',
                 Rule::exists(Carteira::class, 'id')
                     ->where('user_id', $this->user()?->id)
-                    ->whereNot('id', $carteira->id),
+                    ->whereNot('id', $carteira->id)
+                    ->when(! $carteira->isCartao(), fn ($rule) => $rule->where('tipo', TipoCarteira::Comum->value)),
             ],
         ];
     }

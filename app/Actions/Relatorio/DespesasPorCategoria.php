@@ -17,25 +17,25 @@ class DespesasPorCategoria
     /**
      * Estimated expenses of the user's shares in the wallet by category in the period: the ranking of
      * every category with its share of the total and its change against the previous period, and the
-     * donut with the largest ones plus "Outras" (RN-182). One grouped query for both periods.
+     * donut with the largest ones plus "Outras" (RN-182). One grouped query for both periods. Card
+     * purchases count on the due date of their invoice (RN-199, RN-209).
      *
      * @return array{ranking: list<array{id: int, nome: string, icone: string, valor: int, percentual: float|null, variacao: float|null}>, rosca: list<array{nome: string, valor: int, outras: bool}>}
      */
     public function handle(User $user, Carteira $carteira, CarbonImmutable $inicioAnterior, CarbonImmutable $inicio, CarbonImmutable $fim): array
     {
         $linhas = Cota::query()
-            ->join('lancamentos', 'lancamentos.id', '=', 'cotas.lancamento_id')
+            ->naCarteiraPorVencimento($carteira)
             ->join('categorias', 'categorias.id', '=', 'cotas.categoria_id')
             ->where('cotas.user_id', $user->id)
-            ->where('cotas.carteira_id', $carteira->id)
             ->where('lancamentos.tipo', 'despesa')
-            ->where('lancamentos.data', '>=', $inicioAnterior->toDateString())
-            ->where('lancamentos.data', '<', $fim->toDateString())
+            ->whereRaw(Cota::DATA_EFETIVA.' >= ?', [$inicioAnterior->toDateString()])
+            ->whereRaw(Cota::DATA_EFETIVA.' < ?', [$fim->toDateString()])
             ->groupBy('categorias.id', 'categorias.nome', 'categorias.icone')
             ->selectRaw('categorias.id, categorias.nome, categorias.icone')
-            ->selectRaw('coalesce(sum(case when lancamentos.data >= ? then cotas.valor else 0 end), 0) as valor', [$inicio->toDateString()])
-            ->selectRaw('coalesce(sum(case when lancamentos.data < ? then cotas.valor else 0 end), 0) as anterior', [$inicio->toDateString()])
-            ->havingRaw('sum(case when lancamentos.data >= ? then cotas.valor else 0 end) > 0', [$inicio->toDateString()])
+            ->selectRaw('coalesce(sum(case when '.Cota::DATA_EFETIVA.' >= ? then cotas.valor else 0 end), 0) as valor', [$inicio->toDateString()])
+            ->selectRaw('coalesce(sum(case when '.Cota::DATA_EFETIVA.' < ? then cotas.valor else 0 end), 0) as anterior', [$inicio->toDateString()])
+            ->havingRaw('sum(case when '.Cota::DATA_EFETIVA.' >= ? then cotas.valor else 0 end) > 0', [$inicio->toDateString()])
             ->orderByDesc('valor')
             ->orderBy('categorias.nome')
             ->toBase()

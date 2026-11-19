@@ -1,10 +1,18 @@
 <script setup lang="ts">
+import { computed, ref, watch } from 'vue';
+import CampoSelecao from '@/components/CampoSelecao.vue';
 import InputError from '@/components/InputError.vue';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { coresCarteira, iconesCarteira } from './aparencia';
 
-withDefaults(
+export type DadosCartao = {
+    diaVencimento: number;
+    diasFechamento: number;
+    carteiraVinculadaId: number | null;
+};
+
+const props = withDefaults(
     defineProps<{
         cores: string[];
         icones: string[];
@@ -12,13 +20,73 @@ withDefaults(
         nome?: string;
         cor?: string;
         icone?: string;
+        /** Type of a wallet being edited; null when creating (RN-190). */
+        tipo?: 'comum' | 'cartao' | null;
+        cartao?: DadosCartao | null;
+        carteirasComuns?: { id: number; nome: string }[];
+        simples?: boolean;
     }>(),
-    { nome: '', cor: 'blue', icone: 'wallet' },
+    {
+        nome: '',
+        cor: 'blue',
+        icone: 'wallet',
+        tipo: null,
+        cartao: null,
+        carteirasComuns: () => [],
+        simples: false,
+    },
 );
+
+const tipoEscolhido = ref<'comum' | 'cartao'>(props.tipo ?? 'comum');
+const iconeEscolhido = ref(props.icone);
+const iconeMexido = ref(false);
+const vinculadaId = ref<number | null>(
+    props.cartao?.carteiraVinculadaId ?? props.carteirasComuns[0]?.id ?? null,
+);
+const ehCartao = computed(() => tipoEscolhido.value === 'cartao');
+const dias = Array.from({ length: 31 }, (_, indice) => indice + 1);
+const diaVencimento = ref<number | null>(props.cartao?.diaVencimento ?? 10);
+
+/**
+ * Choosing "Cartão de crédito" sets the card icon while the user did not pick another (nota 07).
+ */
+watch(tipoEscolhido, (tipo) => {
+    if (!iconeMexido.value) {
+        iconeEscolhido.value = tipo === 'cartao' ? 'credit-card' : props.icone;
+    }
+});
 </script>
 
 <template>
     <div class="grid gap-4">
+        <fieldset v-if="tipo === null" class="grid gap-2">
+            <legend class="mb-2 text-sm font-medium">Tipo</legend>
+            <div class="flex flex-wrap gap-4">
+                <label class="flex items-center gap-2">
+                    <input
+                        v-model="tipoEscolhido"
+                        type="radio"
+                        name="tipo"
+                        value="comum"
+                    />
+                    Carteira
+                </label>
+                <label class="flex items-center gap-2">
+                    <input
+                        v-model="tipoEscolhido"
+                        type="radio"
+                        name="tipo"
+                        value="cartao"
+                    />
+                    Cartão de crédito
+                </label>
+            </div>
+            <InputError :message="errors.tipo" />
+        </fieldset>
+        <p v-else class="text-sm text-muted-foreground">
+            Tipo: {{ tipo === 'cartao' ? 'Cartão de crédito' : 'Carteira' }}
+        </p>
+
         <div class="grid gap-2">
             <Label for="nome">Nome</Label>
             <Input
@@ -31,7 +99,7 @@ withDefaults(
             <InputError :message="errors.nome" />
         </div>
 
-        <fieldset class="grid gap-2">
+        <fieldset v-if="!(simples && ehCartao)" class="grid gap-2">
             <legend class="mb-2 text-sm font-medium">Cor</legend>
             <div class="flex flex-wrap gap-2">
                 <label
@@ -58,7 +126,7 @@ withDefaults(
             <InputError :message="errors.cor" />
         </fieldset>
 
-        <fieldset class="grid gap-2">
+        <fieldset v-if="!(simples && ehCartao)" class="grid gap-2">
             <legend class="mb-2 text-sm font-medium">Ícone</legend>
             <div class="grid grid-cols-5 gap-2 sm:grid-cols-10">
                 <label
@@ -67,11 +135,12 @@ withDefaults(
                     class="cursor-pointer"
                 >
                     <input
+                        v-model="iconeEscolhido"
                         type="radio"
                         name="icone"
                         :value="opcao"
-                        :checked="opcao === icone"
                         class="peer sr-only"
+                        @change="iconeMexido = true"
                     />
                     <span
                         class="flex size-9 items-center justify-center rounded-md border peer-checked:border-foreground peer-checked:bg-accent peer-focus-visible:ring-2"
@@ -83,5 +152,67 @@ withDefaults(
             </div>
             <InputError :message="errors.icone" />
         </fieldset>
+        <input v-else type="hidden" name="icone" :value="iconeEscolhido" />
+
+        <template v-if="ehCartao">
+            <div class="grid gap-2">
+                <Label for="dia_vencimento">Dia do vencimento</Label>
+                <CampoSelecao
+                    id="dia_vencimento"
+                    v-model="diaVencimento"
+                    :opcoes="
+                        dias.map((dia) => ({ valor: dia, rotulo: String(dia) }))
+                    "
+                />
+                <input
+                    type="hidden"
+                    name="dia_vencimento"
+                    :value="diaVencimento ?? ''"
+                />
+                <InputError :message="errors.dia_vencimento" />
+            </div>
+
+            <div v-if="!simples" class="grid gap-2">
+                <Label for="dias_fechamento">
+                    Fecha quantos dias antes do vencimento
+                </Label>
+                <Input
+                    id="dias_fechamento"
+                    name="dias_fechamento"
+                    type="number"
+                    min="1"
+                    max="25"
+                    :default-value="cartao?.diasFechamento ?? 10"
+                />
+                <InputError :message="errors.dias_fechamento" />
+            </div>
+
+            <div class="grid gap-2">
+                <Label for="carteira_vinculada"
+                    >Carteira que paga a fatura</Label
+                >
+                <CampoSelecao
+                    id="carteira_vinculada"
+                    v-model="vinculadaId"
+                    :opcoes="[
+                        ...carteirasComuns.map((carteira) => ({
+                            valor: carteira.id,
+                            rotulo: carteira.nome,
+                        })),
+                        { valor: null, rotulo: 'Nenhuma, cartão independente' },
+                    ]"
+                />
+                <input
+                    type="hidden"
+                    name="carteira_vinculada_id"
+                    :value="vinculadaId ?? ''"
+                />
+                <p class="text-sm text-muted-foreground">
+                    Sem carteira, o pagamento da fatura não mexe em nenhum
+                    saldo.
+                </p>
+                <InputError :message="errors.carteira_vinculada_id" />
+            </div>
+        </template>
     </div>
 </template>

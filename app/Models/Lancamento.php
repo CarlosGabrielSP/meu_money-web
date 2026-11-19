@@ -81,18 +81,31 @@ class Lancamento extends Model
 
     /**
      * Entries whose author's share is not executed, including entries without an author share
-     * (RN-049, RN-056, RN-087).
+     * (RN-049, RN-056, RN-087). A share in a closed card invoice counts as executed (RN-200).
      *
      * @param  Builder<self>  $query
      */
     #[Scope]
     protected function pendentesDoAutor(Builder $query): void
     {
+        $hoje = CarbonImmutable::today();
+
         $query->whereDoesntHave('cotas', fn (Builder $cotas) => $cotas
             ->whereColumn('cotas.user_id', 'lancamentos.user_id')
-            ->where('executado', true))
+            ->travadas($hoje))
             ->where(fn (Builder $semCotaDoAutor) => $semCotaDoAutor
                 ->whereHas('cotas', fn (Builder $cotas) => $cotas->whereColumn('cotas.user_id', 'lancamentos.user_id'))
-                ->orWhereDoesntHave('cotas', fn (Builder $cotas) => $cotas->where('executado', true)));
+                ->orWhereDoesntHave('cotas', fn (Builder $cotas) => $cotas->travadas($hoje)));
+    }
+
+    /**
+     * The author's share is in a closed card invoice, so the entry is not deleted (RN-200, CA-167.2).
+     */
+    public function emFaturaFechada(CarbonImmutable $hoje): bool
+    {
+        return $this->cotas()
+            ->where('user_id', $this->user_id)
+            ->whereHas('fatura', fn (Builder $fatura) => $fatura->fechadas($hoje))
+            ->exists();
     }
 }

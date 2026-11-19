@@ -13,7 +13,8 @@ class RateioDoPeriodo
     /**
      * Sharing in the period (RN-187). "Você dividiu": shares of other participants in entries authored
      * by the user in the wallet. "Você recebeu": the user's shares in the wallet in entries of other
-     * authors. Each with the number of entries and the sums by type; one query each.
+     * authors, card shares on the due date of their invoice (RN-199). Each with the number of entries
+     * and the sums by type; one query each.
      *
      * @return array{dividiu: array{lancamentos: int, despesas: int, receitas: int}, recebeu: array{lancamentos: int, despesas: int, receitas: int}}
      */
@@ -24,10 +25,12 @@ class RateioDoPeriodo
             ->where('lancamentos.carteira_id', $carteira->id)
             ->where('cotas.user_id', '!=', $user->id);
 
-        $recebeu = $this->cotasDoPeriodo($inicio, $fim)
+        $recebeu = Cota::query()
+            ->naCarteiraPorVencimento($carteira)
+            ->whereRaw(Cota::DATA_EFETIVA.' >= ?', [$inicio->toDateString()])
+            ->whereRaw(Cota::DATA_EFETIVA.' < ?', [$fim->toDateString()])
             ->where('lancamentos.user_id', '!=', $user->id)
-            ->where('cotas.user_id', $user->id)
-            ->where('cotas.carteira_id', $carteira->id);
+            ->where('cotas.user_id', $user->id);
 
         return ['dividiu' => $this->totais($dividiu), 'recebeu' => $this->totais($recebeu)];
     }

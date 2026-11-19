@@ -2,12 +2,17 @@
 
 namespace App\Actions\Carteiras;
 
+use App\Actions\Cartoes\AtribuirFaturas;
 use App\Actions\Lancamentos\RemoverLancamentos;
 use App\Actions\Rateio\SairDoRateio;
+use App\Models\Cartao;
 use App\Models\Carteira;
 use App\Models\Cota;
+use App\Models\Fatura;
 use App\Models\Lancamento;
+use App\Models\PagamentoFatura;
 use App\Models\Parcelamento;
+use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
@@ -18,6 +23,7 @@ class ExcluirCarteira
     public function __construct(
         private RemoverLancamentos $removerLancamentos,
         private SairDoRateio $sairDoRateio,
+        private AtribuirFaturas $atribuirFaturas,
     ) {}
 
     /**
@@ -28,6 +34,11 @@ class ExcluirCarteira
      * participant already executed a share (RN-086); shares received from other authors go back to
      * the author (RN-081). When anything blocks, nothing is deleted and the message lists the
      * blocking entries (CA-024.5).
+     *
+     * A card moves every purchase, closed invoices included, to a common wallet (status by date) or to
+     * another card (its invoices by date); its invoices and payments go with it (RN-201, RN-233). A
+     * common wallet moves its cards, payments and invoices to the destination; in the cascade its
+     * payments are deleted and its cards become independent (RN-201, CA-173.4, CA-173.5).
      *
      * @throws ValidationException
      */
@@ -60,10 +71,22 @@ class ExcluirCarteira
 
     private function moverConteudo(Carteira $carteira, Carteira $destino): void
     {
+        $cotas = $carteira->cotas()->pluck('id');
+
         $carteira->cotas()->update(['carteira_id' => $destino->id]);
         $carteira->grupos()->update(['carteira_id' => $destino->id]);
         $carteira->parcelamentos()->update(['carteira_id' => $destino->id]);
         Lancamento::query()->where('carteira_id', $carteira->id)->update(['carteira_id' => $destino->id]);
+
+        if ($carteira->isCartao()) {
+            $this->atribuirFaturas->handle($cotas, permitirFechadas: true);
+
+            return;
+        }
+
+        Cartao::query()->where('carteira_vinculada_id', $carteira->id)->update(['carteira_vinculada_id' => $destino->id]);
+        Fatura::query()->where('carteira_vinculada_id', $carteira->id)->update(['carteira_vinculada_id' => $destino->id]);
+        PagamentoFatura::query()->where('carteira_id', $carteira->id)->update(['carteira_id' => $destino->id]);
     }
 
     /**
@@ -83,7 +106,7 @@ class ExcluirCarteira
                 ->whereDoesntHave('cotas', fn (Builder $cotas) => $cotas->where('user_id', $dono->id))))
             ->withExists(['cotas as participante_executou' => fn (Builder $cotas) => $cotas
                 ->where('user_id', '!=', $dono->id)
-                ->where('executado', true)])
+                ->whereIn('cotas.id', Cota::query()->travadas(CarbonImmutable::today())->select('cotas.id'))])
             ->get();
 
         $bloqueantes = $proprios->filter(fn (Lancamento $lancamento): bool => (bool) $lancamento->getAttribute('participante_executou'));
@@ -101,10 +124,14 @@ class ExcluirCarteira
         $recebidos = Lancamento::query()->whereKey($naCarteira)->where('user_id', '!=', $dono->id)->get();
 
         foreach ($recebidos as $recebido) {
-            $this->sairDoRateio->handle($dono, $recebido);
+            $this->sairDoRateio->handle($dono, $recebido, permitirFechadas: $carteira->isCartao());
         }
 
         $anexos = $this->removerLancamentos->handle($proprios);
+
+        PagamentoFatura::query()->where('carteira_id', $carteira->id)->delete();
+        Cartao::query()->where('carteira_vinculada_id', $carteira->id)->update(['carteira_vinculada_id' => null]);
+        Fatura::query()->where('carteira_vinculada_id', $carteira->id)->update(['carteira_vinculada_id' => null]);
 
         $serieIds = $carteira->parcelamentos()->pluck('id');
 

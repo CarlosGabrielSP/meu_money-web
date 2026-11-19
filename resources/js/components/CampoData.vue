@@ -41,6 +41,8 @@ const props = defineProps<{
     placeholder?: string;
     /** Optional date: the calendar offers "Limpar" to leave it empty. */
     limpavel?: boolean;
+    /** Read only, for a purchase in a closed invoice (nota 07). */
+    disabled?: boolean;
     class?: HTMLAttributes['class'];
 }>();
 
@@ -151,11 +153,12 @@ function escolher(data: DateValue | undefined): void {
 
 <template>
     <PopoverRoot v-model:open="aberto">
-        <PopoverTrigger as-child>
+        <PopoverTrigger as-child :disabled="disabled">
             <Button
                 :id="id"
                 type="button"
                 variant="outline"
+                :disabled="disabled"
                 :aria-describedby="idDoValor"
                 :class="
                     cn(

@@ -4,8 +4,8 @@ import { formatarMoeda } from '@/lib/dinheiro';
 import type { DestaquesInicio } from '@/types';
 
 defineProps<{
-    vencidas: DestaquesInicio['vencidas'];
-    proximas: DestaquesInicio['proximas'];
+    vencidas: NonNullable<DestaquesInicio['vencidas']>;
+    proximas: NonNullable<DestaquesInicio['proximas']>;
 }>();
 
 const emit = defineEmits<{

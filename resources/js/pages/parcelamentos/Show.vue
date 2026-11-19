@@ -17,6 +17,8 @@ type ParcelaRastreada = {
     valor: number;
     executado: boolean;
     vencida: boolean;
+    /** Purchase date of an installment in a card, dated by the invoice due date (RN-214). */
+    dataCompra: string | null;
 };
 
 const props = defineProps<{
@@ -164,6 +166,12 @@ function numeroDaParcela(parcela: ParcelaRastreada): string {
                                 >{{ dataCompleta(parcela.data) }}</span
                             >
                         </span>
+                        <span
+                            v-if="parcela.dataCompra"
+                            class="text-xs text-muted-foreground tabular-nums"
+                            >compra em
+                            {{ dataCompleta(parcela.dataCompra) }}</span
+                        >
                         <span
                             class="flex items-center gap-1.5 truncate text-sm text-muted-foreground"
                         >

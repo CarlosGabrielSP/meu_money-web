@@ -84,7 +84,7 @@ class ExcluirConta
             ->get();
 
         foreach ($recebidos as $recebido) {
-            $this->sairDoRateio->handle($user, $recebido);
+            $this->sairDoRateio->handle($user, $recebido, permitirFechadas: true);
         }
 
         $series = Parcelamento::query()

@@ -99,7 +99,10 @@ function alternar(marcado: boolean): void {
                 @update:model-value="emit('selecionar', item)"
             />
         </template>
-        <span v-else-if="item.cotaId === null" class="size-4 shrink-0" />
+        <span
+            v-else-if="item.cotaId === null || item.cartao"
+            class="size-4 shrink-0"
+        />
         <Checkbox
             v-else
             :model-value="item.executado"

@@ -16,20 +16,21 @@ class GastosDoMes
 
     /**
      * The categories with the largest estimated expenses of the user in the wallet and month, ties by
-     * name, regardless of filters (RN-174).
+     * name, regardless of filters (RN-174). Card purchases count by the due date of their invoice: a
+     * card shows the purchases of the invoice due in the month, and a common wallet also those of the
+     * invoices it pays (RN-224, RN-226).
      *
      * @return list<array{nome: string, icone: string, valor: int}>
      */
     public function handle(User $user, Carteira $carteira, CarbonImmutable $mes): array
     {
         return array_values(Cota::query()
-            ->join('lancamentos', 'lancamentos.id', '=', 'cotas.lancamento_id')
+            ->naCarteiraPorVencimento($carteira)
             ->join('categorias', 'categorias.id', '=', 'cotas.categoria_id')
             ->where('cotas.user_id', $user->id)
-            ->where('cotas.carteira_id', $carteira->id)
             ->where('lancamentos.tipo', 'despesa')
-            ->where('lancamentos.data', '>=', $mes->startOfMonth()->toDateString())
-            ->where('lancamentos.data', '<', $mes->startOfMonth()->addMonth()->toDateString())
+            ->whereRaw(Cota::DATA_EFETIVA.' >= ?', [$mes->startOfMonth()->toDateString()])
+            ->whereRaw(Cota::DATA_EFETIVA.' < ?', [$mes->startOfMonth()->addMonth()->toDateString()])
             ->groupBy('categorias.id', 'categorias.nome', 'categorias.icone')
             ->selectRaw('categorias.nome, categorias.icone, sum(cotas.valor) as valor')
             ->orderByDesc('valor')

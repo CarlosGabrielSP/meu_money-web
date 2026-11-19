@@ -228,7 +228,15 @@ const rotuloExecutado = computed(() => {
                         <InputError :message="form.errors.categoria_id" />
                     </div>
 
-                    <label class="flex items-center gap-2">
+                    <!-- A share moved to a card has no status (RN-194, RN-231). -->
+                    <label
+                        v-if="
+                            carteiras.find(
+                                (carteira) => carteira.id === form.carteira_id,
+                            )?.tipo !== 'cartao'
+                        "
+                        class="flex items-center gap-2"
+                    >
                         <Checkbox
                             :model-value="form.executado"
                             @update:model-value="
@@ -263,7 +271,11 @@ const rotuloExecutado = computed(() => {
                         Sua parte volta para {{ item?.autor }}.
                     </DialogDescription>
                 </DialogHeader>
-                <InputError :message="page.props.errors.escopo" />
+                <InputError
+                    :message="
+                        page.props.errors.escopo ?? page.props.errors.cota
+                    "
+                />
                 <DialogFooter>
                     <Button variant="destructive" @click="sair()">Sair</Button>
                 </DialogFooter>
@@ -273,7 +285,7 @@ const rotuloExecutado = computed(() => {
         <EscopoSerieDialog
             v-model:open="escolhendoEscopo"
             acao="sair"
-            :erro="page.props.errors.escopo"
+            :erro="page.props.errors.escopo ?? page.props.errors.cota"
             @confirmar="sair"
         />
     </div>

@@ -2,6 +2,7 @@
 
 namespace App\Actions\Series;
 
+use App\Actions\Cartoes\AtribuirFaturas;
 use App\Actions\Lancamentos\SalvarLancamento;
 use App\Actions\Rateio\AplicarRateio;
 use App\Enums\EscopoSerie;
@@ -11,6 +12,7 @@ use App\Models\Cota;
 use App\Models\Lancamento;
 use App\Models\Parcelamento;
 use App\Models\User;
+use Carbon\CarbonImmutable;
 use Illuminate\Http\UploadedFile;
 use Throwable;
 
@@ -19,6 +21,7 @@ class EditarParcelas
     public function __construct(
         private SalvarLancamento $salvarLancamento,
         private AplicarRateio $aplicarRateio,
+        private AtribuirFaturas $atribuirFaturas,
     ) {}
 
     /**
@@ -30,7 +33,9 @@ class EditarParcelas
      * on the open installment (RN-138). Type and periodicity never change (RN-055). An installment with
      * a participant share already executed keeps its amount and split (RN-085, CA-072.5). Shares
      * and the model moved to another wallet leave their group (RN-130); participants keep the group
-     * of their model share (RN-127).
+     * of their model share (RN-127). In a card, a closed invoice counts as executed (RN-049, RN-200):
+     * an open installment in a closed invoice keeps amount, date, wallet and split, and changes only
+     * description and category. Moved shares then follow their wallet's invoices (RN-228).
      *
      * @param  array{tipo: TipoLancamento, descricao: string, valor: int, data: string, categoria_id: int, carteira_id: int, observacao: string|null, executado: bool|null, rateio?: array{modo: ModoRateio, participantes: list<array{user_id: int, percentual: string|null, valor: int|null}>}|null}  $dados
      *
@@ -47,13 +52,18 @@ class EditarParcelas
         }
 
         $diaVencimento ??= $serie->dia_vencimento;
-        $cotas = $parcela->cotas()->get();
+        $hoje = CarbonImmutable::today();
+        $cotas = $parcela->cotas()->with('fatura')->get();
         $cotaAberta = $cotas->firstWhere('user_id', $parcela->user_id);
         $abertaExecutada = $cotaAberta !== null && $cotaAberta->executado;
+        $abertaFechada = $cotaAberta?->fatura !== null && $cotaAberta->fatura->isFechada($hoje);
         $dataOriginal = $parcela->data;
         $dadosDaAberta = $dados;
 
-        if ($abertaExecutada) {
+        if ($abertaFechada) {
+            $dadosDaAberta = [...$dados, 'carteira_id' => $cotaAberta->carteira_id, 'data' => $dataOriginal->toDateString()];
+            $abertaExecutada = true;
+        } elseif ($abertaExecutada) {
             $dadosDaAberta = [
                 ...$dados,
                 'descricao' => $parcela->descricao,
@@ -62,7 +72,7 @@ class EditarParcelas
             ];
         }
 
-        if ($abertaExecutada || $this->participanteExecutou($parcela, $cotas->all())) {
+        if ($abertaExecutada || $this->participanteExecutou($parcela, $cotas->all(), $hoje)) {
             $dadosDaAberta = [...$dadosDaAberta, 'valor' => $parcela->valor, 'rateio' => $this->rateioAtual($parcela, $cotas->all())];
         }
 
@@ -75,7 +85,7 @@ class EditarParcelas
             $dadosDaAberta,
             $anexo,
             $parcela,
-            function (Lancamento $aberta) use ($serie, $escopo, $dados, $diaVencimento): void {
+            function (Lancamento $aberta) use ($autor, $serie, $escopo, $dados, $diaVencimento, $hoje): void {
                 $diaAnterior = $serie->dia_vencimento;
                 $rateio = $dados['rateio'] ?? null;
                 $gruposDoModelo = $serie->cotas()->pluck('grupo_id', 'user_id');
@@ -99,7 +109,7 @@ class EditarParcelas
                     ->whereKeyNot($aberta->id)
                     ->when($escopo === EscopoSerie::Proximas, fn ($query) => $query->where('numero_parcela', '>', $aberta->numero_parcela))
                     ->pendentesDoAutor()
-                    ->with('cotas')
+                    ->with('cotas.fatura')
                     ->get();
 
                 Lancamento::query()->whereKey($pendentes->modelKeys())->update(['descricao' => $dados['descricao']]);
@@ -127,7 +137,7 @@ class EditarParcelas
                         if ($pendente->isDirty()) {
                             $pendente->save();
                         }
-                    } elseif (! $this->participanteExecutou($pendente, $pendente->cotas->all())) {
+                    } elseif (! $this->participanteExecutou($pendente, $pendente->cotas->all(), $hoje)) {
                         $pendente->valor = $dados['valor'];
                         $pendente->save();
 
@@ -140,16 +150,20 @@ class EditarParcelas
                         $pendente->save();
                     }
                 }
+
+                $this->atribuirFaturas->porLancamentos([$aberta->id, ...$pendentes->modelKeys()], $autor);
             },
         );
     }
 
     /**
-     * @param  array<int, Cota>  $cotas
+     * A participant executed their share, or has it in a closed card invoice (RN-085, RN-200).
+     *
+     * @param  array<int, Cota>  $cotas  with their invoices loaded
      */
-    private function participanteExecutou(Lancamento $parcela, array $cotas): bool
+    private function participanteExecutou(Lancamento $parcela, array $cotas, CarbonImmutable $hoje): bool
     {
-        return collect($cotas)->contains(fn (Cota $cota): bool => $cota->user_id !== $parcela->user_id && $cota->executado);
+        return collect($cotas)->contains(fn (Cota $cota): bool => $cota->user_id !== $parcela->user_id && $cota->isTravada($hoje));
     }
 
     /**

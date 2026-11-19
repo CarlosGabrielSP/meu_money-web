@@ -147,6 +147,7 @@ it('CA-151.2 lists the installments by number with the gap of the deleted one', 
         ->where('parcelas.0', [
             'numero' => 1,
             'data' => '2026-08-25',
+            'dataCompra' => null,
             'carteira' => ['nome' => 'X', 'cor' => $this->x->cor->value],
             'valor' => 15000,
             'executado' => true,

@@ -9,6 +9,8 @@ const props = defineProps<{
     gastos: GastoDoMes[];
     totalDespesas: number;
     carteiraId: number;
+    /** "Gastos da fatura" on a card (RN-224, nota 07). */
+    titulo?: string;
 }>();
 
 function proporcao(valor: number): string {
@@ -25,7 +27,9 @@ function proporcao(valor: number): string {
         class="grid gap-3 rounded-2xl border bg-card p-4"
         aria-labelledby="gastos-do-mes"
     >
-        <h2 id="gastos-do-mes" class="font-semibold">Gastos do mês</h2>
+        <h2 id="gastos-do-mes" class="font-semibold">
+            {{ titulo ?? 'Gastos do mês' }}
+        </h2>
         <ul class="grid gap-3">
             <li
                 v-for="gasto in gastos"

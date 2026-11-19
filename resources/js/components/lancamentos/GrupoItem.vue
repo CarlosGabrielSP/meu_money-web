@@ -95,7 +95,11 @@ function excluir(): void {
 <template>
     <li>
         <div class="flex items-center gap-3 px-3 py-2">
-            <span v-if="selecionando" class="size-4 shrink-0" />
+            <!-- A group in a card has no status (RN-211). -->
+            <span
+                v-if="selecionando || grupo.status === null"
+                class="size-4 shrink-0"
+            />
             <Checkbox
                 v-else
                 :model-value="
@@ -134,13 +138,13 @@ function excluir(): void {
                     <span
                         class="flex items-center gap-2 text-xs text-muted-foreground"
                     >
-                        {{
+                        <template v-if="grupo.status !== null">{{
                             {
                                 executado: 'Executado',
                                 parcial: 'Parcial',
                                 pendente: 'Pendente',
                             }[grupo.status]
-                        }}
+                        }}</template>
                         <Badge v-if="grupo.filtrado" variant="secondary"
                             >Filtrado</Badge
                         >

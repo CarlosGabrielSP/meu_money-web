@@ -30,13 +30,15 @@ import {
     SheetTitle,
 } from '@/components/ui/sheet';
 import { useModoSimples } from '@/composables/useModoSimples';
-import { executadoPorPadrao } from '@/lib/datas';
+import { dataCompleta, executadoPorPadrao } from '@/lib/datas';
+import { vencimentoDaCompra } from '@/lib/faturas';
 import { centavosDe, formatarCentavos, mascararValor } from '@/lib/dinheiro';
 import {
     destroy as destroyAnexo,
     show as showAnexo,
 } from '@/routes/lancamentos/anexo';
 import type {
+    CartaoDoFormulario,
     CarteiraResumo,
     CategoriaOpcao,
     ContatoOpcao,
@@ -58,6 +60,10 @@ const props = defineProps<{
     hoje: string;
     carteiras: CarteiraResumo[];
     categorias: CategoriaOpcao[];
+    /** Invoice data of each card of the user, by wallet id (RN-192). */
+    cartoes?: Record<string, CartaoDoFormulario>;
+    /** The entry is in a closed invoice (RN-200). */
+    faturaFechada?: boolean;
 }>();
 
 type Campos = {
@@ -111,7 +117,22 @@ function divisaoInicial(): Divisao {
     };
 }
 
-const bloqueado = computed(() => props.edicao?.rateio?.bloqueado ?? false);
+const bloqueado = computed(
+    () => (props.edicao?.rateio?.bloqueado ?? false) || props.faturaFechada,
+);
+
+/**
+ * In a card: no status, no split with contacts until Fase 15, and a hint with the invoice due date
+ * (RN-194, RN-231, nota 07).
+ */
+const cartaoEscolhido = computed(
+    () => props.cartoes?.[String(form.carteira_id)] ?? null,
+);
+const vencimentoDaFatura = computed(() =>
+    cartaoEscolhido.value === null || props.faturaFechada
+        ? null
+        : vencimentoDaCompra(cartaoEscolhido.value, form.dataLancamento),
+);
 const anexoInput = ref<HTMLInputElement | null>(null);
 
 const editando = computed(() => props.lancamentoId !== null);
@@ -245,7 +266,10 @@ function paraEnvio({
               }
             : {}),
         ...(serie.value ? { dia_vencimento, escopo } : {}),
-        ...(divisao.value.ativa ? { rateio: rateioParaEnvio() } : {}),
+        ...(cartaoEscolhido.value !== null ? { executado: null } : {}),
+        ...(divisao.value.ativa && cartaoEscolhido.value === null
+            ? { rateio: rateioParaEnvio() }
+            : {}),
     };
 }
 
@@ -467,7 +491,23 @@ function removerAnexo(): void {
                             <CampoData
                                 id="data"
                                 v-model="form.dataLancamento"
+                                :disabled="faturaFechada"
                             />
+                            <p
+                                v-if="cartaoEscolhido && vencimentoDaFatura"
+                                class="text-xs text-muted-foreground"
+                            >
+                                Entra na fatura que vence em
+                                {{ dataCompleta(vencimentoDaFatura) }}.
+                            </p>
+                            <p
+                                v-else-if="cartaoEscolhido && !faturaFechada"
+                                class="text-xs text-destructive"
+                            >
+                                Essa data cai numa fatura fechada. Use uma data
+                                a partir de
+                                {{ dataCompleta(cartaoEscolhido.abertaDesde) }}.
+                            </p>
                             <InputError :message="erros.data" />
                         </div>
                     </div>
@@ -494,6 +534,7 @@ function removerAnexo(): void {
                         <CampoSelecao
                             id="carteira_id"
                             v-model="form.carteira_id"
+                            :disabled="faturaFechada"
                             :opcoes="
                                 carteiras.map((carteira) => ({
                                     valor: carteira.id,
@@ -622,8 +663,27 @@ function removerAnexo(): void {
                         </template>
                     </div>
 
+                    <p
+                        v-if="faturaFechada"
+                        class="rounded-md border border-dashed p-3 text-sm text-muted-foreground"
+                    >
+                        Fatura fechada: só descrição, categoria, observação e
+                        anexo podem mudar.
+                    </p>
+
+                    <label
+                        v-if="mostrarDividir && cartaoEscolhido"
+                        class="grid gap-1 text-sm text-muted-foreground"
+                    >
+                        <span class="flex items-center gap-2">
+                            <Checkbox :model-value="false" disabled />
+                            Dividir
+                        </span>
+                        Ainda não é possível dividir compras do cartão com
+                        contatos.
+                    </label>
                     <DividirCampos
-                        v-if="mostrarDividir"
+                        v-else-if="mostrarDividir"
                         v-model="divisao"
                         :contatos="contatos"
                         :autor-id="autorId"
@@ -635,6 +695,7 @@ function removerAnexo(): void {
                     <label
                         v-if="
                             !form.repetir &&
+                            cartaoEscolhido === null &&
                             (!divisao.ativa || divisao.autorParticipa)
                         "
                         class="flex items-center gap-2"
@@ -712,7 +773,7 @@ function removerAnexo(): void {
                             Salvar e adicionar outro
                         </Button>
                         <Button
-                            v-if="editando"
+                            v-if="editando && !faturaFechada"
                             type="button"
                             variant="destructive"
                             class="ml-auto"

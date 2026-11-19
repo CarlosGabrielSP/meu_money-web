@@ -29,13 +29,22 @@ class InicioRequest extends FormRequest
      */
     public function mes(): CarbonImmutable
     {
-        $mes = $this->query('mes');
-
-        if (is_string($mes) && preg_match('/^\d{4}-(0[1-9]|1[0-2])$/', $mes) === 1) {
-            return CarbonImmutable::createFromFormat('!Y-m', $mes) ?: CarbonImmutable::today()->startOfMonth();
+        if ($this->mesInformado()) {
+            return CarbonImmutable::createFromFormat('!Y-m', (string) $this->query('mes')) ?: CarbonImmutable::today()->startOfMonth();
         }
 
         return CarbonImmutable::today()->startOfMonth();
+    }
+
+    /**
+     * Whether the URL has a valid month; a card opens on the month of its open invoice without one
+     * (RN-223, R3).
+     */
+    public function mesInformado(): bool
+    {
+        $mes = $this->query('mes');
+
+        return is_string($mes) && preg_match('/^\d{4}-(0[1-9]|1[0-2])$/', $mes) === 1;
     }
 
     /**

@@ -1,11 +1,18 @@
 <?php
 
+use App\Actions\Cartoes\AtribuirFaturas;
+use App\Actions\Cartoes\PagarFatura;
+use App\Enums\IconeCarteira;
+use App\Enums\TipoCarteira;
+use App\Enums\TipoCategoria;
 use App\Models\Carteira;
 use App\Models\Categoria;
 use App\Models\Cota;
+use App\Models\Fatura;
 use App\Models\Lancamento;
 use App\Models\Parcelamento;
 use App\Models\User;
+use Carbon\CarbonImmutable;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -148,4 +155,90 @@ function exemploSaldos(User $user, Carteira $carteira, Categoria $categoria): vo
     ] as [$data, $tipo, $valor, $executado]) {
         lancamentoComCota($user, $carteira, $categoria, ['data' => $data, 'tipo' => $tipo, 'valor' => $valor], ['executado' => $executado]);
     }
+}
+
+/**
+ * Base scenario of Módulo 16 (RF-160 to RF-176), with today = 2026-11-14: wallet X with income of
+ * 5000,00 on 2026-11-05; card Nubank (due day 10, closing 10 days before, paid by X) with purchases
+ * on 2026-10-20 (Mercado 300,00), 2026-11-05 (Lazer 200,00), 2026-11-30 (Mercado 100,00) and
+ * 2026-12-01 (Lazer 50,00); a payment of 300,00 on 2026-11-10 in the November invoice, from X.
+ */
+function cenarioCartao(bool $comPagamento = true): void
+{
+    $teste = test();
+    $teste->travelTo(CarbonImmutable::parse('2026-11-14 10:00'));
+    $teste->user = User::factory()->create();
+    $teste->principal = Carteira::factory()->for($teste->user)->padrao()->create(['nome' => 'Principal']);
+    $teste->x = Carteira::factory()->for($teste->user)->create(['nome' => 'X']);
+    $teste->mercado = Categoria::factory()->for($teste->user)->create(['nome' => 'Mercado']);
+    $teste->lazer = Categoria::factory()->for($teste->user)->create(['nome' => 'Lazer']);
+    $teste->entrada = Categoria::factory()->for($teste->user)->create(['nome' => 'Entrada', 'tipo' => TipoCategoria::Ambos]);
+
+    lancamentoComCota($teste->user, $teste->x, $teste->entrada, ['data' => '2026-11-05', 'tipo' => 'receita', 'valor' => 500000], ['executado' => true]);
+
+    $teste->nubank = cartaoDe($teste->user, 'Nubank', $teste->x);
+    $teste->compraOutubro = compraNoCartao('2026-10-20', 30000, $teste->mercado, descricao: 'Mercado outubro');
+    $teste->compraNovembro = compraNoCartao('2026-11-05', 20000, $teste->lazer, descricao: 'Cinema');
+    $teste->compraFimNovembro = compraNoCartao('2026-11-30', 10000, $teste->mercado, descricao: 'Mercado');
+    $teste->compraDezembro = compraNoCartao('2026-12-01', 5000, $teste->lazer, descricao: 'Bar');
+
+    if ($comPagamento) {
+        $teste->pagamento = app(PagarFatura::class)->handle($teste->nubank, CarbonImmutable::parse('2026-11-01'), 30000, '2026-11-10');
+    }
+}
+
+/**
+ * A card of the user (RN-190, RN-191).
+ */
+function cartaoDe(User $user, string $nome, ?Carteira $vinculada = null, int $diaVencimento = 10, int $diasFechamento = 10): Carteira
+{
+    $cartao = Carteira::factory()->for($user)->create(['nome' => $nome, 'tipo' => TipoCarteira::Cartao, 'icone' => IconeCarteira::CreditCard]);
+    $cartao->cartao()->create(['dia_vencimento' => $diaVencimento, 'dias_fechamento' => $diasFechamento, 'carteira_vinculada_id' => $vinculada?->id]);
+
+    return $cartao;
+}
+
+/**
+ * A purchase (or income) of the scenario user in the card, already in the invoice of its date, even
+ * a closed one (RN-192).
+ */
+function compraNoCartao(string $data, int $valor, ?Categoria $categoria = null, string $tipo = 'despesa', ?Carteira $cartao = null, string $descricao = 'Compra'): Lancamento
+{
+    $teste = test();
+    $lancamento = lancamentoComCota(
+        $teste->user,
+        $cartao ?? $teste->nubank,
+        $categoria ?? $teste->mercado,
+        ['data' => $data, 'tipo' => $tipo, 'valor' => $valor, 'descricao' => $descricao],
+    );
+    app(AtribuirFaturas::class)->porLancamentos([$lancamento->id], permitirFechadas: true);
+
+    return $lancamento;
+}
+
+/**
+ * The stored invoice of the card due in the month ("Y-m").
+ */
+function faturaDe(Carteira $cartao, string $mes): Fatura
+{
+    return Fatura::query()->where('carteira_id', $cartao->id)->whereDate('referencia', "{$mes}-01")->sole();
+}
+
+/**
+ * Form data of a purchase in the Nubank card of the card scenario (RF-167).
+ *
+ * @param  array<string, mixed>  $dados
+ * @return array<string, mixed>
+ */
+function dadosCompra(array $dados = []): array
+{
+    return [
+        'tipo' => 'despesa',
+        'descricao' => 'Cinema',
+        'valor' => '50,00',
+        'data' => '2026-11-20',
+        'categoria_id' => test()->mercado->id,
+        'carteira_id' => test()->nubank->id,
+        ...$dados,
+    ];
 }

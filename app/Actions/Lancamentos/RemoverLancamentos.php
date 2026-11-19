@@ -4,6 +4,7 @@ namespace App\Actions\Lancamentos;
 
 use App\Models\Cota;
 use App\Models\Lancamento;
+use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Validation\ValidationException;
 
@@ -14,8 +15,9 @@ class RemoverLancamentos
      * removed after the commit.
      *
      * Every share is locked first, so a concurrent status change waits. Deletion is refused when a
-     * participant already executed a share (RN-086). With $somentePendentes, entries whose author's
-     * share became executed meanwhile are kept (RN-049, RN-056).
+     * participant already executed a share, or has it in a closed card invoice (RN-086, RN-200). With
+     * $somentePendentes, entries whose author's share became executed meanwhile are kept (RN-049,
+     * RN-056).
      *
      * @param  Collection<int, Lancamento>  $lancamentos
      * @return array<int, string>
@@ -32,12 +34,13 @@ class RemoverLancamentos
         $cotas = Cota::query()
             ->whereIn('lancamento_id', $lancamentos->modelKeys())
             ->lockForUpdate()
-            ->with('user:id,name')
-            ->get(['id', 'lancamento_id', 'user_id', 'executado']);
+            ->with(['user:id,name', 'fatura:id,fechamento'])
+            ->get(['id', 'lancamento_id', 'user_id', 'fatura_id', 'executado']);
+        $hoje = CarbonImmutable::today();
 
         if ($somentePendentes) {
             $executados = $cotas
-                ->filter(fn (Cota $cota): bool => $cota->executado && $cota->user_id === $autores[$cota->lancamento_id])
+                ->filter(fn (Cota $cota): bool => $cota->isTravada($hoje) && $cota->user_id === $autores[$cota->lancamento_id])
                 ->pluck('lancamento_id')
                 ->all();
 
@@ -46,7 +49,7 @@ class RemoverLancamentos
         }
 
         $executaram = $cotas
-            ->filter(fn (Cota $cota): bool => $cota->executado && $cota->user_id !== $autores[$cota->lancamento_id])
+            ->filter(fn (Cota $cota): bool => $cota->isTravada($hoje) && $cota->user_id !== $autores[$cota->lancamento_id])
             ->map(fn (Cota $cota): string => $cota->user->name)
             ->unique();
 

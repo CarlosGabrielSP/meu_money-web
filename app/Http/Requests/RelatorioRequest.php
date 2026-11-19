@@ -39,6 +39,15 @@ class RelatorioRequest extends FormRequest
     }
 
     /**
+     * View of the evolution line and the forecast: "mes" (month result) or "acumulado" (accumulated
+     * balance, the default also for an invalid value) (RN-252, CA-193.1).
+     */
+    public function visao(): string
+    {
+        return $this->query('visao') === 'mes' ? 'mes' : 'acumulado';
+    }
+
+    /**
      * Period of the URL, or the default when missing or invalid (CA-140.5).
      */
     public function periodo(): PeriodoRelatorio

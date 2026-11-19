@@ -1,6 +1,9 @@
 /** Period of the report (RN-179). */
 export type PeriodoRelatorio = 'mes' | '3m' | '6m' | '12m' | 'ano';
 
+/** Month result or accumulated balance in the evolution line and the forecast (RN-252). */
+export type VisaoRelatorio = 'mes' | 'acumulado';
+
 /** Summary of the period with the change against the previous one (RN-180). */
 export type ResumoRelatorio = {
     receitas: number;

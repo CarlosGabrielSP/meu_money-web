@@ -5,11 +5,24 @@ import VisLine from '@unovis/vue/components/line';
 import VisXYContainer from '@unovis/vue/containers/xy-container';
 import { mesCurto, nomeDoMes } from '@/lib/datas';
 import { formatarMoeda } from '@/lib/dinheiro';
-import type { MesEvolucao } from '@/types';
+import type { MesEvolucao, VisaoRelatorio } from '@/types';
 
-const props = defineProps<{
-    meses: MesEvolucao[];
-}>();
+const props = withDefaults(
+    defineProps<{
+        meses: MesEvolucao[];
+        /** A card shows its debt in place of the accumulated balance (RN-227, R7). */
+        rotuloLinha?: string;
+        /** "Compras" on a card (nota 07). */
+        rotuloDespesas?: string;
+        /** The line shows the month result or the accumulated balance (RN-252). */
+        visao?: VisaoRelatorio;
+    }>(),
+    {
+        rotuloLinha: 'Saldo acumulado no fim do mês',
+        rotuloDespesas: 'Despesas',
+        visao: 'acumulado',
+    },
+);
 
 const x = (_: MesEvolucao, indice: number): number => indice;
 const barras = [
@@ -17,7 +30,11 @@ const barras = [
     (mes: MesEvolucao): number => mes.despesas / 100,
 ];
 const coresBarras = ['var(--grafico-receita)', 'var(--grafico-despesa)'];
-const acumulado = (mes: MesEvolucao): number => mes.acumulado / 100;
+function valorDaLinha(mes: MesEvolucao): number {
+    return props.visao === 'mes' ? mes.receitas - mes.despesas : mes.acumulado;
+}
+
+const acumulado = (mes: MesEvolucao): number => valorDaLinha(mes) / 100;
 
 function rotuloDoMes(indice: number | Date): string {
     const mes = props.meses[Number(indice)];
@@ -85,11 +102,11 @@ function rotuloDoValor(valor: number | Date): string {
             </li>
             <li class="flex items-center gap-1.5">
                 <span class="size-2.5 rounded-sm bg-(--grafico-despesa)" />
-                Despesas
+                {{ rotuloDespesas }}
             </li>
             <li class="flex items-center gap-1.5">
                 <span class="h-0.5 w-3 rounded-full bg-primary" />
-                Saldo acumulado no fim do mês
+                {{ rotuloLinha }}
             </li>
         </ul>
         <table class="sr-only">
@@ -100,8 +117,8 @@ function rotuloDoValor(valor: number | Date): string {
                 <tr>
                     <th scope="col">Mês</th>
                     <th scope="col">Receitas</th>
-                    <th scope="col">Despesas</th>
-                    <th scope="col">Saldo acumulado</th>
+                    <th scope="col">{{ rotuloDespesas }}</th>
+                    <th scope="col">{{ rotuloLinha }}</th>
                 </tr>
             </thead>
             <tbody>
@@ -109,7 +126,7 @@ function rotuloDoValor(valor: number | Date): string {
                     <th scope="row">{{ nomeDoMes(mes.mes) }}</th>
                     <td>{{ formatarMoeda(mes.receitas) }}</td>
                     <td>{{ formatarMoeda(mes.despesas) }}</td>
-                    <td>{{ formatarMoeda(mes.acumulado) }}</td>
+                    <td>{{ formatarMoeda(valorDaLinha(mes)) }}</td>
                 </tr>
             </tbody>
         </table>

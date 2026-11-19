@@ -23,6 +23,7 @@ import type {
     MesEvolucao,
     PeriodoRelatorio,
     PrevisaoRelatorio,
+    VisaoRelatorio,
     RateioRelatorio,
     ResumoRelatorio as Resumo,
     SaldoCarteira,
@@ -31,6 +32,8 @@ import type {
 const props = defineProps<{
     carteira: CarteiraResumo;
     periodo: PeriodoRelatorio;
+    /** Month result or accumulated balance (RN-252). */
+    visao: VisaoRelatorio;
     intervalo: { inicio: string; fim: string };
     hoje: string;
     resumo: Resumo;
@@ -41,6 +44,8 @@ const props = defineProps<{
     despesasPorTipo?: DespesaTipo[];
     compromissos?: CompromissosRelatorio;
     carteiras?: SaldoCarteira[];
+    /** Cards apart from the common wallets, with their debt (RN-227). */
+    cartoes?: SaldoCarteira[];
     rateio?: RateioRelatorio;
 }>();
 
@@ -78,21 +83,40 @@ const rotuloPeriodo = computed(() => {
     return `${comeco} a ${mesPorExtenso(fim)}`;
 });
 
-function navegar(mudancas: { carteira?: number; periodo?: string }): void {
+function navegar(mudancas: {
+    carteira?: number;
+    periodo?: string;
+    visao?: VisaoRelatorio;
+}): void {
     router.get(
         relatorio.url(),
         modoSimples.value
-            ? { periodo: mudancas.periodo ?? props.periodo }
+            ? {
+                  periodo: mudancas.periodo ?? props.periodo,
+                  visao: mudancas.visao ?? props.visao,
+              }
             : {
                   carteira: props.carteira.id,
                   periodo: props.periodo,
+                  visao: props.visao,
                   ...mudancas,
               },
         { preserveScroll: true },
     );
 }
 
-const carteirasDoSeletor = computed(() => props.carteiras ?? [props.carteira]);
+const visoes: { valor: VisaoRelatorio; rotulo: string }[] = [
+    { valor: 'mes', rotulo: 'Resultado do mês' },
+    { valor: 'acumulado', rotulo: 'Saldo acumulado' },
+];
+
+/** The cards come after the common wallets (nota 07). */
+const carteirasDoSeletor = computed(() =>
+    props.carteiras
+        ? [...props.carteiras, ...(props.cartoes ?? [])]
+        : [props.carteira],
+);
+const ehCartao = computed(() => props.carteira.tipo === 'cartao');
 </script>
 
 <template>
@@ -151,6 +175,31 @@ const carteirasDoSeletor = computed(() => props.carteiras ?? [props.carteira]);
                         (valor) => valor !== null && navegar({ periodo: valor })
                     "
                 />
+                <!-- Month result or accumulated balance in the evolution and the forecast (RN-252). -->
+                <div
+                    role="group"
+                    aria-label="Visão"
+                    class="inline-flex rounded-md border p-0.5"
+                >
+                    <button
+                        v-for="opcao in visoes"
+                        :key="opcao.valor"
+                        type="button"
+                        class="rounded px-3 py-1 text-sm font-medium transition-colors focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none simples:min-h-12 simples:text-base"
+                        :class="
+                            visao === opcao.valor
+                                ? 'bg-primary text-primary-foreground'
+                                : 'text-muted-foreground hover:bg-accent'
+                        "
+                        :aria-pressed="visao === opcao.valor"
+                        @click="
+                            visao !== opcao.valor &&
+                            navegar({ visao: opcao.valor })
+                        "
+                    >
+                        {{ opcao.rotulo }}
+                    </button>
+                </div>
             </div>
         </header>
 
@@ -158,11 +207,23 @@ const carteirasDoSeletor = computed(() => props.carteiras ?? [props.carteira]);
             :resumo="resumo"
             :rotulo-periodo="rotuloPeriodo"
             :simples="modoSimples"
+            :sem-taxa="ehCartao"
         />
 
         <div class="grid gap-4 md:grid-cols-2 md:gap-6">
             <BlocoRelatorio v-if="evolucao" titulo="Evolução mensal">
-                <GraficoEvolucao :meses="evolucao" />
+                <GraficoEvolucao
+                    :meses="evolucao"
+                    :rotulo-despesas="ehCartao ? 'Compras' : 'Despesas'"
+                    :visao="visao"
+                    :rotulo-linha="
+                        visao === 'mes'
+                            ? 'Resultado do mês'
+                            : ehCartao
+                              ? 'Dívida do cartão no fim do mês'
+                              : 'Saldo acumulado no fim do mês'
+                    "
+                />
             </BlocoRelatorio>
 
             <BlocoRelatorio titulo="Despesas por categoria">
@@ -185,9 +246,20 @@ const carteirasDoSeletor = computed(() => props.carteiras ?? [props.carteira]);
 
             <BlocoRelatorio
                 titulo="Previsão"
-                descricao="Saldo no fim de cada mês, só com os lançamentos já feitos"
+                :descricao="
+                    visao === 'mes'
+                        ? 'Resultado de cada mês, só com os lançamentos já feitos'
+                        : ehCartao
+                          ? 'Dívida do cartão no fim de cada mês, só com as compras já feitas'
+                          : 'Saldo no fim de cada mês, só com os lançamentos já feitos'
+                "
             >
-                <PrevisaoMeses :previsao="previsao" :simples="modoSimples" />
+                <PrevisaoMeses
+                    :previsao="previsao"
+                    :simples="modoSimples"
+                    :neutro="ehCartao"
+                    :visao="visao"
+                />
             </BlocoRelatorio>
 
             <BlocoRelatorio
@@ -208,6 +280,7 @@ const carteirasDoSeletor = computed(() => props.carteiras ?? [props.carteira]);
                 >
                     <SaldosCarteiras
                         :carteiras="carteiras"
+                        :cartoes="cartoes ?? []"
                         :atual="carteira.id"
                         @escolher="(id) => navegar({ carteira: id })"
                     />

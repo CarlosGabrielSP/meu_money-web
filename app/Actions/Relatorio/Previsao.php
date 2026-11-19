@@ -18,6 +18,7 @@ class Previsao
     /**
      * Estimated result and accumulated balance of the months after the current one, only from the
      * existing entries, and the first month with a negative balance. Independent of the period (RN-184).
+     * A card shows its debt and has no negative month to highlight (RN-227, R7).
      *
      * @return array{meses: list<array{mes: string, resultado: int, acumulado: int}>, primeiroNegativo: string|null}
      */
@@ -34,7 +35,7 @@ class Previsao
             'acumulado' => $mes['acumulado'],
         ], $this->evolucaoMensal->handle($user, $carteira, $meses));
 
-        $negativo = array_find($previsao, fn (array $mes): bool => $mes['acumulado'] < 0);
+        $negativo = $carteira->isCartao() ? null : array_find($previsao, fn (array $mes): bool => $mes['acumulado'] < 0);
 
         return [
             'meses' => $previsao,

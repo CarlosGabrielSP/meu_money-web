@@ -2,6 +2,7 @@
 
 namespace App\Actions\Relatorio;
 
+use App\Actions\Cartoes\CalcularFaturas;
 use App\Enums\Periodicidade;
 use App\Models\Carteira;
 use App\Models\Cota;
@@ -12,16 +13,20 @@ use Illuminate\Database\Eloquent\Builder;
 
 class Compromissos
 {
+    public function __construct(private CalcularFaturas $calcularFaturas) {}
+
     /**
      * Expense series that still bind the user's shares in the wallet, independent of the period
-     * (RN-185): installment series with a pending share and active recurring series. Two queries.
+     * (RN-185): installment series with a pending share and active recurring series. Two queries. In a
+     * card, a share is paid when its invoice is settled (RN-214, CA-172.5), one more query.
      *
      * @return array{parceladas: array{series: list<array{id: int, descricao: string, parcelasPendentes: int, restante: int, ultimaParcela: string}>, total: int}, recorrentes: array{series: list<array{id: int, descricao: string, proximoValor: int, periodicidade: string, mensal: int}>, total: int}}
      */
     public function handle(User $user, Carteira $carteira, CarbonImmutable $hoje): array
     {
-        $parceladas = $this->parceladas($user, $carteira);
-        $recorrentes = $this->recorrentes($user, $carteira, $hoje);
+        $quitadas = $carteira->isCartao() ? CalcularFaturas::quitadas($this->calcularFaturas->handle($user, [$carteira->id])) : [];
+        $parceladas = $this->parceladas($user, $carteira, $quitadas);
+        $recorrentes = $this->recorrentes($user, $carteira, $hoje, $quitadas);
 
         return [
             'parceladas' => ['series' => $parceladas, 'total' => array_sum(array_column($parceladas, 'restante'))],
@@ -31,46 +36,60 @@ class Compromissos
 
     /**
      * Installment series with a pending share: pending installments, the remaining amount and the
-     * month of the user's last installment, paid or not (RN-185 a).
+     * month of the user's last installment, paid or not (RN-185 a). Rows come by series and invoice,
+     * so the shares of a settled invoice count as paid (RN-214).
      *
+     * @param  list<int>  $quitadas  settled invoices of a card
      * @return list<array{id: int, descricao: string, parcelasPendentes: int, restante: int, ultimaParcela: string}>
      */
-    private function parceladas(User $user, Carteira $carteira): array
+    private function parceladas(User $user, Carteira $carteira, array $quitadas): array
     {
-        return array_values(Cota::query()
+        $series = [];
+
+        $linhas = Cota::query()
             ->join('lancamentos', 'lancamentos.id', '=', 'cotas.lancamento_id')
             ->join('parcelamentos', 'parcelamentos.id', '=', 'lancamentos.parcelamento_id')
             ->where('cotas.user_id', $user->id)
             ->where('cotas.carteira_id', $carteira->id)
             ->where('lancamentos.tipo', 'despesa')
             ->whereNotNull('parcelamentos.total_parcelas')
-            ->groupBy('parcelamentos.id', 'parcelamentos.descricao')
-            ->selectRaw('parcelamentos.id, parcelamentos.descricao')
+            ->groupBy('parcelamentos.id', 'parcelamentos.descricao', 'cotas.fatura_id')
+            ->selectRaw('parcelamentos.id, parcelamentos.descricao, cotas.fatura_id')
             ->selectRaw('sum(case when cotas.executado then 0 else 1 end) as pendentes')
             ->selectRaw('sum(case when cotas.executado then 0 else cotas.valor end) as restante')
             ->selectRaw('max(lancamentos.data) as ultima')
-            ->havingRaw('sum(case when cotas.executado then 0 else 1 end) > 0')
-            ->orderBy('ultima')
-            ->orderBy('parcelamentos.descricao')
             ->toBase()
-            ->get()
-            ->map(fn (object $serie): array => [
-                'id' => (int) $serie->id,
-                'descricao' => (string) $serie->descricao,
-                'parcelasPendentes' => (int) $serie->pendentes,
-                'restante' => (int) $serie->restante,
-                'ultimaParcela' => substr((string) $serie->ultima, 0, 7),
-            ])
-            ->all());
+            ->get();
+
+        foreach ($linhas as $linha) {
+            $id = (int) $linha->id;
+            $paga = $linha->fatura_id !== null && in_array((int) $linha->fatura_id, $quitadas, true);
+            $series[$id] ??= ['id' => $id, 'descricao' => (string) $linha->descricao, 'parcelasPendentes' => 0, 'restante' => 0, 'ultima' => ''];
+            $series[$id]['parcelasPendentes'] += $paga ? 0 : (int) $linha->pendentes;
+            $series[$id]['restante'] += $paga ? 0 : (int) $linha->restante;
+            $series[$id]['ultima'] = max($series[$id]['ultima'], (string) $linha->ultima);
+        }
+
+        $pendentes = array_filter($series, fn (array $serie): bool => $serie['parcelasPendentes'] > 0);
+        usort($pendentes, fn (array $a, array $b): int => [$a['ultima'], $a['descricao']] <=> [$b['ultima'], $b['descricao']]);
+
+        return array_map(fn (array $serie): array => [
+            'id' => $serie['id'],
+            'descricao' => $serie['descricao'],
+            'parcelasPendentes' => $serie['parcelasPendentes'],
+            'restante' => $serie['restante'],
+            'ultimaParcela' => substr($serie['ultima'], 0, 7),
+        ], $pendentes);
     }
 
     /**
      * Recurring series with a pending share dated today or later: the amount of the next one, the
      * periodicity and the monthly equivalent, rounded down to the cent (RN-185 b).
      *
+     * @param  list<int>  $quitadas  settled invoices of a card
      * @return list<array{id: int, descricao: string, proximoValor: int, periodicidade: string, mensal: int}>
      */
-    private function recorrentes(User $user, Carteira $carteira, CarbonImmutable $hoje): array
+    private function recorrentes(User $user, Carteira $carteira, CarbonImmutable $hoje, array $quitadas): array
     {
         $proximasCotas = fn (): Builder => Cota::query()
             ->join('lancamentos', 'lancamentos.id', '=', 'cotas.lancamento_id')
@@ -78,6 +97,9 @@ class Compromissos
             ->where('cotas.user_id', $user->id)
             ->where('cotas.carteira_id', $carteira->id)
             ->where('cotas.executado', false)
+            ->when($quitadas !== [], fn (Builder $query) => $query->where(fn (Builder $aberta) => $aberta
+                ->whereNull('cotas.fatura_id')
+                ->orWhereNotIn('cotas.fatura_id', $quitadas)))
             ->where('lancamentos.data', '>=', $hoje->toDateString());
 
         return array_values(Parcelamento::query()

@@ -24,7 +24,8 @@ class AplicarRateio
      * and seen date (RN-080). Participants left out lose their share (CA-072.3). An author share moved
      * to another wallet leaves its group (RN-130).
      *
-     * When a participant already executed a share, amounts and split cannot change (RN-089); internal
+     * When a participant already executed a share, or has it in a closed card invoice, amounts and
+     * split cannot change (RN-089, RN-200); internal
      * recalculations of a brand new series skip that check.
      *
      * @param  list<array{user_id: int, percentual: string|null, valor: int|null}>  $participantes
@@ -42,7 +43,7 @@ class AplicarRateio
             : $this->calcularCotas->handle($lancamento->valor, $modo, $participantes, $autorId);
         $modo = $semRateio ? null : $modo;
 
-        $atuais = $lancamento->cotas()->with('user:id,name')->lockForUpdate()->get()->keyBy('user_id');
+        $atuais = $lancamento->cotas()->with(['user:id,name', 'fatura'])->lockForUpdate()->get()->keyBy('user_id');
 
         if ($verificarExecutadas) {
             $this->impedirMudancaComExecutadas($lancamento, $modo, $atuais->all(), $novas);
@@ -100,8 +101,9 @@ class AplicarRateio
      */
     private function impedirMudancaComExecutadas(Lancamento $lancamento, ?ModoRateio $modo, array $atuais, array $novas): void
     {
+        $hoje = CarbonImmutable::today();
         $executaram = collect($atuais)
-            ->filter(fn (Cota $cota): bool => $cota->user_id !== $lancamento->user_id && $cota->executado);
+            ->filter(fn (Cota $cota): bool => $cota->user_id !== $lancamento->user_id && $cota->isTravada($hoje));
 
         if ($executaram->isEmpty()) {
             return;

@@ -10,6 +10,9 @@ import {
 import { useIntersectionObserver } from '@vueuse/core';
 import { computed, onMounted, ref, useTemplateRef, watch } from 'vue';
 import CampoSelecao from '@/components/CampoSelecao.vue';
+import CardFatura from '@/components/cartoes/CardFatura.vue';
+import PagamentosFatura from '@/components/cartoes/PagamentosFatura.vue';
+import FaturaVinculadaItem from '@/components/cartoes/FaturaVinculadaItem.vue';
 import type { OpcaoSelecao } from '@/components/CampoSelecao.vue';
 import CarteiraIcone from '@/components/carteiras/CarteiraIcone.vue';
 import AvisosPendencias from '@/components/inicio/AvisosPendencias.vue';
@@ -36,11 +39,14 @@ import { passosModoCompleto, passosModoSimples } from '@/lib/tutorial';
 import { home, tutorialVisto } from '@/routes';
 import { desagrupar } from '@/routes/grupos';
 import type {
+    CartaoDoFormulario,
     CarteiraResumo,
     CategoriaOpcao,
     ContatoOpcao,
     DestaquesInicio,
     EscopoSerie,
+    FaturaDoMes,
+    FaturaVinculada,
     GrupoOpcao,
     ItemLancamento,
     LancamentoEdicao,
@@ -64,9 +70,16 @@ const props = defineProps<{
     contatos: ContatoOpcao[];
     grupos: GrupoOpcao[];
     mes: string;
+    /** Month of "Hoje": the current one, or the due month of the open invoice of a card (R3). */
+    mesHoje: string;
     hoje: string;
     filtros: Filtros;
-    saldos: SaldosInicio;
+    /** Null on a card, which shows its invoice instead (RN-223). */
+    saldos: SaldosInicio | null;
+    fatura: FaturaDoMes | null;
+    /** Invoices this wallet pays, due in the month (RN-219). */
+    faturasVinculadas: FaturaVinculada[];
+    cartoes: Record<string, CartaoDoFormulario>;
     /** Subsections in the full mode; one plain list per type in the simple mode (RN-161). */
     lancamentos:
         | Record<TipoLancamento, Subsecoes>
@@ -78,6 +91,7 @@ const props = defineProps<{
 }>();
 
 const modoSimples = useModoSimples();
+const ehCartao = computed(() => props.carteira.tipo === 'cartao');
 
 const listaSimples = computed<Record<TipoLancamento, ItemLancamento[]> | null>(
     () =>
@@ -120,6 +134,7 @@ const emEdicao = ref<{
     id: number;
     edicao: LancamentoEdicao;
     serie: SerieDaParcela | null;
+    faturaFechada: boolean;
 } | null>(null);
 const participacaoAberta = ref(false);
 const emParticipacao = ref<{
@@ -144,13 +159,15 @@ const quantidade = (subsecoesDoTipo: Subsecoes): number =>
     subsecoesDoTipo.grupos.length;
 
 function quantidadeNaSecao(tipo: TipoLancamento): number {
+    const faturas = tipo === 'despesa' ? props.faturasVinculadas.length : 0;
+
     if (listaSimples.value !== null) {
-        return listaSimples.value[tipo].length;
+        return listaSimples.value[tipo].length + faturas;
     }
 
     return listaCompleta.value === null
         ? 0
-        : quantidade(listaCompleta.value[tipo]);
+        : quantidade(listaCompleta.value[tipo]) + faturas;
 }
 
 const secoesVisiveis = computed(() =>
@@ -246,6 +263,7 @@ function editar(item: ItemLancamento, tipo: TipoLancamento): void {
             id: item.lancamentoId,
             edicao: item.edicao,
             serie: item.serie,
+            faturaFechada: item.faturaFechada,
         };
         formularioAberto.value = true;
     } else if (item.participacao !== null) {
@@ -422,6 +440,7 @@ onMounted(() => {
             :carteira="carteira.nome"
             :mes="nomeDoMes(mes)"
             :saldos="saldos"
+            :a-pagar="fatura?.aPagar ?? null"
             :simples="modoSimples"
         />
 
@@ -498,8 +517,8 @@ onMounted(() => {
                     <Button
                         variant="outline"
                         size="sm"
-                        :disabled="mes === mesAtual"
-                        @click="navegar({ mes: mesAtual })"
+                        :disabled="mes === mesHoje"
+                        @click="navegar({ mes: mesHoje })"
                     >
                         Hoje
                     </Button>
@@ -547,19 +566,36 @@ onMounted(() => {
                         : 'md:max-w-xl'
                 "
             >
-                <div ref="card">
-                    <CardSaldos :saldos="saldos" :simples="modoSimples" />
+                <div ref="card" class="grid gap-4">
+                    <CardFatura
+                        v-if="fatura"
+                        :cartao-id="carteira.id"
+                        :cartao-nome="carteira.nome"
+                        :fatura="fatura"
+                        :hoje="hoje"
+                        :simples="modoSimples"
+                    />
+                    <CardSaldos
+                        v-else-if="saldos"
+                        :saldos="saldos"
+                        :simples="modoSimples"
+                    />
                 </div>
                 <div v-if="destaques" class="grid gap-4">
+                    <PagamentosFatura v-if="fatura" :fatura="fatura" />
                     <AvisosPendencias
+                        v-if="destaques.vencidas && destaques.proximas"
                         :vencidas="destaques.vencidas"
                         :proximas="destaques.proximas"
                         @abrir="painel = $event"
                     />
                     <GastosDoMes
                         :gastos="destaques.gastosDoMes"
-                        :total-despesas="saldos.despesas"
+                        :total-despesas="
+                            saldos?.despesas ?? fatura?.compras ?? 0
+                        "
                         :carteira-id="carteira.id"
+                        :titulo="ehCartao ? 'Gastos da fatura' : undefined"
                     />
                 </div>
             </div>
@@ -620,7 +656,8 @@ onMounted(() => {
                         "
                     />
                 </div>
-                <div class="grid gap-1 text-sm">
+                <!-- A card has no status, so no status filter (RN-223). -->
+                <div v-if="!ehCartao" class="grid gap-1 text-sm">
                     <span aria-hidden="true">Status</span>
                     <CampoSelecao
                         :model-value="filtros.status"
@@ -682,6 +719,14 @@ onMounted(() => {
                             :tipo="secao.tipo"
                             @editar="editar($event, secao.tipo)"
                         />
+                        <template v-if="secao.tipo === 'despesa'">
+                            <FaturaVinculadaItem
+                                v-for="linha in faturasVinculadas"
+                                :key="linha.chave"
+                                :fatura="linha"
+                                simples
+                            />
+                        </template>
                     </ul>
                 </section>
             </div>
@@ -752,6 +797,25 @@ onMounted(() => {
                             />
                         </ul>
                     </div>
+                    <div
+                        v-if="
+                            secao.tipo === 'despesa' &&
+                            faturasVinculadas.length > 0
+                        "
+                        class="grid gap-1"
+                    >
+                        <h3 class="text-xs text-muted-foreground">Cartões</h3>
+                        <ul
+                            class="divide-y overflow-hidden rounded-2xl border bg-card"
+                        >
+                            <FaturaVinculadaItem
+                                v-for="linha in faturasVinculadas"
+                                :key="linha.chave"
+                                :fatura="linha"
+                                @editar="editar($event, 'despesa')"
+                            />
+                        </ul>
+                    </div>
                 </section>
             </div>
         </div>
@@ -815,6 +879,8 @@ onMounted(() => {
             :hoje="hoje"
             :carteiras="carteiras"
             :categorias="categorias"
+            :cartoes="cartoes"
+            :fatura-fechada="emEdicao?.faturaFechada ?? false"
         />
 
         <PerguntaModoSimples :perguntar="perguntarModoSimples" />
@@ -829,8 +895,8 @@ onMounted(() => {
             :painel="painel"
             :quantidade="
                 painel === 'vencidas'
-                    ? (destaques?.vencidas.quantidade ?? 0)
-                    : (destaques?.proximas.quantidade ?? 0)
+                    ? (destaques?.vencidas?.quantidade ?? 0)
+                    : (destaques?.proximas?.quantidade ?? 0)
             "
             @fechar="painel = null"
         />
