@@ -82,7 +82,7 @@ it('CA-180.8 refuses moving a purchase to the card when the contact executed the
     cotaDeB($jantar)->forceFill(['executado' => true, 'executado_em' => now()])->save();
 
     salvarLancamento(['descricao' => 'Jantar', 'valor' => '80,00', 'data' => '2026-11-10'], comB: true, lancamento: $jantar)
-        ->assertSessionHasErrors(['rateio' => 'B já marcou a cota como executada. Valor e divisão não podem mudar.']);
+        ->assertSessionHasErrors(['rateio' => 'B já marcou a cota como paga. Valor e divisão não podem mudar.']);
 
     expect(cotaDeB($jantar)->carteira_id)->toBe($this->z->id)
         ->and($jantar->cotas()->where('user_id', $this->user->id)->sole()->carteira_id)->toBe($this->x->id);

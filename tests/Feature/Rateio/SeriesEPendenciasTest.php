@@ -85,7 +85,7 @@ it('CA-057.5 refuses converting a shared entry when the split of an executed sha
     $this->actingAs($this->a)->put(route('lancamentos.update', $lancamento), [
         ...dadosRateio($this->carteiraA, $this->mercado, 'iguais', $this->iguaisAB, ['valor' => '300,00']),
         'repeticao' => 'parcelado', 'periodicidade' => 'mensal', 'total_parcelas' => 3, 'modo_valor' => 'total',
-    ])->assertSessionHasErrors(['rateio' => 'Bruno já marcou a cota como executada. Valor e divisão não podem mudar.']);
+    ])->assertSessionHasErrors(['rateio' => 'Bruno já marcou a cota como paga. Valor e divisão não podem mudar.']);
 
     expect($lancamento->fresh()->parcelamento_id)->toBeNull()
         ->and(valoresDasCotas($lancamento))->toBe([$this->a->id => 15000, $this->b->id => 15000]);
@@ -239,7 +239,7 @@ it('CA-024.5 deletes nothing and lists the blocking entries', function () {
     $simples = lancamentoComCota($this->a, $this->outraA, $this->mercado, ['data' => '2026-11-12']);
 
     $this->actingAs($this->a)->delete(route('carteiras.destroy', $this->outraA), ['modo' => 'excluir'])
-        ->assertSessionHasErrors(['carteira' => 'Nada foi excluído. Estes lançamentos têm cota já executada por um participante: Jantar (20/11/2026).']);
+        ->assertSessionHasErrors(['carteira' => 'Nada foi excluído. Estes lançamentos têm cota já paga ou recebida por um participante: Jantar (20/11/2026).']);
 
     expect($this->outraA->fresh())->not->toBeNull()
         ->and($proprio->fresh())->not->toBeNull()

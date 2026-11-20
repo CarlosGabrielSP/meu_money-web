@@ -5,7 +5,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { centavosDe, formatarMoeda, mascararValor } from '@/lib/dinheiro';
 import { calcularCotas } from '@/lib/rateio';
-import type { ContatoOpcao, ModoRateio } from '@/types';
+import type { ContatoOpcao, ModoRateio, TipoLancamento } from '@/types';
 
 export type ParticipanteDivisao = {
     userId: number;
@@ -30,6 +30,8 @@ const props = defineProps<{
     bloqueado: boolean;
     /** Lock reason when it is not an executed share, e.g. a settled part (RN-258). */
     aviso?: string;
+    /** Names the executed share "paga" or "recebida" (DEC-093). */
+    tipo: TipoLancamento;
     erro?: string;
 }>();
 
@@ -132,7 +134,7 @@ function alternarAutor(incluir: boolean): void {
             <p v-if="bloqueado" class="text-sm text-muted-foreground">
                 {{
                     aviso ??
-                    'Um participante já marcou a cota como executada. Valor e divisão não podem mudar.'
+                    `Um participante já marcou a cota como ${tipo === 'receita' ? 'recebida' : 'paga'}. Valor e divisão não podem mudar.`
                 }}
             </p>
 

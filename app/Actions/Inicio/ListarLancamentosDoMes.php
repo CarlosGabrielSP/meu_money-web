@@ -101,7 +101,7 @@ class ListarLancamentosDoMes
 
         foreach ($grupos as $tipo => $doTipo) {
             foreach ($doTipo as $linha) {
-                $secoes[$tipo]['grupos'][] = $this->grupo($linha['grupo'], $linha['itens'], $totaisNoMes, $carteira->isCartao());
+                $secoes[$tipo]['grupos'][] = $this->grupo($linha['grupo'], $tipo, $linha['itens'], $totaisNoMes, $carteira->isCartao());
             }
         }
 
@@ -340,7 +340,7 @@ class ListarLancamentosDoMes
      * @param  Collection<int, mixed>|null  $totaisNoMes  shares of each group in the month without filters, when a filter is active
      * @return array<string, mixed>
      */
-    private function grupo(Grupo $grupo, array $itens, ?Collection $totaisNoMes, bool $noCartao = false): array
+    private function grupo(Grupo $grupo, string $tipo, array $itens, ?Collection $totaisNoMes, bool $noCartao = false): array
     {
         $executados = count(array_filter($itens, fn (array $item): bool => $item['executado'] === true));
 
@@ -348,6 +348,7 @@ class ListarLancamentosDoMes
             'chave' => "g{$grupo->id}",
             'id' => $grupo->id,
             'nome' => $grupo->nome,
+            'tipo' => $tipo,
             'quantidade' => count($itens),
             'valor' => array_sum(array_column($itens, 'valor')),
             'status' => match (true) {
@@ -378,6 +379,7 @@ class ListarLancamentosDoMes
             'lancamentoId' => $lancamento->id,
             'data' => $lancamento->data->toDateString(),
             'descricao' => $lancamento->descricao,
+            'tipo' => $lancamento->tipo->value,
             'categoria' => $cota?->categoria->nome,
             'categoriaIcone' => $cota?->categoria->icone->value,
             'valor' => $cota === null ? 0 : $cota->valor,

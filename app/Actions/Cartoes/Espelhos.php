@@ -122,7 +122,7 @@ class Espelhos
             ->whereKey(collect($lancamentoIds)->values()->all())
             ->whereNotNull('modo_rateio')
             ->with(['cotas:id,lancamento_id,user_id,carteira_id,fatura_id,executado', 'cotas.user:id,name'])
-            ->get(['id', 'user_id', 'carteira_id', 'modo_rateio']);
+            ->get(['id', 'user_id', 'carteira_id', 'tipo', 'modo_rateio']);
 
         if ($lancamentos->isEmpty()) {
             return [];
@@ -186,7 +186,7 @@ class Espelhos
             $nomes = collect($executaram)->unique()->join(', ', ' e ');
 
             throw ValidationException::withMessages([
-                'rateio' => "{$nomes} já marcou a cota como executada. Valor e divisão não podem mudar.",
+                'rateio' => "{$nomes} já marcou a cota como {$lancamentos->first()->tipo->executadaNaInterface()}. Valor e divisão não podem mudar.",
             ]);
         }
 

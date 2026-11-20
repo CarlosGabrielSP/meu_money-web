@@ -169,13 +169,10 @@ const mostrarAnexo = computed(
     () => !modoSimples.value || Boolean(props.edicao?.anexoNome),
 );
 
-const rotuloExecutado = computed(() => {
-    if (!modoSimples.value) {
-        return 'Executado';
-    }
-
-    return form.tipo === 'receita' ? 'Recebido' : 'Pago';
-});
+/** "Pago" or "Recebido" in both modes (RN-159, DEC-093). */
+const rotuloExecutado = computed(() =>
+    form.tipo === 'receita' ? 'Recebido' : 'Pago',
+);
 
 const rotuloValor = computed(() => {
     if (!form.repetir) {
@@ -459,6 +456,7 @@ function removerAnexo(): void {
                     <SerieAcoes
                         v-if="serie"
                         :serie="serie"
+                        :tipo="form.tipo"
                         :hoje="hoje"
                         :com-cota="edicao?.rateio?.autorParticipa ?? true"
                         :alteracoes-pendentes="form.isDirty"
@@ -687,6 +685,7 @@ function removerAnexo(): void {
                         :total="centavosDe(form.valor)"
                         :bloqueado="bloqueado"
                         :aviso="avisoDeQuitacao"
+                        :tipo="form.tipo"
                         :erro="erros.rateio"
                     />
 
@@ -808,6 +807,7 @@ function removerAnexo(): void {
         <EscopoSerieDialog
             :open="escolhendoEscopo !== null"
             :acao="escolhendoEscopo ?? 'editar'"
+            :tipo="form.tipo"
             :erro="erros.escopo ?? page.props.errors.lancamento"
             :processando="form.processing"
             @update:open="!$event && (escolhendoEscopo = null)"

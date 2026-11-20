@@ -135,7 +135,7 @@ function alternar(
                     >
                         <Checkbox
                             :model-value="linha.executado"
-                            :aria-label="`Executado: ${linha.descricao}`"
+                            :aria-label="`${linha.tipo === 'receita' ? 'Recebido' : 'Pago'}: ${linha.descricao}`"
                             @update:model-value="
                                 alternar(linha, $event === true)
                             "

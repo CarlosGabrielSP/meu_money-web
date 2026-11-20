@@ -68,9 +68,10 @@ class RemoverLancamentos
 
         if ($executaram->isNotEmpty()) {
             $nomes = $executaram->join(', ', ' e ');
+            $tipo = $lancamentos->firstWhere('id', $travadas->first()->lancamento_id)->tipo;
 
             throw ValidationException::withMessages([
-                'lancamento' => "{$nomes} já marcou a cota como executada. O lançamento não pode ser excluído.",
+                'lancamento' => "{$nomes} já marcou a cota como {$tipo->executadaNaInterface()}. O lançamento não pode ser excluído.",
             ]);
         }
 

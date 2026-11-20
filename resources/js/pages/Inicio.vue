@@ -231,7 +231,7 @@ const opcoesCategoria = computed<OpcaoSelecao<number>[]>(() => [
 
 const opcoesStatus: OpcaoSelecao<string>[] = [
     { valor: null, rotulo: 'Todos' },
-    { valor: 'executado', rotulo: 'Executado' },
+    { valor: 'executado', rotulo: 'Pago ou recebido' },
     { valor: 'pendente', rotulo: 'Pendente' },
 ];
 

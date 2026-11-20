@@ -10,12 +10,14 @@ import {
     DialogHeader,
     DialogTitle,
 } from '@/components/ui/dialog';
-import type { EscopoSerie } from '@/types';
+import type { EscopoSerie, TipoLancamento } from '@/types';
 
 const aberto = defineModel<boolean>('open', { required: true });
 
 const props = defineProps<{
     acao: 'editar' | 'excluir' | 'sair' | 'desagrupar';
+    /** Names the executed installments "pagas" or "recebidas" (DEC-093). */
+    tipo?: TipoLancamento;
     erro?: string;
     processando?: boolean;
 }>();
@@ -57,7 +59,9 @@ const opcoes: { valor: EscopoSerie; titulo: string }[] = [
                         as futuras deixam de entrar nele.
                     </template>
                     <template v-else>
-                        Parcelas já executadas não mudam nas opções em massa.
+                        Parcelas já
+                        {{ props.tipo === 'receita' ? 'recebidas' : 'pagas' }}
+                        não mudam nas opções em massa.
                     </template>
                 </DialogDescription>
             </DialogHeader>

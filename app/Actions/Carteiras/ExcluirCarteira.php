@@ -145,7 +145,7 @@ class ExcluirCarteira
                 ->join(', ');
 
             throw ValidationException::withMessages([
-                'carteira' => "Nada foi excluído. Estes lançamentos têm cota já executada por um participante: {$lista}.",
+                'carteira' => "Nada foi excluído. Estes lançamentos têm cota já paga ou recebida por um participante: {$lista}.",
             ]);
         }
 

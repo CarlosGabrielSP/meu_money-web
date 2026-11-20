@@ -198,13 +198,31 @@ it('CA-072.3 removes a participant and recalculates', function () {
     expect(valoresDasCotas($lancamento))->toBe([$this->a->id => 5000, $this->c->id => 5000]);
 });
 
+it('names the executed share of shared income "recebida" in the message (DEC-093)', function () {
+    $reembolso = Categoria::query()->globais()->where('nome', 'Reembolso')->sole();
+    $lancamento = ratear($this->a, $this->carteiraA, $reembolso, [['user_id' => $this->a->id], ['user_id' => $this->b->id]], ['tipo' => 'receita']);
+    $lancamento->cotas()->where('user_id', $this->b->id)->update(['executado' => true, 'executado_em' => now()]);
+
+    editarRateio($this->a, $lancamento, $this->carteiraA, $reembolso, [['user_id' => $this->a->id], ['user_id' => $this->b->id]], ['tipo' => 'receita', 'valor' => '120,00'])
+        ->assertSessionHasErrors(['rateio' => 'Bruno já marcou a cota como recebida. Valor e divisão não podem mudar.']);
+    $this->actingAs($this->a)->delete(route('lancamentos.destroy', $lancamento))
+        ->assertSessionHasErrors(['lancamento' => 'Bruno já marcou a cota como recebida. O lançamento não pode ser excluído.']);
+});
+
+it('sends the entry type of items and groups, for the "Pago" and "Recebido" labels (DEC-093)', function () {
+    ratear($this->a, $this->carteiraA, $this->mercado, [['user_id' => $this->a->id], ['user_id' => $this->b->id]]);
+
+    $this->actingAs($this->b)->get(route('home'))
+        ->assertInertia(fn (Assert $page) => $page->where('lancamentos.despesa.avista.0.tipo', 'despesa'));
+});
+
 it('CA-072.4 blocks amount and split changes after a participant executed, but allows description, date and note', function () {
     $lancamento = ratear($this->a, $this->carteiraA, $this->mercado, [['user_id' => $this->a->id], ['user_id' => $this->b->id]]);
     $lancamento->cotas()->where('user_id', $this->b->id)->update(['executado' => true, 'executado_em' => now()]);
     $participantes = [['user_id' => $this->a->id], ['user_id' => $this->b->id]];
 
     editarRateio($this->a, $lancamento, $this->carteiraA, $this->mercado, $participantes, ['valor' => '120,00'])
-        ->assertSessionHasErrors(['rateio' => 'Bruno já marcou a cota como executada. Valor e divisão não podem mudar.']);
+        ->assertSessionHasErrors(['rateio' => 'Bruno já marcou a cota como paga. Valor e divisão não podem mudar.']);
     editarRateio($this->a, $lancamento, $this->carteiraA, $this->mercado, [['user_id' => $this->a->id], ['user_id' => $this->b->id], ['user_id' => $this->c->id]])
         ->assertSessionHasErrors('rateio');
 
@@ -281,7 +299,7 @@ it('CA-074.2 blocks deletion naming the participant who executed', function () {
     $lancamento->cotas()->where('user_id', $this->b->id)->update(['executado' => true, 'executado_em' => now()]);
 
     $this->actingAs($this->a)->delete(route('lancamentos.destroy', $lancamento))
-        ->assertSessionHasErrors(['lancamento' => 'Bruno já marcou a cota como executada. O lançamento não pode ser excluído.']);
+        ->assertSessionHasErrors(['lancamento' => 'Bruno já marcou a cota como paga. O lançamento não pode ser excluído.']);
 
     expect($lancamento->fresh())->not->toBeNull();
 });

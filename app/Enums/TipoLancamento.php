@@ -21,6 +21,18 @@ enum TipoLancamento: string
     }
 
     /**
+     * How the interface names an executed share in messages: "paga" (expense) or "recebida"
+     * (income); "executada" stays a technical term (DEC-083, DEC-093).
+     */
+    public function executadaNaInterface(): string
+    {
+        return match ($this) {
+            self::Receita => 'recebida',
+            self::Despesa => 'paga',
+        };
+    }
+
+    /**
      * Initial status of a share when the user does not choose one (RN-013, DEC-025):
      * past dates are executed, future dates pending, and today only income is executed.
      */

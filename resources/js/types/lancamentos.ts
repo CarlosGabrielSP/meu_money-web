@@ -174,6 +174,7 @@ export type ItemLancamento = {
     lancamentoId: number;
     data: string;
     descricao: string;
+    tipo: TipoLancamento;
     categoria: string | null;
     /** Icon of the share category (RN-176); null for an author without a share. */
     categoriaIcone: string | null;
@@ -201,6 +202,7 @@ export type GrupoLinha = {
     chave: string;
     id: number;
     nome: string;
+    tipo: TipoLancamento;
     quantidade: number;
     valor: number;
     /** Null in a card, which has no status (RN-211). */

@@ -107,7 +107,7 @@ function excluir(): void {
                         ? 'indeterminate'
                         : grupo.status === 'executado'
                 "
-                :aria-label="`Executar grupo: ${grupo.nome}`"
+                :aria-label="`Marcar grupo como ${grupo.tipo === 'receita' ? 'recebido' : 'pago'}: ${grupo.nome}`"
                 data-tutorial="executado"
                 @update:model-value="executar"
             />
@@ -140,7 +140,10 @@ function excluir(): void {
                     >
                         <template v-if="grupo.status !== null">{{
                             {
-                                executado: 'Executado',
+                                executado:
+                                    grupo.tipo === 'receita'
+                                        ? 'Recebido'
+                                        : 'Pago',
                                 parcial: 'Parcial',
                                 pendente: 'Pendente',
                             }[grupo.status]

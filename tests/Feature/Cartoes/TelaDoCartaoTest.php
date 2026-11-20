@@ -427,7 +427,7 @@ it('RN-200 keeps installments of a closed invoice when the total of installments
 
     $this->actingAs($this->user)
         ->patch(route('parcelamentos.total', $serie), ['total_parcelas' => 2])
-        ->assertSessionHasErrors(['total_parcelas' => 'A parcela 3 já foi executada. O total não pode ficar abaixo dela.']);
+        ->assertSessionHasErrors(['total_parcelas' => 'A parcela 3 já foi paga. O total não pode ficar abaixo dela.']);
     $this->actingAs($this->user)->patch(route('parcelamentos.total', $serie), ['total_parcelas' => 3])->assertSessionHasNoErrors();
 
     expect($serie->lancamentos()->orderBy('numero_parcela')->pluck('numero_parcela')->all())->toBe([1, 2, 3]);

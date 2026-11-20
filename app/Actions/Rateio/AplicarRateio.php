@@ -137,7 +137,7 @@ class AplicarRateio
         $nomes = $outras->map(fn (Cota $cota): string => $cota->user->name)->join(', ', ' e ');
 
         throw ValidationException::withMessages([
-            'rateio' => "{$nomes} já marcou a cota como executada. Valor e divisão não podem mudar.",
+            'rateio' => "{$nomes} já marcou a cota como {$lancamento->tipo->executadaNaInterface()}. Valor e divisão não podem mudar.",
         ]);
     }
 

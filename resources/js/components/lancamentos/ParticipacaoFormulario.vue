@@ -133,15 +133,11 @@ const noEspelho = computed(
 const modoSimples = useModoSimples();
 
 /**
- * The simple mode names the status "Pago" or "Recebido" (RN-159).
+ * "Pago" or "Recebido" in both modes (RN-159, DEC-093).
  */
-const rotuloExecutado = computed(() => {
-    if (!modoSimples.value) {
-        return 'Executado';
-    }
-
-    return props.tipo === 'receita' ? 'Recebido' : 'Pago';
-});
+const rotuloExecutado = computed(() =>
+    props.tipo === 'receita' ? 'Recebido' : 'Pago',
+);
 </script>
 
 <template>
@@ -308,6 +304,7 @@ const rotuloExecutado = computed(() => {
         <EscopoSerieDialog
             v-model:open="escolhendoEscopo"
             acao="sair"
+            :tipo="tipo"
             :erro="page.props.errors.escopo ?? page.props.errors.cota"
             @confirmar="sair"
         />

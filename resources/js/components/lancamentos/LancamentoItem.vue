@@ -117,7 +117,7 @@ function alternar(marcado: boolean): void {
         <Checkbox
             v-else
             :model-value="item.executado"
-            :aria-label="`Executado: ${item.descricao}`"
+            :aria-label="`${item.tipo === 'receita' ? 'Recebido' : 'Pago'}: ${item.descricao}`"
             data-tutorial="executado"
             @update:model-value="alternar($event === true)"
         />

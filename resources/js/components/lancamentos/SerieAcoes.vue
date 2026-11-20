@@ -15,11 +15,13 @@ import {
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { encerrar, show, total } from '@/routes/parcelamentos';
-import type { SerieDaParcela } from '@/types';
+import type { SerieDaParcela, TipoLancamento } from '@/types';
 import { dataCompleta } from '@/lib/datas';
 
 const props = defineProps<{
     serie: SerieDaParcela;
+    /** Names the executed installments "pagas" or "recebidas" (DEC-093). */
+    tipo: TipoLancamento;
     hoje: string;
     /** False for an author without a share in the open installment (RN-087), who gets no link (RN-213). */
     comCota: boolean;
@@ -128,7 +130,8 @@ function confirmarTotal(): void {
                     <DialogTitle>Encerrar série</DialogTitle>
                     <DialogDescription>
                         Parcelas pendentes depois desta data serão removidas.
-                        Parcelas executadas ficam.
+                        Parcelas
+                        {{ tipo === 'receita' ? 'recebidas' : 'pagas' }} ficam.
                     </DialogDescription>
                 </DialogHeader>
                 <div class="grid gap-2">

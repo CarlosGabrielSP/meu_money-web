@@ -45,7 +45,7 @@ class AlterarTotalParcelas
 
             if ($total < $maiorExecutada) {
                 throw ValidationException::withMessages([
-                    'total_parcelas' => "A parcela {$maiorExecutada} já foi executada. O total não pode ficar abaixo dela.",
+                    'total_parcelas' => "A parcela {$maiorExecutada} já foi {$serie->tipo->executadaNaInterface()}. O total não pode ficar abaixo dela.",
                 ]);
             }
 
