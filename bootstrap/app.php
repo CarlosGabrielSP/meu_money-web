@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Middleware\BloquearIndexacao;
 use App\Http\Middleware\GarantirUsuarioAtivo;
 use App\Http\Middleware\HandleAppearance;
 use App\Http\Middleware\HandleInertiaRequests;
@@ -19,6 +20,8 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->encryptCookies(except: ['appearance', 'sidebar_state']);
 
         $middleware->web(append: [
+            BloquearIndexacao::class,
+            'throttle:geral',
             HandleAppearance::class,
             HandleInertiaRequests::class,
             GarantirUsuarioAtivo::class,
