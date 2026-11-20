@@ -2,6 +2,7 @@
 
 namespace App\Actions\Inicio;
 
+use App\Enums\OrigemQuitacao;
 use App\Enums\TipoLancamento;
 use App\Models\Carteira;
 use App\Models\Categoria;
@@ -10,6 +11,7 @@ use App\Models\Fatura;
 use App\Models\Grupo;
 use App\Models\Lancamento;
 use App\Models\Parcelamento;
+use App\Models\QuitacaoContato;
 use App\Models\User;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Builder;
@@ -29,7 +31,8 @@ class ListarLancamentosDoMes
      * each with the icon of its category (RN-176),
      * plus entries the user authored in this wallet without a share of their own (RN-145).
      *
-     * The author gets edit data with the split (RF-072); a participant gets the data of their own
+     * The author gets edit data with the split (RF-072), locked when a participant executed a share or a
+     * contact's part was settled, with the names of those contacts (RN-250, nota 07); a participant gets the data of their own
      * share, the total and the author (RF-071). Recurring installments show only their number (RN-050).
      *
      * Grouped shares leave the other subsections and form one row per group in "Grupos", with the
@@ -141,7 +144,7 @@ class ListarLancamentosDoMes
         $relacoes = [
             'parcelamento:id,categoria_id,total_parcelas,dia_vencimento,encerrado_em',
             'user:id,name',
-            'cotas:id,lancamento_id,user_id,categoria_id,valor,percentual,executado',
+            'cotas:id,lancamento_id,user_id,fatura_id,categoria_id,valor,percentual,executado',
             'cotas.user:id,name',
         ];
 
@@ -175,6 +178,8 @@ class ListarLancamentosDoMes
                 ->when($filtros['tipo'], fn ($query, string $tipo) => $query->where('tipo', $tipo))
                 ->with($relacoes)
                 ->get();
+
+        Cota::marcarQuitadas($cotas->flatMap(fn (Cota $cota) => $cota->lancamento->cotas)->concat($semCota->flatMap->cotas));
 
         return $cotas->map(fn (Cota $cota): array => [$cota->lancamento, $cota])
             ->concat($semCota->map(fn (Lancamento $lancamento): array => [$lancamento, null]))
@@ -220,12 +225,13 @@ class ListarLancamentosDoMes
                 'fatura.carteira.cartao:id,carteira_id,dia_vencimento,dias_fechamento,competencia',
                 'lancamento.parcelamento:id,categoria_id,total_parcelas,dia_vencimento,encerrado_em',
                 'lancamento.user:id,name',
-                'lancamento.cotas:id,lancamento_id,user_id,categoria_id,valor,percentual,executado',
+                'lancamento.cotas:id,lancamento_id,user_id,fatura_id,categoria_id,valor,percentual,executado',
                 'lancamento.cotas.user:id,name',
             ])
             ->orderBy('lancamentos.data')
             ->orderBy('lancamentos.id')
             ->get();
+        Cota::marcarQuitadas($cotas->flatMap(fn (Cota $cota) => $cota->lancamento->cotas));
 
         return array_values($cotas
             ->groupBy('fatura_id')
@@ -256,6 +262,50 @@ class ListarLancamentosDoMes
                 ];
             })
             ->sortBy(fn (array $linha): array => [$linha['vencimento'], $linha['nome']])
+            ->all());
+    }
+
+    /**
+     * The "a receber" items of a common wallet in the month (RN-216 to RN-218, RN-242, RN-243, RN-265):
+     * one per settlement of origin `autor` paid from the wallet, in the month of the payment date, with
+     * the contact's name, the total, what was received and whether a manual receipt exists. With any
+     * filter active, except type = income, there are none. They never enter the month totals.
+     *
+     * @param  array{tipo: string|null, categoria: int|null, status: string|null, compartilhado: string|null}  $filtros
+     * @return list<array{chave: string, id: int, data: string, nome: string, valor: int, recebido: int, manual: bool}>
+     */
+    public function aReceber(Carteira $carteira, CarbonImmutable $mes, array $filtros): array
+    {
+        $outros = array_filter([$filtros['categoria'], $filtros['status'], $filtros['compartilhado']], fn (mixed $valor): bool => $valor !== null);
+
+        if ($carteira->isCartao() || $outros !== [] || ($filtros['tipo'] !== null && $filtros['tipo'] !== 'receita')) {
+            return [];
+        }
+
+        [$inicio, $fim] = $this->limites($mes);
+
+        return array_values(QuitacaoContato::query()
+            ->join('pagamentos_fatura', 'pagamentos_fatura.id', '=', 'quitacoes_contato.pagamento_fatura_id')
+            ->join('users', 'users.id', '=', 'quitacoes_contato.contato_id')
+            ->where('pagamentos_fatura.carteira_id', $carteira->id)
+            ->where('quitacoes_contato.origem', OrigemQuitacao::Autor->value)
+            ->where('pagamentos_fatura.data', '>=', $inicio)
+            ->where('pagamentos_fatura.data', '<', $fim)
+            ->select(['quitacoes_contato.*', 'pagamentos_fatura.data as data_pagamento', 'users.name as nome_contato'])
+            ->withSum('recebimentos', 'valor')
+            ->withExists(['recebimentos as tem_manual' => fn (Builder $query) => $query->whereNull('pagamento_fatura_id')])
+            ->orderBy('pagamentos_fatura.data')
+            ->orderBy('quitacoes_contato.id')
+            ->get()
+            ->map(fn (QuitacaoContato $quitacao): array => [
+                'chave' => "r{$quitacao->id}",
+                'id' => $quitacao->id,
+                'data' => CarbonImmutable::parse($quitacao->getAttribute('data_pagamento'))->toDateString(),
+                'nome' => (string) $quitacao->getAttribute('nome_contato'),
+                'valor' => $quitacao->valor,
+                'recebido' => (int) $quitacao->getAttribute('recebimentos_sum_valor'),
+                'manual' => (bool) $quitacao->getAttribute('tem_manual'),
+            ])
             ->all());
     }
 
@@ -366,7 +416,8 @@ class ListarLancamentosDoMes
                 'rateio' => $lancamento->modo_rateio === null ? null : [
                     'modo' => $lancamento->modo_rateio->value,
                     'autorParticipa' => $cota !== null,
-                    'bloqueado' => $lancamento->cotas->contains(fn (Cota $outra): bool => $outra->user_id !== $user->id && $outra->executado),
+                    'bloqueado' => $lancamento->cotas->contains(fn (Cota $outra): bool => $outra->user_id !== $user->id && ($outra->executado || $outra->isQuitada())),
+                    'avisoQuitacao' => $this->avisoQuitacao($user, $lancamento),
                     'participantes' => $lancamento->cotas->sortBy('id')->values()->map(fn (Cota $outra): array => [
                         'userId' => $outra->user_id,
                         'nome' => $outra->user->name,
@@ -384,6 +435,19 @@ class ListarLancamentosDoMes
                 'anexoNome' => $lancamento->anexo_nome,
             ],
         ];
+    }
+
+    /**
+     * Lock hint of a purchase whose contacts' parts were settled, the server message of RN-258; null
+     * when none was (RN-250, nota 07).
+     */
+    private function avisoQuitacao(User $user, Lancamento $lancamento): ?string
+    {
+        $nomes = $lancamento->cotas
+            ->filter(fn (Cota $outra): bool => $outra->user_id !== $user->id && $outra->isQuitada())
+            ->map(fn (Cota $outra): string => $outra->user->name);
+
+        return $nomes->isEmpty() ? null : QuitacaoContato::mensagemDeTrava($nomes);
     }
 
     /**

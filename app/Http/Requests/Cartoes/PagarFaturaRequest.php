@@ -26,15 +26,21 @@ class PagarFaturaRequest extends FormRequest
     }
 
     /**
-     * Amount above zero, no minimum; date until today, never future (RN-195, RN-222, CA-165.2).
+     * Amount above zero, no minimum; date until today, never future (RN-195, RN-222, CA-165.2). With
+     * a marked contact the typed amount may be empty or zero; the payment, typed amount plus the
+     * marked parts, is checked above zero when paying (RN-264).
      *
      * @return array<string, ValidationRule|array<mixed>|string>
      */
     public function rules(): array
     {
+        $comContatos = array_filter((array) $this->input('contatos', [])) !== [];
+
         return [
-            'valor' => ['required', 'integer', 'min:1', 'max:'.SalvarLancamentoRequest::VALOR_MAXIMO],
+            'valor' => [$comContatos ? 'nullable' : 'required', 'integer', $comContatos ? 'min:0' : 'min:1', 'max:'.SalvarLancamentoRequest::VALOR_MAXIMO],
             'data' => ['required', 'date_format:Y-m-d', 'before_or_equal:'.CarbonImmutable::today()->toDateString()],
+            'contatos' => ['nullable', 'array'],
+            'contatos.*' => ['integer', 'distinct'],
         ];
     }
 

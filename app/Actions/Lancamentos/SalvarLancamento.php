@@ -30,21 +30,22 @@ class SalvarLancamento
      * A new attachment replaces the previous one, whose file is removed only after the save commits (CA-044.2).
      * $depois runs inside the same transaction with the saved entry (series creation, mass edits).
      * Shares in cards then enter the invoice of the date and lose the status; shares that left a card
-     * get the status by date (RN-192, RN-194, RN-228).
+     * get the status by date (RN-192, RN-194, RN-228). A settled contact part that would change invoice
+     * fails on $campoDaQuitacao (RN-258, RN-263).
      *
      * @param  (Closure(Lancamento): void)|null  $depois
      * @param  array{tipo: TipoLancamento, descricao: string, valor: int, data: string, categoria_id: int, carteira_id: int, observacao: string|null, executado: bool|null, rateio?: array{modo: ModoRateio, participantes: list<array{user_id: int, percentual: string|null, valor: int|null}>}|null}  $dados
      *
      * @throws Throwable
      */
-    public function handle(User $autor, array $dados, ?UploadedFile $anexo = null, ?Lancamento $lancamento = null, ?Closure $depois = null): Lancamento
+    public function handle(User $autor, array $dados, ?UploadedFile $anexo = null, ?Lancamento $lancamento = null, ?Closure $depois = null, string $campoDaQuitacao = 'data'): Lancamento
     {
         $lancamento ??= new Lancamento;
         $anexoAnterior = $lancamento->anexo_caminho;
         $novoAnexo = $anexo?->store("anexos/{$autor->id}", 'local');
 
         try {
-            DB::transaction(function () use ($autor, $dados, $anexo, $novoAnexo, $lancamento, $depois): void {
+            DB::transaction(function () use ($autor, $dados, $anexo, $novoAnexo, $lancamento, $depois, $campoDaQuitacao): void {
                 $lancamento->user_id ??= $autor->id;
                 $lancamento->carteira_id = $dados['carteira_id'];
                 $lancamento->fill([
@@ -72,7 +73,7 @@ class SalvarLancamento
                     'executado' => $dados['executado'],
                 ]);
 
-                $this->atribuirFaturas->porLancamentos([$lancamento->id], $autor);
+                $this->atribuirFaturas->porLancamentos([$lancamento->id], $autor, campoDaQuitacao: $campoDaQuitacao);
 
                 if ($depois !== null) {
                     $depois($lancamento);

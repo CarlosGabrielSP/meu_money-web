@@ -4,7 +4,6 @@ namespace App\Actions\Cartoes;
 
 use App\Enums\OrigemQuitacao;
 use App\Models\Carteira;
-use App\Models\Cota;
 use App\Models\Fatura;
 use App\Models\PagamentoFatura;
 use App\Models\QuitacaoContato;
@@ -18,7 +17,10 @@ class FaturaDoMes
      */
     private ?FaturasDoCartao $calendario = null;
 
-    public function __construct(private CalcularFaturas $calcularFaturas) {}
+    public function __construct(
+        private CalcularFaturas $calcularFaturas,
+        private PartesDaFatura $partesDaFatura,
+    ) {}
 
     /**
      * The invoice card of the card screen for the invoice of the competence month (RN-198, RN-221,
@@ -32,10 +34,11 @@ class FaturaDoMes
      * With contacts (RN-202, RN-239, RN-244, RN-257): to pay includes the contacts' parts, purchases and
      * income are the user's own part with the contacts' parts apart, and "partes" lists the author ("Você") and each contact with part,
      * settled (by the contact and by the author) and open; it is empty when no purchase of the invoice
-     * is shared. A mirror never edits its dates (RN-238).
+     * is shared. A mirror never edits its dates (RN-238). "aPagarAutor" is the to pay without the
+     * contacts' open parts, the amount the "Pagar" form suggests (S3, RN-245).
      *
-     * @param  array<int, list<array{fatura: Fatura, compras: int, receitas: int, comprasContatos: int, receitasContatos: int, quitadoPeloAutor: int, pagamentos: int, saldoAnterior: int, aPagar: int}>>|null  $faturas  CalcularFaturas, to reuse in the request
-     * @return array{id: int|null, referencia: string, competencia: string, estado: string, inicio: string, fechamento: string, vencimento: string, saldoAnterior: int, compras: int, receitas: int, comprasContatos: int, receitasContatos: int, pagamentos: int, aPagar: int, editavel: bool, limites: array{fechamentoMin: string, fechamentoMax: string, vencimentoMin: string, vencimentoMax: string}, pagaPor: string|null, pagamentosLista: list<array{id: int, data: string, valor: int, origem: string|null}>, partes: list<array{userId: int, nome: string, voce: bool, parte: int, quitadoPeloContato: int, quitadoPeloAutor: int, aberto: int}>}
+     * @param  array<int, list<array{fatura: Fatura, compras: int, receitas: int, comprasContatos: int, receitasContatos: int, quitadoPeloAutor: int, pagamentos: int, saldoAnterior: int, aPagar: int, aPagarAutor: int}>>|null  $faturas  CalcularFaturas, to reuse in the request
+     * @return array{id: int|null, referencia: string, competencia: string, estado: string, inicio: string, fechamento: string, vencimento: string, saldoAnterior: int, compras: int, receitas: int, comprasContatos: int, receitasContatos: int, pagamentos: int, aPagar: int, aPagarAutor: int, editavel: bool, limites: array{fechamentoMin: string, fechamentoMax: string, vencimentoMin: string, vencimentoMax: string}, pagaPor: string|null, pagamentosLista: list<array{id: int, data: string, valor: int, origem: string|null}>, partes: list<array{userId: int, nome: string, voce: bool, parte: int, quitadoPeloContato: int, quitadoPeloAutor: int, aberto: int}>}
      */
     public function handle(User $user, Carteira $cartao, CarbonImmutable $mes, CarbonImmutable $hoje, ?array $faturas = null): array
     {
@@ -47,6 +50,7 @@ class FaturaDoMes
         $linhas = ($faturas ?? $this->calcularFaturas->handle($user, [$cartao->id]))[$cartao->id] ?? [];
         $linha = collect($linhas)->first(fn (array $linha): bool => $linha['fatura']->id === $fatura->id);
         $aPagar = $linha['aPagar'] ?? CalcularFaturas::aPagarNoMes($linhas, $referencia);
+        $aPagarAutor = $linha['aPagarAutor'] ?? CalcularFaturas::aPagarNoMes($linhas, $referencia, doAutor: true);
         [$janelaInicio, $janelaFim] = $calendario->cartao->janelaDeDatas($fatura->referencia);
 
         return [
@@ -64,6 +68,7 @@ class FaturaDoMes
             'receitasContatos' => $linha['receitasContatos'] ?? 0,
             'pagamentos' => $linha['pagamentos'] ?? 0,
             'aPagar' => $aPagar,
+            'aPagarAutor' => $aPagarAutor,
             'editavel' => $calendario->origem === null && ! $fatura->isFechada($hoje),
             // Date picker limits (RN-193); the due date also starts at the chosen closing.
             'limites' => [
@@ -89,19 +94,7 @@ class FaturaDoMes
      */
     private function partes(User $user, Fatura $fatura, array $linha): array
     {
-        $partes = Cota::query()
-            ->join('lancamentos', 'lancamentos.id', '=', 'cotas.lancamento_id')
-            ->join('faturas as do_espelho', 'do_espelho.id', '=', 'cotas.fatura_id')
-            ->join('cartoes as espelho', 'espelho.carteira_id', '=', 'do_espelho.carteira_id')
-            ->join('users', 'users.id', '=', 'cotas.user_id')
-            ->where('espelho.cartao_origem_id', $fatura->carteira_id)
-            ->where('do_espelho.referencia', $fatura->referencia)
-            ->where('lancamentos.user_id', $user->id)
-            ->groupBy('cotas.user_id', 'users.name')
-            ->selectRaw("cotas.user_id, users.name, sum(case when lancamentos.tipo = 'despesa' then cotas.valor else -cotas.valor end) as parte")
-            ->orderBy('users.name')
-            ->toBase()
-            ->get();
+        $partes = $this->partesDaFatura->partes($fatura, $user->id);
 
         if ($partes->isEmpty()) {
             return [];
@@ -127,18 +120,18 @@ class FaturaDoMes
         ]];
 
         foreach ($partes as $parte) {
-            $doContato = collect($quitado->get($parte->user_id, []))->pluck('total', 'origem');
+            $doContato = collect($quitado->get($parte['user_id'], []))->pluck('total', 'origem');
             $peloContato = (int) $doContato->get(OrigemQuitacao::Contato->value, 0);
             $peloAutor = (int) $doContato->get(OrigemQuitacao::Autor->value, 0);
 
             $linhas[] = [
-                'userId' => (int) $parte->user_id,
-                'nome' => (string) $parte->name,
+                'userId' => $parte['user_id'],
+                'nome' => $parte['name'],
                 'voce' => false,
-                'parte' => (int) $parte->parte,
+                'parte' => $parte['parte'],
                 'quitadoPeloContato' => $peloContato,
                 'quitadoPeloAutor' => $peloAutor,
-                'aberto' => (int) $parte->parte - $peloContato - $peloAutor,
+                'aberto' => $parte['parte'] - $peloContato - $peloAutor,
             ];
         }
 

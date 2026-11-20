@@ -10,6 +10,7 @@ use App\Models\Carteira;
 use App\Models\Cota;
 use App\Models\Fatura;
 use App\Models\Lancamento;
+use App\Models\QuitacaoContato;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection;
@@ -104,7 +105,8 @@ class Espelhos
      * Contact shares follow the wallet of the entry (RN-203, RN-254): in a card of the author they go
      * to the contact's mirror of that card (created when needed); in a common wallet a share that was
      * in a mirror goes to the mirror's linked wallet. A share the contact already marked as executed
-     * cannot enter a mirror (RN-089); every share is checked before any moves. Shares that change
+     * cannot enter a mirror (RN-089), and a share whose part was settled never moves (RN-254, RN-258);
+     * every share is checked before any moves. Shares that change
      * wallet leave their group (RN-130, RN-261 b).
      * The invoice and status follow afterwards (AtribuirFaturas).
      *
@@ -118,12 +120,14 @@ class Espelhos
         $lancamentos = Lancamento::query()
             ->whereKey(collect($lancamentoIds)->values()->all())
             ->whereNotNull('modo_rateio')
-            ->with(['cotas:id,lancamento_id,user_id,carteira_id,executado', 'cotas.user:id,name'])
+            ->with(['cotas:id,lancamento_id,user_id,carteira_id,fatura_id,executado', 'cotas.user:id,name'])
             ->get(['id', 'user_id', 'carteira_id', 'modo_rateio']);
 
         if ($lancamentos->isEmpty()) {
             return [];
         }
+
+        Cota::marcarQuitadas($lancamentos->flatMap->cotas);
 
         $carteiraDe = fn (Lancamento $lancamento): int => $lancamento->cotas->firstWhere('user_id', $lancamento->user_id)->carteira_id ?? $lancamento->carteira_id;
         $carteiras = Carteira::query()
@@ -133,6 +137,7 @@ class Espelhos
             ->keyBy('id');
         $deixadas = [];
         $executaram = [];
+        $quitadas = [];
         $mudancas = [];
 
         foreach ($lancamentos as $lancamento) {
@@ -156,6 +161,12 @@ class Espelhos
                     continue;
                 }
 
+                if ($cota->isQuitada()) {
+                    $quitadas[] = $cota->user->name;
+
+                    continue;
+                }
+
                 if ($doLancamento->isCartao() && $cota->executado) {
                     $executaram[] = $cota->user->name;
 
@@ -164,6 +175,10 @@ class Espelhos
 
                 $mudancas[] = [$cota, $alvo];
             }
+        }
+
+        if ($quitadas !== []) {
+            throw ValidationException::withMessages(['rateio' => QuitacaoContato::mensagemDeTrava($quitadas)]);
         }
 
         if ($executaram !== []) {

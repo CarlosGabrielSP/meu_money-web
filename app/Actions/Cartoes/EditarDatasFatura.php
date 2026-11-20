@@ -23,7 +23,8 @@ class EditarDatasFatura
      * (/code-review da Fase 14). Both dates stay in the months of the competence window, and the due
      * date stays between the due dates of the previous and the next invoice (RN-193). The mirrors of
      * the card copy the new dates and their shares move the same way (RN-238); a mirror's own dates
-     * never change (CA-181.4).
+     * never change (CA-181.4). A change that would move a contact's settled share to another invoice
+     * is refused (RN-260).
      *
      * @throws ValidationException
      */
@@ -83,7 +84,7 @@ class EditarDatasFatura
             $fatura->save();
 
             $this->espelhos->copiarDatas($cartao, $hoje);
-            $this->atribuirFaturas->handle($cotas, permitirFechadas: true);
+            $this->atribuirFaturas->handle($cotas, permitirFechadas: true, campoDaQuitacao: 'fechamento');
         });
     }
 

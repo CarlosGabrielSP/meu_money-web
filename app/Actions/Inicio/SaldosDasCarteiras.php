@@ -26,7 +26,7 @@ class SaldosDasCarteiras
      * constant number of queries whatever the number of wallets (RNF-030).
      *
      * @param  array<int, list<array{fatura: Fatura, aPagar: int}>>|null  $faturas  CalcularFaturas, to reuse in the request
-     * @param  array<int, array{pagamentosAte: int, aPagar: int}>|null  $vinculados  SaldosVinculados of the month, to reuse
+     * @param  array<int, array{pagamentosAte: int, aPagar: int, quitacoesAte: int, recebimentosAte: int}>|null  $vinculados  SaldosVinculados of the month, to reuse
      * @return array<int, int> amount in cents by wallet id
      */
     public function handle(User $user, CarbonImmutable $mes, ?array $faturas = null, ?array $vinculados = null): array
@@ -51,10 +51,11 @@ class SaldosDasCarteiras
      * Current and estimated accumulated balance of every common wallet of the user until the last day
      * of the month, in one grouped query plus the card changes (RN-021, RN-022, RN-186, RN-196): the
      * current balance loses the invoice payments and the estimated one also what the invoices still
-     * have to pay (data model 05, R5). A wallet without shares gets 0; cards get 0 here, since their
+     * have to pay (data model 05, R5). With contacts, the current balance gains the receipts of the
+     * "a receber" items and the estimated one their total (RN-245). A wallet without shares gets 0; cards get 0 here, since their
      * balance is the invoice (RN-225, RN-227).
      *
-     * @param  array<int, array{pagamentosAte: int, aPagar: int}>|null  $vinculados  SaldosVinculados of the month, to reuse
+     * @param  array<int, array{pagamentosAte: int, aPagar: int, quitacoesAte: int, recebimentosAte: int}>|null  $vinculados  SaldosVinculados of the month, to reuse
      * @return array<int, array{atual: int, estimado: int}> balances in cents by wallet id
      */
     public function atuaisEEstimados(User $user, CarbonImmutable $mes, ?array $vinculados = null): array
@@ -81,11 +82,11 @@ class SaldosDasCarteiras
                     return [(int) $carteira->id => ['atual' => 0, 'estimado' => 0]];
                 }
 
-                $doCartao = $cartoes[(int) $carteira->id] ?? ['pagamentosAte' => 0, 'aPagar' => 0];
+                $doCartao = $cartoes[(int) $carteira->id] ?? ['pagamentosAte' => 0, 'aPagar' => 0, 'quitacoesAte' => 0, 'recebimentosAte' => 0];
 
                 return [(int) $carteira->id => [
-                    'atual' => (int) $carteira->atual - $doCartao['pagamentosAte'],
-                    'estimado' => (int) $carteira->estimado - $doCartao['pagamentosAte'] - $doCartao['aPagar'],
+                    'atual' => (int) $carteira->atual - $doCartao['pagamentosAte'] + $doCartao['recebimentosAte'],
+                    'estimado' => (int) $carteira->estimado - $doCartao['pagamentosAte'] - $doCartao['aPagar'] + $doCartao['quitacoesAte'],
                 ]];
             })
             ->all();

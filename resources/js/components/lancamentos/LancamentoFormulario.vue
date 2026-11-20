@@ -122,8 +122,16 @@ const bloqueado = computed(
 );
 
 /**
- * In a card: no status, no split with contacts until Fase 15, and a hint with the invoice due date
- * (RN-194, RN-231, nota 07).
+ * A contact's part in the author's invoice was settled: amount and split are read only and the entry
+ * is not deleted until the payment is (RN-250, RN-258, nota 07).
+ */
+const avisoDeQuitacao = computed(
+    () => props.edicao?.rateio?.avisoQuitacao ?? undefined,
+);
+
+/**
+ * In a card: no status, the split goes to the contacts' mirrors (RN-251), and a hint with the
+ * invoice due date (RN-194, nota 07).
  */
 const cartaoEscolhido = computed(
     () => props.cartoes?.[String(form.carteira_id)] ?? null,
@@ -267,9 +275,7 @@ function paraEnvio({
             : {}),
         ...(serie.value ? { dia_vencimento, escopo } : {}),
         ...(cartaoEscolhido.value !== null ? { executado: null } : {}),
-        ...(divisao.value.ativa && cartaoEscolhido.value === null
-            ? { rateio: rateioParaEnvio() }
-            : {}),
+        ...(divisao.value.ativa ? { rateio: rateioParaEnvio() } : {}),
     };
 }
 
@@ -673,24 +679,14 @@ function removerAnexo(): void {
                         anexo podem mudar.
                     </p>
 
-                    <label
-                        v-if="mostrarDividir && cartaoEscolhido"
-                        class="grid gap-1 text-sm text-muted-foreground"
-                    >
-                        <span class="flex items-center gap-2">
-                            <Checkbox :model-value="false" disabled />
-                            Dividir
-                        </span>
-                        Ainda não é possível dividir compras do cartão com
-                        contatos.
-                    </label>
                     <DividirCampos
-                        v-else-if="mostrarDividir"
+                        v-if="mostrarDividir"
                         v-model="divisao"
                         :contatos="contatos"
                         :autor-id="autorId"
                         :total="centavosDe(form.valor)"
                         :bloqueado="bloqueado"
+                        :aviso="avisoDeQuitacao"
                         :erro="erros.rateio"
                     />
 
@@ -775,7 +771,11 @@ function removerAnexo(): void {
                             Salvar e adicionar outro
                         </Button>
                         <Button
-                            v-if="editando && !faturaFechada"
+                            v-if="
+                                editando &&
+                                !faturaFechada &&
+                                avisoDeQuitacao === undefined
+                            "
                             type="button"
                             variant="destructive"
                             class="ml-auto"

@@ -44,7 +44,8 @@ class SalvarCartao
      * already made keep their wallet. A new competence rule only renames the invoices; no data
      * changes (RN-253, CA-177.8). The mirrors of the card copy due day, closing days, competence rule
      * and invoice dates, and their shares move the same way (RN-238, CA-181.3). A mirror's own due
-     * day, closing days and competence rule never change here (the request keeps them).
+     * day, closing days and competence rule never change here (the request keeps them). A change that
+     * would move a contact's settled share to another invoice is refused (RN-260).
      *
      * @param  array{dia_vencimento: int, dias_fechamento: int, competencia: CompetenciaFatura, carteira_vinculada_id: int|null}  $dados
      */
@@ -86,7 +87,7 @@ class SalvarCartao
 
             $this->garantirOrdem($carteira, $abertaAntes, $hoje);
             $this->espelhos->copiarDatas($carteira, $hoje);
-            $this->atribuirFaturas->handle($cotas, permitirFechadas: true);
+            $this->atribuirFaturas->handle($cotas, permitirFechadas: true, campoDaQuitacao: 'dia_vencimento');
         });
     }
 

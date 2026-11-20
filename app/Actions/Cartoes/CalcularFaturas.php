@@ -114,11 +114,11 @@ class CalcularFaturas
 
     /**
      * To pay of the invoice due in the month: the stored one, else the balance left by the last one
-     * before it (RN-195).
+     * before it (RN-195). $doAutor picks the author's own to pay, without the contacts' open parts (RN-245).
      *
-     * @param  list<array{fatura: Fatura, aPagar: int}>  $faturas  of one card, by reference month
+     * @param  list<array{fatura: Fatura, aPagar: int, aPagarAutor?: int}>  $faturas  of one card, by reference month
      */
-    public static function aPagarNoMes(array $faturas, CarbonImmutable $referencia): int
+    public static function aPagarNoMes(array $faturas, CarbonImmutable $referencia, bool $doAutor = false): int
     {
         $aPagar = 0;
 
@@ -127,7 +127,7 @@ class CalcularFaturas
                 break;
             }
 
-            $aPagar = $linha['aPagar'];
+            $aPagar = $doAutor ? ($linha['aPagarAutor'] ?? 0) : $linha['aPagar'];
         }
 
         return $aPagar;

@@ -7,6 +7,7 @@ use App\Enums\ModoRateio;
 use App\Models\Categoria;
 use App\Models\Cota;
 use App\Models\Lancamento;
+use App\Models\QuitacaoContato;
 use Carbon\CarbonImmutable;
 use Illuminate\Validation\ValidationException;
 
@@ -28,8 +29,9 @@ class AplicarRateio
      * to another wallet leaves its group (RN-130). A mirror left without shares and payments is
      * deleted (RN-237, CA-182.5).
      *
-     * When a participant already executed a share, or has it in a closed card invoice, amounts and
-     * split cannot change (RN-089, RN-200); internal
+     * When a participant already executed a share, or has it in a closed card invoice, or a contact's
+     * part in the author's invoice was settled, amounts and split cannot change (RN-089, RN-200,
+     * RN-250, with the message of RN-258); internal
      * recalculations of a brand new series skip that check.
      *
      * @param  list<array{user_id: int, percentual: string|null, valor: int|null}>  $participantes
@@ -48,6 +50,7 @@ class AplicarRateio
         $modo = $semRateio ? null : $modo;
 
         $atuais = $lancamento->cotas()->with(['user:id,name', 'fatura'])->lockForUpdate()->get()->keyBy('user_id');
+        Cota::marcarQuitadas($atuais);
 
         if ($verificarExecutadas) {
             $this->impedirMudancaComExecutadas($lancamento, $modo, $atuais->all(), $novas);
@@ -119,13 +122,23 @@ class AplicarRateio
             || collect($novas)->contains(fn (array $nova, int $userId): bool => $atuais[$userId]->valor !== $nova['valor']
                 || $this->percentual($atuais[$userId]->percentual) !== $this->percentual($nova['percentual']));
 
-        if ($mudou) {
-            $nomes = $executaram->map(fn (Cota $cota): string => $cota->user->name)->join(', ', ' e ');
+        if (! $mudou) {
+            return;
+        }
 
+        [$quitadas, $outras] = $executaram->partition(fn (Cota $cota): bool => $cota->isQuitada());
+
+        if ($quitadas->isNotEmpty()) {
             throw ValidationException::withMessages([
-                'rateio' => "{$nomes} já marcou a cota como executada. Valor e divisão não podem mudar.",
+                'rateio' => QuitacaoContato::mensagemDeTrava($quitadas->map(fn (Cota $cota): string => $cota->user->name)),
             ]);
         }
+
+        $nomes = $outras->map(fn (Cota $cota): string => $cota->user->name)->join(', ', ' e ');
+
+        throw ValidationException::withMessages([
+            'rateio' => "{$nomes} já marcou a cota como executada. Valor e divisão não podem mudar.",
+        ]);
     }
 
     private function percentual(?string $percentual): ?int

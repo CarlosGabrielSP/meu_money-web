@@ -5,6 +5,7 @@ namespace App\Actions\Series;
 use App\Actions\Lancamentos\RemoverLancamentos;
 use App\Models\Cota;
 use App\Models\Parcelamento;
+use App\Models\QuitacaoContato;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
@@ -21,7 +22,8 @@ class AlterarTotalParcelas
      * Change the number of installments (RN-058): more installments are added at the end with the
      * model amount; fewer removes pending installments from the end, never below the highest
      * executed number (CA-056.1 to CA-056.3). An author installment in a closed card invoice counts as
-     * executed (RN-200). Shares are locked before the check.
+     * executed (RN-200). Shares are locked before the check. An installment to remove with a settled
+     * contact part fails on the total, with the message of RN-258 (RN-250).
      *
      * @throws ValidationException
      */
@@ -44,6 +46,19 @@ class AlterarTotalParcelas
             if ($total < $maiorExecutada) {
                 throw ValidationException::withMessages([
                     'total_parcelas' => "A parcela {$maiorExecutada} já foi executada. O total não pode ficar abaixo dela.",
+                ]);
+            }
+
+            $quitadas = Cota::query()
+                ->whereIn('lancamento_id', $serie->lancamentos()->where('numero_parcela', '>', $total)->select('id'))
+                ->where('user_id', '!=', $serie->user_id)
+                ->quitadas()
+                ->with('user:id,name')
+                ->get();
+
+            if ($quitadas->isNotEmpty()) {
+                throw ValidationException::withMessages([
+                    'total_parcelas' => QuitacaoContato::mensagemDeTrava($quitadas->map(fn (Cota $cota): string => $cota->user->name), excluir: true),
                 ]);
             }
 

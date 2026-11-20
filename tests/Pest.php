@@ -8,13 +8,16 @@ use App\Enums\TipoCarteira;
 use App\Enums\TipoCategoria;
 use App\Models\Carteira;
 use App\Models\Categoria;
+use App\Models\Contato;
 use App\Models\Cota;
 use App\Models\Fatura;
 use App\Models\Lancamento;
 use App\Models\Parcelamento;
 use App\Models\User;
 use Carbon\CarbonImmutable;
+use Database\Seeders\CategoriasGlobaisSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Testing\TestResponse;
 use Tests\TestCase;
 
 /*
@@ -243,4 +246,92 @@ function dadosCompra(array $dados = []): array
         'carteira_id' => test()->nubank->id,
         ...$dados,
     ];
+}
+
+/**
+ * Base scenario of Módulo 17 (nota 06): today 2026-11-14; A with X (default, income of 5000,00) and
+ * the Nubank (due day 10, closing 10 days before, paid by X); contact B with Z (default, income of
+ * 3000,00); "Restaurante" 200,00 on 2026-11-05 split equally with B and "Mercado" 100,00 of A only on
+ * 2026-11-20. Invoices are named by the due month, as in Módulo 16.
+ */
+function cenarioEspelho(): void
+{
+    $teste = test();
+    $teste->travelTo(CarbonImmutable::parse('2026-11-14 10:00'));
+    $teste->seed(CategoriasGlobaisSeeder::class);
+    $teste->user = User::factory()->create(['name' => 'A']);
+    $teste->b = User::factory()->create(['name' => 'B']);
+    Contato::factory()->aceito()->create(['solicitante_id' => $teste->user->id, 'convidado_id' => $teste->b->id]);
+    $teste->x = Carteira::factory()->for($teste->user)->padrao()->create(['nome' => 'X']);
+    $teste->z = Carteira::factory()->for($teste->b)->padrao()->create(['nome' => 'Z']);
+    $teste->lazer = Categoria::query()->whereNull('user_id')->where('tipo', '!=', TipoCategoria::Receita)->firstOrFail();
+    $entrada = Categoria::factory()->for($teste->user)->create(['tipo' => TipoCategoria::Ambos]);
+    lancamentoComCota($teste->user, $teste->x, $entrada, ['data' => '2026-11-05', 'tipo' => 'receita', 'valor' => 500000], ['executado' => true]);
+    lancamentoComCota($teste->b, $teste->z, $entrada, ['data' => '2026-11-05', 'tipo' => 'receita', 'valor' => 300000], ['executado' => true]);
+    $teste->nubank = cartaoDe($teste->user, 'Nubank', $teste->x);
+
+    $teste->restaurante = compraRateada($teste->nubank, 'Restaurante', '200,00', '2026-11-05');
+    salvarLancamento(['descricao' => 'Mercado', 'valor' => '100,00', 'data' => '2026-11-20', 'carteira_id' => $teste->nubank->id]);
+}
+
+/**
+ * Form data of an entry of A (RF-070), shared with B when $comB.
+ *
+ * @param  array<string, mixed>  $dados
+ * @return array<string, mixed>
+ */
+function dadosDeA(array $dados = [], bool $comB = false): array
+{
+    $teste = test();
+
+    return [
+        'tipo' => 'despesa',
+        'descricao' => 'Compra',
+        'valor' => '100,00',
+        'data' => '2026-11-20',
+        'categoria_id' => $teste->lazer->id,
+        'carteira_id' => $teste->nubank->id,
+        ...($comB ? ['rateio' => ['modo' => 'iguais', 'participantes' => [['user_id' => $teste->user->id], ['user_id' => $teste->b->id]]]] : []),
+        ...$dados,
+    ];
+}
+
+/**
+ * @param  array<string, mixed>  $dados
+ */
+function salvarLancamento(array $dados, bool $comB = false, ?Lancamento $lancamento = null): TestResponse
+{
+    $teste = test();
+    $rota = $lancamento === null ? route('lancamentos.store') : route('lancamentos.update', $lancamento);
+    $metodo = $lancamento === null ? 'post' : 'put';
+
+    return $teste->actingAs($teste->user)->{$metodo}($rota, dadosDeA($dados, $comB));
+}
+
+function compraRateada(Carteira $carteira, string $descricao, string $valor, string $data): Lancamento
+{
+    salvarLancamento(['descricao' => $descricao, 'valor' => $valor, 'data' => $data, 'carteira_id' => $carteira->id], comB: true)->assertSessionHasNoErrors();
+
+    return test()->user->lancamentos()->where('descricao', $descricao)->latest('id')->firstOrFail();
+}
+
+/**
+ * @param  array<string, mixed>  $parametros
+ */
+function telaDe(Carteira $carteira, array $parametros = []): TestResponse
+{
+    return test()->actingAs(test()->user)->get(route('home', ['carteira' => $carteira->id, ...$parametros]));
+}
+
+/**
+ * B's mirror of the author's card, or null.
+ */
+function espelhoDe(Carteira $cartao): ?Carteira
+{
+    return Carteira::query()->whereHas('cartao', fn ($query) => $query->where('cartao_origem_id', $cartao->id))->first();
+}
+
+function cotaDeB(Lancamento $lancamento): Cota
+{
+    return $lancamento->cotas()->where('user_id', test()->b->id)->with('fatura')->sole();
 }

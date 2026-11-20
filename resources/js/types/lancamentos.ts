@@ -48,6 +48,8 @@ export type FaturaDoMes = {
     receitasContatos: number;
     pagamentos: number;
     aPagar: number;
+    /** To pay without the contacts' open parts, the "Pagar" suggestion (S3, RN-245). */
+    aPagarAutor: number;
     editavel: boolean;
     /** Date picker limits (RN-193). */
     limites: {
@@ -89,6 +91,18 @@ export type FaturaVinculada = {
     itens: ItemLancamento[];
 };
 
+/** "A receber" item of the wallet that paid the author's settlement (RN-216, RN-243, RN-265). */
+export type ItemAReceber = {
+    chave: string;
+    id: number;
+    data: string;
+    nome: string;
+    valor: number;
+    recebido: number;
+    /** A manual receipt exists, so unmarking undoes it (RN-242). */
+    manual: boolean;
+};
+
 export type CategoriaOpcao = {
     id: number;
     nome: string;
@@ -122,6 +136,8 @@ export type RateioEdicao = {
     modo: ModoRateio;
     autorParticipa: boolean;
     bloqueado: boolean;
+    /** Lock hint when a contact's part in the author's invoice was settled (RN-250, RN-258). */
+    avisoQuitacao: string | null;
     participantes: ParticipanteRateio[];
 };
 

@@ -2,106 +2,18 @@
 
 use App\Actions\Cartoes\Espelhos;
 use App\Actions\Cartoes\PagarFatura;
-use App\Enums\TipoCategoria;
 use App\Models\Cartao;
 use App\Models\Carteira;
 use App\Models\Categoria;
 use App\Models\Contato;
 use App\Models\Cota;
-use App\Models\Lancamento;
 use App\Models\User;
 use Carbon\CarbonImmutable;
-use Database\Seeders\CategoriasGlobaisSeeder;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Testing\TestResponse;
 use Illuminate\Validation\ValidationException;
 use Inertia\Testing\AssertableInertia as Assert;
 
-/**
- * Base scenario of Módulo 17 (nota 06): today 2026-11-14; A with X (default, income of 5000,00) and
- * the Nubank (due day 10, closing 10 days before, paid by X); contact B with Z (default, income of
- * 3000,00); "Restaurante" 200,00 on 2026-11-05 split equally with B and "Mercado" 100,00 of A only on
- * 2026-11-20. Invoices are named by the due month, as in Módulo 16.
- */
-beforeEach(function () {
-    $this->travelTo(CarbonImmutable::parse('2026-11-14 10:00'));
-    $this->seed(CategoriasGlobaisSeeder::class);
-    $this->user = User::factory()->create(['name' => 'A']);
-    $this->b = User::factory()->create(['name' => 'B']);
-    Contato::factory()->aceito()->create(['solicitante_id' => $this->user->id, 'convidado_id' => $this->b->id]);
-    $this->x = Carteira::factory()->for($this->user)->padrao()->create(['nome' => 'X']);
-    $this->z = Carteira::factory()->for($this->b)->padrao()->create(['nome' => 'Z']);
-    $this->lazer = Categoria::query()->whereNull('user_id')->where('tipo', '!=', TipoCategoria::Receita)->firstOrFail();
-    $entrada = Categoria::factory()->for($this->user)->create(['tipo' => TipoCategoria::Ambos]);
-    lancamentoComCota($this->user, $this->x, $entrada, ['data' => '2026-11-05', 'tipo' => 'receita', 'valor' => 500000], ['executado' => true]);
-    lancamentoComCota($this->b, $this->z, $entrada, ['data' => '2026-11-05', 'tipo' => 'receita', 'valor' => 300000], ['executado' => true]);
-    $this->nubank = cartaoDe($this->user, 'Nubank', $this->x);
-
-    $this->restaurante = compraRateada($this->nubank, 'Restaurante', '200,00', '2026-11-05');
-    salvarLancamento(['descricao' => 'Mercado', 'valor' => '100,00', 'data' => '2026-11-20', 'carteira_id' => $this->nubank->id]);
-});
-
-/**
- * Form data of an entry of A (RF-070), shared with B when $comB.
- *
- * @param  array<string, mixed>  $dados
- * @return array<string, mixed>
- */
-function dadosDeA(array $dados = [], bool $comB = false): array
-{
-    $teste = test();
-
-    return [
-        'tipo' => 'despesa',
-        'descricao' => 'Compra',
-        'valor' => '100,00',
-        'data' => '2026-11-20',
-        'categoria_id' => $teste->lazer->id,
-        'carteira_id' => $teste->nubank->id,
-        ...($comB ? ['rateio' => ['modo' => 'iguais', 'participantes' => [['user_id' => $teste->user->id], ['user_id' => $teste->b->id]]]] : []),
-        ...$dados,
-    ];
-}
-
-/**
- * @param  array<string, mixed>  $dados
- */
-function salvarLancamento(array $dados, bool $comB = false, ?Lancamento $lancamento = null): TestResponse
-{
-    $teste = test();
-    $rota = $lancamento === null ? route('lancamentos.store') : route('lancamentos.update', $lancamento);
-    $metodo = $lancamento === null ? 'post' : 'put';
-
-    return $teste->actingAs($teste->user)->{$metodo}($rota, dadosDeA($dados, $comB));
-}
-
-function compraRateada(Carteira $carteira, string $descricao, string $valor, string $data): Lancamento
-{
-    salvarLancamento(['descricao' => $descricao, 'valor' => $valor, 'data' => $data, 'carteira_id' => $carteira->id], comB: true)->assertSessionHasNoErrors();
-
-    return test()->user->lancamentos()->where('descricao', $descricao)->latest('id')->firstOrFail();
-}
-
-/**
- * @param  array<string, mixed>  $parametros
- */
-function telaDe(Carteira $carteira, array $parametros = []): TestResponse
-{
-    return test()->actingAs(test()->user)->get(route('home', ['carteira' => $carteira->id, ...$parametros]));
-}
-
-/**
- * B's mirror of the author's card, or null.
- */
-function espelhoDe(Carteira $cartao): ?Carteira
-{
-    return Carteira::query()->whereHas('cartao', fn ($query) => $query->where('cartao_origem_id', $cartao->id))->first();
-}
-
-function cotaDeB(Lancamento $lancamento): Cota
-{
-    return $lancamento->cotas()->where('user_id', test()->b->id)->with('fatura')->sole();
-}
+beforeEach(fn () => cenarioEspelho());
 
 it('CA-180.1 creates the mirror on the first share, with the card days and linked to the default wallet', function () {
     $espelho = espelhoDe($this->nubank);
@@ -342,7 +254,8 @@ it('CA-182.5 deletes the mirror when the last shared purchase is deleted', funct
 
 it('CA-182.6 keeps a mirror without parts that has a payment', function () {
     $espelho = espelhoDe($this->nubank);
-    app(PagarFatura::class)->handle($espelho, CarbonImmutable::parse('2026-12-01'), 5000, '2026-11-14');
+    // November, where B has no part: the payment is a credit and settles nothing (RN-240).
+    app(PagarFatura::class)->handle($espelho, CarbonImmutable::parse('2026-11-01'), 5000, '2026-11-14');
 
     salvarLancamento(['descricao' => 'Restaurante', 'valor' => '200,00', 'data' => '2026-11-05'], lancamento: $this->restaurante)
         ->assertSessionHasNoErrors();
@@ -352,7 +265,7 @@ it('CA-182.6 keeps a mirror without parts that has a payment', function () {
 
 it('RN-261 c deletes the mirror when its last payment is deleted and it has no parts', function () {
     $espelho = espelhoDe($this->nubank);
-    app(PagarFatura::class)->handle($espelho, CarbonImmutable::parse('2026-12-01'), 5000, '2026-11-14');
+    app(PagarFatura::class)->handle($espelho, CarbonImmutable::parse('2026-11-01'), 5000, '2026-11-14');
     salvarLancamento(['descricao' => 'Restaurante', 'valor' => '200,00', 'data' => '2026-11-05'], lancamento: $this->restaurante)
         ->assertSessionHasNoErrors();
 

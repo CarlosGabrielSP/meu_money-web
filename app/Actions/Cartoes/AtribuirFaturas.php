@@ -5,6 +5,7 @@ namespace App\Actions\Cartoes;
 use App\Models\Cartao;
 use App\Models\Cota;
 use App\Models\Fatura;
+use App\Models\QuitacaoContato;
 use App\Models\User;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Collection;
@@ -25,12 +26,14 @@ class AtribuirFaturas
      * user's share, or one the system generates without an acting user, goes to the open invoice
      * instead (DEC-087, RN-232). $permitirFechadas lifts these limits for
      * deleting a card (RN-233) and for recalculating invoices whose dates changed (RN-193, RN-220).
+     * A contact's share whose part was settled never changes invoice (RN-250, RN-260, RN-263): the
+     * change fails with the message of RN-258 on the field $campoDaQuitacao.
      *
      * @param  iterable<int>  $cotaIds
      *
      * @throws ValidationException
      */
-    public function handle(iterable $cotaIds, ?User $ator = null, bool $permitirFechadas = false): void
+    public function handle(iterable $cotaIds, ?User $ator = null, bool $permitirFechadas = false, string $campoDaQuitacao = 'data'): void
     {
         $ids = collect($cotaIds)->values()->all();
 
@@ -40,13 +43,16 @@ class AtribuirFaturas
 
         $cotas = Cota::query()
             ->whereKey($ids)
-            ->with(['lancamento:id,tipo,data', 'fatura', 'carteira:id,tipo'])
+            ->with(['lancamento:id,tipo,data', 'fatura', 'carteira:id,tipo', 'user:id,name'])
             ->get()
             ->filter(fn (Cota $cota): bool => $cota->carteira->isCartao() || $cota->fatura_id !== null);
 
         if ($cotas->isEmpty()) {
             return;
         }
+
+        Cota::marcarQuitadas($cotas);
+        $quitadas = [];
 
         $calendarios = $this->calendarios($cotas);
         $hoje = CarbonImmutable::today();
@@ -90,8 +96,18 @@ class AtribuirFaturas
                 $alvo = $aberta;
             }
 
+            if ($atual !== null && $cota->isQuitada() && ! $alvo->referencia->equalTo($atual->referencia)) {
+                $quitadas[] = $cota->user->name;
+
+                continue;
+            }
+
             $alvo = $calendario->salvar($alvo);
             $cota->forceFill(['fatura_id' => $alvo->id, 'executado' => false, 'executado_em' => null])->save();
+        }
+
+        if ($quitadas !== []) {
+            throw ValidationException::withMessages([$campoDaQuitacao => QuitacaoContato::mensagemDeTrava($quitadas)]);
         }
     }
 
@@ -104,12 +120,12 @@ class AtribuirFaturas
      *
      * @throws ValidationException
      */
-    public function porLancamentos(iterable $lancamentoIds, ?User $ator = null, bool $permitirFechadas = false): void
+    public function porLancamentos(iterable $lancamentoIds, ?User $ator = null, bool $permitirFechadas = false, string $campoDaQuitacao = 'data'): void
     {
         $ids = collect($lancamentoIds)->values()->all();
         $deixadas = $this->espelhos->acompanharLancamentos($ids);
 
-        $this->handle(Cota::query()->whereIn('lancamento_id', $ids)->pluck('id'), $ator, $permitirFechadas);
+        $this->handle(Cota::query()->whereIn('lancamento_id', $ids)->pluck('id'), $ator, $permitirFechadas, $campoDaQuitacao);
 
         $this->espelhos->excluirVazios($deixadas);
     }

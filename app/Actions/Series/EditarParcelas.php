@@ -54,6 +54,7 @@ class EditarParcelas
         $diaVencimento ??= $serie->dia_vencimento;
         $hoje = CarbonImmutable::today();
         $cotas = $parcela->cotas()->with('fatura')->get();
+        Cota::marcarQuitadas($cotas);
         $cotaAberta = $cotas->firstWhere('user_id', $parcela->user_id);
         $abertaExecutada = $cotaAberta !== null && $cotaAberta->executado;
         $abertaFechada = $cotaAberta?->fatura !== null && $cotaAberta->fatura->isFechada($hoje);
@@ -80,12 +81,15 @@ class EditarParcelas
             $dadosDaAberta['data'] = Parcelamento::noDia($dataOriginal, $diaVencimento)->toDateString();
         }
 
+        // A settled contact part refused by a new due day shows on that field (RN-263).
+        $campoDaQuitacao = $diaVencimento !== $serie->dia_vencimento ? 'dia_vencimento' : 'data';
+
         return $this->salvarLancamento->handle(
             $autor,
             $dadosDaAberta,
             $anexo,
             $parcela,
-            function (Lancamento $aberta) use ($autor, $serie, $escopo, $dados, $diaVencimento, $hoje): void {
+            function (Lancamento $aberta) use ($autor, $serie, $escopo, $dados, $diaVencimento, $hoje, $campoDaQuitacao): void {
                 $diaAnterior = $serie->dia_vencimento;
                 $rateio = $dados['rateio'] ?? null;
                 $gruposDoModelo = $serie->cotas()->pluck('grupo_id', 'user_id');
@@ -111,6 +115,7 @@ class EditarParcelas
                     ->pendentesDoAutor()
                     ->with('cotas.fatura')
                     ->get();
+                Cota::marcarQuitadas($pendentes->flatMap->cotas);
 
                 Lancamento::query()->whereKey($pendentes->modelKeys())->update(['descricao' => $dados['descricao']]);
                 Cota::query()->whereIn('lancamento_id', $pendentes->modelKeys())->where('user_id', $serie->user_id)
@@ -151,13 +156,15 @@ class EditarParcelas
                     }
                 }
 
-                $this->atribuirFaturas->porLancamentos([$aberta->id, ...$pendentes->modelKeys()], $autor);
+                $this->atribuirFaturas->porLancamentos([$aberta->id, ...$pendentes->modelKeys()], $autor, campoDaQuitacao: $campoDaQuitacao);
             },
+            $campoDaQuitacao,
         );
     }
 
     /**
-     * A participant executed their share, or has it in a closed card invoice (RN-085, RN-200).
+     * A participant executed their share, or has it in a closed card invoice, or their part was
+     * settled (RN-085, RN-200, RN-250).
      *
      * @param  array<int, Cota>  $cotas  with their invoices loaded
      */

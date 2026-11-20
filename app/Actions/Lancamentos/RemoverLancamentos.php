@@ -5,6 +5,7 @@ namespace App\Actions\Lancamentos;
 use App\Actions\Cartoes\Espelhos;
 use App\Models\Cota;
 use App\Models\Lancamento;
+use App\Models\QuitacaoContato;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Validation\ValidationException;
@@ -18,7 +19,8 @@ class RemoverLancamentos
      * removed after the commit.
      *
      * Every share is locked first, so a concurrent status change waits. Deletion is refused when a
-     * participant already executed a share, or has it in a closed card invoice (RN-086, RN-200). With
+     * participant already executed a share, or has it in a closed card invoice (RN-086, RN-200), or a
+     * contact's part was settled, with the message of RN-258 (RN-250). With
      * $somentePendentes, entries whose author's share became executed meanwhile are kept (RN-049,
      * RN-056). Mirrors left without shares and payments are deleted (RN-237, RN-261 c).
      *
@@ -40,6 +42,7 @@ class RemoverLancamentos
             ->with(['user:id,name', 'fatura:id,fechamento'])
             ->get(['id', 'lancamento_id', 'user_id', 'carteira_id', 'fatura_id', 'executado']);
         $hoje = CarbonImmutable::today();
+        Cota::marcarQuitadas($cotas);
 
         if ($somentePendentes) {
             $executados = $cotas
@@ -51,10 +54,16 @@ class RemoverLancamentos
             $cotas = $cotas->reject(fn (Cota $cota): bool => in_array($cota->lancamento_id, $executados, true));
         }
 
-        $executaram = $cotas
-            ->filter(fn (Cota $cota): bool => $cota->isTravada($hoje) && $cota->user_id !== $autores[$cota->lancamento_id])
-            ->map(fn (Cota $cota): string => $cota->user->name)
-            ->unique();
+        $travadas = $cotas->filter(fn (Cota $cota): bool => $cota->isTravada($hoje) && $cota->user_id !== $autores[$cota->lancamento_id]);
+        $quitadas = $travadas->filter(fn (Cota $cota): bool => $cota->isQuitada());
+
+        if ($quitadas->isNotEmpty()) {
+            throw ValidationException::withMessages([
+                'lancamento' => QuitacaoContato::mensagemDeTrava($quitadas->map(fn (Cota $cota): string => $cota->user->name), excluir: true),
+            ]);
+        }
+
+        $executaram = $travadas->map(fn (Cota $cota): string => $cota->user->name)->unique();
 
         if ($executaram->isNotEmpty()) {
             $nomes = $executaram->join(', ', ' e ');

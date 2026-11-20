@@ -32,7 +32,7 @@ class InicioController extends Controller
      * A card shows its invoice instead of balances (RN-223): the month is the invoice competence, the
      * open invoice's without a month in the URL (R3, RN-253); the list and the spending have the
      * invoice purchases; overdue and upcoming highlights are hidden (RN-224). A common wallet also gets one row per invoice it pays
-     * in the month (RN-219).
+     * in the month (RN-219) and the "a receber" items of the month (RN-243).
      */
     public function __invoke(
         InicioRequest $request,
@@ -114,6 +114,7 @@ class InicioController extends Controller
                 $hoje,
                 $faturas,
             ),
+            'aReceber' => $noCartao ? [] : $listarLancamentos->aReceber($carteira, $mes, $filtros),
             'perguntarModoSimples' => $perguntarModoSimples,
             'mostrarTutorial' => $user->tutorial_visto_em === null || $request->query('tutorial') === '1',
             'destaques' => fn (): ?array => $user->modo_simples ? null : [

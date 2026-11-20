@@ -28,6 +28,8 @@ const props = defineProps<{
     autorId: number;
     total: number;
     bloqueado: boolean;
+    /** Lock reason when it is not an executed share, e.g. a settled part (RN-258). */
+    aviso?: string;
     erro?: string;
 }>();
 
@@ -128,8 +130,10 @@ function alternarAutor(incluir: boolean): void {
 
         <template v-if="divisao.ativa">
             <p v-if="bloqueado" class="text-sm text-muted-foreground">
-                Um participante já marcou a cota como executada. Valor e divisão
-                não podem mudar.
+                {{
+                    aviso ??
+                    'Um participante já marcou a cota como executada. Valor e divisão não podem mudar.'
+                }}
             </p>
 
             <fieldset class="flex flex-wrap gap-4" :disabled="bloqueado">

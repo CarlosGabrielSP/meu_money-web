@@ -25,8 +25,11 @@ class CalcularSaldos
      * enter income and expenses; what the invoices still have to pay enters "a pagar"; the estimated
      * balance is the current one plus "a receber" minus "a pagar" (data model 05, R5). The month
      * result is income minus expenses, and the current one also loses the payments of the month.
+     * The "a receber" items of the contacts' parts the user settled (RN-216, RN-245): their receipts
+     * enter the current balance and what is still pending enters "a receber", so the estimated
+     * balance gains their total; they stay out of the month income and result (RN-243, P-047).
      *
-     * @param  array<int, array{pagamentosAte: int, pagamentosNoMes: int, aPagar: int, receitas: int, despesas: int}>|null  $vinculados  SaldosVinculados of the month, to reuse in the request
+     * @param  array<int, array{pagamentosAte: int, pagamentosNoMes: int, aPagar: int, receitas: int, despesas: int, quitacoesAte: int, recebimentosAte: int}>|null  $vinculados  SaldosVinculados of the month, to reuse in the request
      * @return array{acumulado: array{estimado: int, atual: int}, mes: array{estimado: int, atual: int}, receitas: int, despesas: int, aReceber: int, aPagar: int}
      */
     public function handle(User $user, Carteira $carteira, CarbonImmutable $mes, ?array $vinculados = null): array
@@ -50,11 +53,11 @@ class CalcularSaldos
             ->first();
 
         $cartoes = ($vinculados ?? $this->saldosVinculados->handle($user, $mes))[$carteira->id]
-            ?? ['pagamentosAte' => 0, 'pagamentosNoMes' => 0, 'aPagar' => 0, 'receitas' => 0, 'despesas' => 0];
-        $atual = (int) $saldos?->acumulado_atual - $cartoes['pagamentosAte'];
+            ?? ['pagamentosAte' => 0, 'pagamentosNoMes' => 0, 'aPagar' => 0, 'receitas' => 0, 'despesas' => 0, 'quitacoesAte' => 0, 'recebimentosAte' => 0];
+        $atual = (int) $saldos?->acumulado_atual - $cartoes['pagamentosAte'] + $cartoes['recebimentosAte'];
         $receitas = (int) $saldos?->receitas + $cartoes['receitas'];
         $despesas = (int) $saldos?->despesas + $cartoes['despesas'];
-        $aReceber = (int) $saldos?->a_receber;
+        $aReceber = (int) $saldos?->a_receber + $cartoes['quitacoesAte'] - $cartoes['recebimentosAte'];
         $aPagar = (int) $saldos?->a_pagar + $cartoes['aPagar'];
 
         return [

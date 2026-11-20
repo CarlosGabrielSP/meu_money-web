@@ -109,13 +109,52 @@ class Cota extends Model
     }
 
     /**
+     * Whether the contact's part this share belongs to was settled, set in bulk by marcarQuitadas.
+     */
+    private ?bool $quitada = null;
+
+    /**
      * A share counts as executed when marked so or, in a card, when its invoice is closed: it no
-     * longer changes amount, date or split (RN-049, RN-085, RN-086, RN-089, RN-200). Needs the
-     * invoice loaded.
+     * longer changes amount, date or split (RN-049, RN-085, RN-086, RN-089, RN-200). A contact's share
+     * whose part in the author's invoice has a settlement counts too (RN-250). Needs the invoice
+     * loaded.
      */
     public function isTravada(CarbonImmutable $hoje): bool
     {
-        return $this->executado || ($this->fatura !== null && $this->fatura->isFechada($hoje));
+        return $this->executado || ($this->fatura !== null && $this->fatura->isFechada($hoje)) || $this->isQuitada();
+    }
+
+    /**
+     * The share is in a mirror invoice and the contact's part in the author's invoice of the same
+     * reference month has a settlement of any origin (RN-250, S2): every purchase of that invoice with
+     * the contact's part is locked. One query unless marcarQuitadas ran.
+     */
+    public function isQuitada(): bool
+    {
+        if ($this->fatura_id === null) {
+            return false;
+        }
+
+        return $this->quitada ??= self::query()->whereKey($this->id)->quitadas()->exists();
+    }
+
+    /**
+     * Load isQuitada for many shares in one query.
+     *
+     * @param  iterable<Cota>  $cotas
+     */
+    public static function marcarQuitadas(iterable $cotas): void
+    {
+        $cotas = collect($cotas);
+        $quitadas = self::query()
+            ->whereKey($cotas->whereNotNull('fatura_id')->pluck('id')->all())
+            ->quitadas()
+            ->pluck('cotas.id')
+            ->flip();
+
+        foreach ($cotas as $cota) {
+            $cota->quitada = $quitadas->has($cota->id);
+        }
     }
 
     /**
@@ -128,7 +167,29 @@ class Cota extends Model
     {
         $query->where(fn (Builder $travada) => $travada
             ->where('cotas.executado', true)
-            ->orWhereHas('fatura', fn (Builder $fatura) => $fatura->fechadas($hoje)));
+            ->orWhereHas('fatura', fn (Builder $fatura) => $fatura->fechadas($hoje))
+            ->orWhere(fn (Builder $quitada) => $quitada->quitadas()));
+    }
+
+    /**
+     * Contacts' shares whose part was settled (see isQuitada), in SQL: the share's mirror invoice, the
+     * author's invoice of the same reference month, and a settlement there for the share's user.
+     *
+     * @param  Builder<self>  $query
+     */
+    #[Scope]
+    protected function quitadas(Builder $query): void
+    {
+        $query->whereExists(fn ($existe) => $existe
+            ->selectRaw('1')
+            ->from('faturas as do_espelho')
+            ->join('cartoes as espelho', 'espelho.carteira_id', '=', 'do_espelho.carteira_id')
+            ->join('faturas as do_autor', fn ($join) => $join
+                ->on('do_autor.carteira_id', '=', 'espelho.cartao_origem_id')
+                ->on('do_autor.referencia', '=', 'do_espelho.referencia'))
+            ->join('quitacoes_contato', 'quitacoes_contato.fatura_id', '=', 'do_autor.id')
+            ->whereColumn('do_espelho.id', 'cotas.fatura_id')
+            ->whereColumn('quitacoes_contato.contato_id', 'cotas.user_id'));
     }
 
     /**

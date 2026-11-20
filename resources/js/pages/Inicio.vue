@@ -13,6 +13,7 @@ import CampoSelecao from '@/components/CampoSelecao.vue';
 import CardFatura from '@/components/cartoes/CardFatura.vue';
 import PagamentosFatura from '@/components/cartoes/PagamentosFatura.vue';
 import PartesFatura from '@/components/cartoes/PartesFatura.vue';
+import AReceberItem from '@/components/cartoes/AReceberItem.vue';
 import FaturaVinculadaItem from '@/components/cartoes/FaturaVinculadaItem.vue';
 import type { OpcaoSelecao } from '@/components/CampoSelecao.vue';
 import CarteiraIcone from '@/components/carteiras/CarteiraIcone.vue';
@@ -48,6 +49,7 @@ import type {
     EscopoSerie,
     FaturaDoMes,
     FaturaVinculada,
+    ItemAReceber,
     GrupoOpcao,
     ItemLancamento,
     LancamentoEdicao,
@@ -80,6 +82,8 @@ const props = defineProps<{
     fatura: FaturaDoMes | null;
     /** Invoices this wallet pays, due in the month (RN-219). */
     faturasVinculadas: FaturaVinculada[];
+    /** "A receber" items of the contacts' parts the user settled, in the month (RN-243). */
+    aReceber: ItemAReceber[];
     cartoes: Record<string, CartaoDoFormulario>;
     /** Subsections in the full mode; one plain list per type in the simple mode (RN-161). */
     lancamentos:
@@ -160,7 +164,10 @@ const quantidade = (subsecoesDoTipo: Subsecoes): number =>
     subsecoesDoTipo.grupos.length;
 
 function quantidadeNaSecao(tipo: TipoLancamento): number {
-    const faturas = tipo === 'despesa' ? props.faturasVinculadas.length : 0;
+    const faturas =
+        tipo === 'despesa'
+            ? props.faturasVinculadas.length
+            : props.aReceber.length;
 
     if (listaSimples.value !== null) {
         return listaSimples.value[tipo].length + faturas;
@@ -729,6 +736,14 @@ onMounted(() => {
                                 simples
                             />
                         </template>
+                        <template v-else>
+                            <AReceberItem
+                                v-for="linha in aReceber"
+                                :key="linha.chave"
+                                :item="linha"
+                                simples
+                            />
+                        </template>
                     </ul>
                 </section>
             </div>
@@ -796,6 +811,21 @@ onMounted(() => {
                                 :selecionados="idsSelecionados"
                                 @editar="editar($event, secao.tipo)"
                                 @selecionar="selecionar($event, secao.tipo)"
+                            />
+                        </ul>
+                    </div>
+                    <div
+                        v-if="secao.tipo === 'receita' && aReceber.length > 0"
+                        class="grid gap-1"
+                    >
+                        <h3 class="text-xs text-muted-foreground">A receber</h3>
+                        <ul
+                            class="divide-y overflow-hidden rounded-2xl border bg-card"
+                        >
+                            <AReceberItem
+                                v-for="linha in aReceber"
+                                :key="linha.chave"
+                                :item="linha"
                             />
                         </ul>
                     </div>

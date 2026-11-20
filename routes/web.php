@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\AReceberController;
 use App\Http\Controllers\Auth\GoogleController;
 use App\Http\Controllers\CarteiraController;
 use App\Http\Controllers\CategoriaController;
@@ -48,6 +49,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
         ->where('referencia', '\d{4}-(0[1-9]|1[0-2])')
         ->name('faturas.datas');
     Route::delete('pagamentos-fatura/{pagamentoFatura}', [FaturaController::class, 'excluirPagamento'])->name('faturas.pagamentos.destroy');
+    Route::patch('a-receber/{quitacaoContato}/recebido', [AReceberController::class, 'alternar'])->name('a-receber.recebido');
 
     Route::resource('categorias', CategoriaController::class)->only(['index', 'store', 'update', 'destroy']);
 

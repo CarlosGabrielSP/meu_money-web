@@ -47,6 +47,20 @@ class QuitacaoContato extends Model
     }
 
     /**
+     * Server message when a settled part locks a purchase (RN-258): changing amount, split, wallet or
+     * dates, or deleting it. Several contacts are joined by comma and "e".
+     *
+     * @param  iterable<string>  $nomes  contact names
+     */
+    public static function mensagemDeTrava(iterable $nomes, bool $excluir = false): string
+    {
+        $quem = collect($nomes)->unique()->join(', ', ' e ');
+        $acao = $excluir ? 'excluir a compra' : 'mudar valor ou divisão';
+
+        return "A parte de {$quem} já foi quitada. Exclua o pagamento para {$acao}.";
+    }
+
+    /**
      * @return BelongsTo<Fatura, $this>
      */
     public function fatura(): BelongsTo

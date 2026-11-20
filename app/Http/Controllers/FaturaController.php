@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Actions\Cartoes\DistribuirPagamentosDoContato;
 use App\Actions\Cartoes\EditarDatasFatura;
 use App\Actions\Cartoes\Espelhos;
 use App\Actions\Cartoes\PagarFatura;
@@ -18,11 +19,17 @@ use Inertia\Inertia;
 class FaturaController extends Controller
 {
     /**
-     * Pay the invoice due in the month (RF-165).
+     * Pay the invoice due in the month, settling the marked contacts' parts too (RF-165, RF-185).
      */
     public function pagar(PagarFaturaRequest $request, Carteira $carteira, string $referencia, PagarFatura $pagarFatura): RedirectResponse
     {
-        $pagarFatura->handle($this->cartao($carteira), $this->referencia($referencia), (int) $request->validated('valor'), (string) $request->validated('data'));
+        $pagarFatura->handle(
+            $this->cartao($carteira),
+            $this->referencia($referencia),
+            (int) $request->validated('valor'),
+            (string) $request->validated('data'),
+            array_values(array_map(intval(...), $request->validated('contatos') ?? [])),
+        );
 
         Inertia::flash('toast', ['type' => 'success', 'message' => 'Pagamento registrado.']);
 
@@ -47,16 +54,25 @@ class FaturaController extends Controller
     }
 
     /**
-     * Delete a payment; payments are never edited (RF-166, RN-222). A mirror left without shares and
-     * payments is deleted (RN-261 c).
+     * Delete a payment; payments are never edited (RF-166, RN-222). Its settlements, "a receber" and
+     * automatic receipts go with it (foreign keys), and the contacts' mirror payments of the card are
+     * redistributed when the payment was a contact's or settled a part (RN-240, RN-241, RN-255). A mirror left without shares and payments is deleted
+     * (RN-261 c).
      */
-    public function excluirPagamento(PagamentoFatura $pagamentoFatura, Espelhos $espelhos): RedirectResponse
+    public function excluirPagamento(PagamentoFatura $pagamentoFatura, Espelhos $espelhos, DistribuirPagamentosDoContato $distribuir): RedirectResponse
     {
-        Gate::authorize('update', $pagamentoFatura->fatura->carteira);
+        $cartao = $pagamentoFatura->fatura->carteira;
+        Gate::authorize('update', $cartao);
 
-        DB::transaction(function () use ($pagamentoFatura, $espelhos): void {
+        DB::transaction(function () use ($pagamentoFatura, $espelhos, $distribuir, $cartao): void {
+            DistribuirPagamentosDoContato::travar($cartao);
+            $redistribuir = $cartao->cartao()->value('cartao_origem_id') !== null || $pagamentoFatura->quitacoes()->exists();
             $pagamentoFatura->delete();
-            $espelhos->excluirVazios([$pagamentoFatura->fatura->carteira_id]);
+
+            if ($redistribuir) {
+                $distribuir->doCartao($cartao);
+            }
+            $espelhos->excluirVazios([$cartao->id]);
         });
 
         Inertia::flash('toast', ['type' => 'success', 'message' => 'Pagamento excluído.']);
