@@ -22,14 +22,15 @@ class RemoverLancamentos
      * participant already executed a share, or has it in a closed card invoice (RN-086, RN-200), or a
      * contact's part was settled, with the message of RN-258 (RN-250). With
      * $somentePendentes, entries whose author's share became executed meanwhile are kept (RN-049,
-     * RN-056). Mirrors left without shares and payments are deleted (RN-237, RN-261 c).
+     * RN-056). $ignorarTravas lifts both refusals when a card is deleted in cascade (RN-233,
+     * RN-236). Mirrors left without shares and payments are deleted (RN-237, RN-261 c).
      *
      * @param  Collection<int, Lancamento>  $lancamentos
      * @return array<int, string>
      *
      * @throws ValidationException
      */
-    public function handle(Collection $lancamentos, bool $somentePendentes = false): array
+    public function handle(Collection $lancamentos, bool $somentePendentes = false, bool $ignorarTravas = false): array
     {
         if ($lancamentos->isEmpty()) {
             return [];
@@ -54,7 +55,7 @@ class RemoverLancamentos
             $cotas = $cotas->reject(fn (Cota $cota): bool => in_array($cota->lancamento_id, $executados, true));
         }
 
-        $travadas = $cotas->filter(fn (Cota $cota): bool => $cota->isTravada($hoje) && $cota->user_id !== $autores[$cota->lancamento_id]);
+        $travadas = $ignorarTravas ? collect() : $cotas->filter(fn (Cota $cota): bool => $cota->isTravada($hoje) && $cota->user_id !== $autores[$cota->lancamento_id]);
         $quitadas = $travadas->filter(fn (Cota $cota): bool => $cota->isQuitada());
 
         if ($quitadas->isNotEmpty()) {

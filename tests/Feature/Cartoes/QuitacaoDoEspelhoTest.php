@@ -1,68 +1,17 @@
 <?php
 
 use App\Actions\Cartoes\AtribuirFaturas;
-use App\Enums\OrigemQuitacao;
 use App\Models\Cartao;
-use App\Models\Carteira;
 use App\Models\Lancamento;
-use App\Models\PagamentoFatura;
 use App\Models\QuitacaoContato;
 use App\Models\RecebimentoContato;
-use App\Models\User;
 use Illuminate\Support\Collection;
-use Illuminate\Testing\TestResponse;
 use Inertia\Testing\AssertableInertia as Assert;
 
 /**
  * Stage 15.2 of Módulo 17 (nota 06): payments, settlements and "a receber", on the base scenario.
  */
 beforeEach(fn () => cenarioEspelho());
-
-/**
- * Pay an invoice of the card as its owner, through the "Pagar" form (RF-165, RF-185).
- *
- * @param  list<int>  $contatos
- */
-function pagarComo(User $user, Carteira $cartao, string $mes, string $valor, array $contatos = [], string $data = '2026-11-14'): TestResponse
-{
-    return test()->actingAs($user)->post(route('faturas.pagar', [$cartao, $mes]), ['valor' => $valor, 'data' => $data, 'contatos' => $contatos]);
-}
-
-function pagarNoEspelho(string $valor, string $mes = '2026-12', string $data = '2026-11-14'): PagamentoFatura
-{
-    $espelho = espelhoDe(test()->nubank);
-    pagarComo(test()->b, $espelho, $mes, $valor, data: $data)->assertSessionHasNoErrors();
-
-    return PagamentoFatura::query()->whereHas('fatura', fn ($query) => $query->where('carteira_id', $espelho->id))->latest('id')->firstOrFail();
-}
-
-function pagarComB(string $valor = '200,00', string $mes = '2026-12'): PagamentoFatura
-{
-    pagarComo(test()->user, test()->nubank, $mes, $valor, [test()->b->id])->assertSessionHasNoErrors();
-
-    return PagamentoFatura::query()->whereHas('fatura', fn ($query) => $query->where('carteira_id', test()->nubank->id))->latest('id')->firstOrFail();
-}
-
-/**
- * Settlements of B on the Nubank as [reference month, origin, amount], oldest first.
- *
- * @return list<array{0: string, 1: string, 2: int}>
- */
-function quitacoesDeB(): array
-{
-    return QuitacaoContato::query()
-        ->where('contato_id', test()->b->id)
-        ->with('fatura:id,referencia')
-        ->orderBy('id')
-        ->get()
-        ->map(fn (QuitacaoContato $quitacao): array => [$quitacao->fatura->referencia->format('Y-m'), $quitacao->origem->value, $quitacao->valor])
-        ->all();
-}
-
-function aReceberDeB(): QuitacaoContato
-{
-    return QuitacaoContato::query()->where('origem', OrigemQuitacao::Autor->value)->where('contato_id', test()->b->id)->sole();
-}
 
 /**
  * The October purchase of CA-184.3: B's part of 50,00 in the November invoice.
@@ -74,16 +23,6 @@ function compraDeOutubro(): Lancamento
     app(AtribuirFaturas::class)->handle($compra->cotas()->pluck('id'), permitirFechadas: true);
 
     return $compra;
-}
-
-function aPagarDoNubank(string $mes): int
-{
-    $aPagar = 0;
-    telaDe(test()->nubank, ['mes' => $mes])->assertInertia(function (Assert $page) use (&$aPagar) {
-        $aPagar = $page->toArray()['props']['fatura']['aPagar'];
-    });
-
-    return $aPagar;
 }
 
 it('CA-184.1 settles the contact part on the author invoice with the mirror payment', function () {

@@ -579,6 +579,7 @@ onMounted(() => {
                         v-if="fatura"
                         :cartao-id="carteira.id"
                         :cartao-nome="carteira.nome"
+                        :autor-do-espelho="carteira.autorDoEspelho ?? null"
                         :fatura="fatura"
                         :hoje="hoje"
                         :simples="modoSimples"

@@ -9,6 +9,7 @@ use App\Enums\CorCarteira;
 use App\Enums\IconeCarteira;
 use App\Http\Requests\Carteiras\ExcluirCarteiraRequest;
 use App\Http\Requests\Carteiras\SalvarCarteiraRequest;
+use App\Models\Cartao;
 use App\Models\Carteira;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -20,7 +21,8 @@ class CarteiraController extends Controller
 {
     /**
      * List the user's own wallets (RF-020), cards after the common ones, each card with its due day
-     * and the wallet that pays it (RF-160, nota 07). A mirror carries the author's name (RF-182).
+     * and the wallet that pays it (RF-160, nota 07). A mirror carries the author's name (RF-182); an
+     * author's card, the contacts with a mirror of it, for the delete dialog (nota 07, DEC-092).
      */
     public function index(Request $request): Response
     {
@@ -30,7 +32,7 @@ class CarteiraController extends Controller
                 ->orderBy('tipo', 'desc')
                 ->orderBy('nome')
                 ->withCount(['cotas', 'parcelamentos', 'grupos'])
-                ->with(['cartao.carteiraVinculada:id,nome', 'cartao.cartaoOrigem.user:id,name'])
+                ->with(['cartao.carteiraVinculada:id,nome', 'cartao.cartaoOrigem.user:id,name', 'espelhos.carteira.user:id,name'])
                 ->get(['id', 'nome', 'tipo', 'padrao', 'cor', 'icone'])
                 ->map(fn (Carteira $carteira): array => [
                     'id' => $carteira->id,
@@ -48,6 +50,7 @@ class CarteiraController extends Controller
                         'carteiraVinculadaId' => $carteira->cartao->carteira_vinculada_id,
                         'carteiraVinculadaNome' => $carteira->cartao->carteiraVinculada?->nome,
                         'autorDoEspelho' => $carteira->cartao->cartaoOrigem?->user->name,
+                        'contatosDosEspelhos' => $carteira->espelhos->map(fn (Cartao $espelho): string => $espelho->carteira->user->name)->sort()->values()->all(),
                     ],
                 ]),
             'cores' => array_column(CorCarteira::cases(), 'value'),

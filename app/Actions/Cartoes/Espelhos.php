@@ -10,6 +10,7 @@ use App\Models\Carteira;
 use App\Models\Cota;
 use App\Models\Fatura;
 use App\Models\Lancamento;
+use App\Models\PagamentoFatura;
 use App\Models\QuitacaoContato;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Builder;
@@ -54,10 +55,10 @@ class Espelhos
     /**
      * The contact's mirror of the card, created on the first share (RN-203, RN-237): named
      * "<card> · <author>", icon `credit-card`, default color, linked to the contact's default wallet
-     * (RN-206), with the due day, closing days and competence rule of the card (RN-238). The card row
-     * is locked so two requests never create two mirrors.
+     * (RN-206), or to $vinculada when given (RN-234), with the due day, closing days and competence
+     * rule of the card (RN-238). The card row is locked so two requests never create two mirrors.
      */
-    public function espelho(Carteira $cartao, int $contatoId): int
+    public function espelho(Carteira $cartao, int $contatoId, ?int $vinculada = null): int
     {
         $chave = "{$cartao->id}:{$contatoId}";
 
@@ -92,7 +93,7 @@ class Espelhos
             'dia_vencimento' => $origem->dia_vencimento,
             'dias_fechamento' => $origem->dias_fechamento,
             'competencia' => $origem->competencia,
-            'carteira_vinculada_id' => Carteira::query()->where('user_id', $contatoId)->where('padrao', true)->value('id'),
+            'carteira_vinculada_id' => $vinculada ?? Carteira::query()->where('user_id', $contatoId)->where('padrao', true)->value('id'),
         ]);
         $dados->carteira_id = $espelho->id;
         $dados->cartao_origem_id = $cartao->id;
@@ -221,6 +222,71 @@ class Espelhos
             ->each(fn (Carteira $espelho) => $espelho->delete());
 
         $this->encontrados = array_diff($this->encontrados, $vazios->modelKeys());
+    }
+
+    /**
+     * The author deletes the card moving its purchases (RN-234, RN-235, RN-259, P-046). To another
+     * card: each contact's shares go to the contact's mirror of the destination (created when needed,
+     * linked to the wallet of the old mirror) and the contact's mirror payments go to the invoice of
+     * the same reference month there; settlements are rebuilt afterwards (DistribuirPagamentosDoContato).
+     * To a common wallet: the shares go to the mirror's linked wallet and become a common split. The
+     * invoice and status of the shares follow afterwards (AtribuirFaturas); then the old mirrors are
+     * deleted with what is left in them (excluirDoCartao): the payments, in the common wallet case,
+     * with their settlements and receipts.
+     *
+     * @return list<int> ids of the contacts' shares that moved
+     */
+    public function moverDoCartao(Carteira $cartao, Carteira $destino): array
+    {
+        $movidas = [];
+
+        foreach ($this->doCartao($cartao) as $espelho) {
+            $contato = $espelho->carteira->user_id;
+            $alvo = $destino->isCartao()
+                ? $this->espelho($destino, $contato, $espelho->carteira_vinculada_id)
+                : $espelho->carteira_vinculada_id ?? Carteira::query()->where('user_id', $contato)->where('padrao', true)->value('id');
+            $cotas = Cota::query()->where('carteira_id', $espelho->carteira_id);
+
+            array_push($movidas, ...$cotas->pluck('id')->all());
+            $cotas->update(['carteira_id' => $alvo, 'grupo_id' => null]);
+
+            if ($destino->isCartao()) {
+                $this->moverPagamentos($espelho->carteira_id, Carteira::query()->whereKey($alvo)->firstOrFail());
+            }
+        }
+
+        return $movidas;
+    }
+
+    /**
+     * Delete the card's mirrors with their payments, after their shares moved (RN-234, RN-235) or
+     * were deleted in cascade (RN-236); the settlements and receipts of those payments go with them.
+     */
+    public function excluirDoCartao(Carteira $cartao): void
+    {
+        $this->doCartao($cartao)->each(fn (Cartao $espelho) => $espelho->carteira->delete());
+    }
+
+    /**
+     * The mirror payments go to the invoice of the same reference month of the new mirror (RN-234).
+     */
+    private function moverPagamentos(int $deEspelho, Carteira $paraEspelho): void
+    {
+        $pagamentos = PagamentoFatura::query()
+            ->whereIn('fatura_id', Fatura::query()->where('carteira_id', $deEspelho)->select('id'))
+            ->with('fatura:id,referencia')
+            ->get();
+
+        if ($pagamentos->isEmpty()) {
+            return;
+        }
+
+        $calendario = FaturasDoCartao::carregar($paraEspelho);
+
+        foreach ($pagamentos as $pagamento) {
+            $fatura = $calendario->salvar($calendario->daReferencia($pagamento->fatura->referencia));
+            $pagamento->forceFill(['fatura_id' => $fatura->id])->save();
+        }
     }
 
     /**

@@ -97,6 +97,16 @@ class Carteira extends Model
     }
 
     /**
+     * The contacts' mirrors of an author's card (RN-203).
+     *
+     * @return HasMany<Cartao, $this>
+     */
+    public function espelhos(): HasMany
+    {
+        return $this->hasMany(Cartao::class, 'cartao_origem_id');
+    }
+
+    /**
      * Invoices of a card (RN-192).
      *
      * @return HasMany<Fatura, $this>

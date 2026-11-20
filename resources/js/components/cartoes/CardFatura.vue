@@ -11,6 +11,7 @@ import type { FaturaDoMes } from '@/types';
 const props = defineProps<{
     cartaoId: number;
     cartaoNome: string;
+    autorDoEspelho: string | null;
     fatura: FaturaDoMes;
     hoje: string;
     simples: boolean;
@@ -43,6 +44,13 @@ const credito = computed(() => props.fatura.aPagar < 0);
                 >{{ estados[fatura.estado] }}</span
             >
         </div>
+        <!-- The contact's mirror names the card and its author (RN-246, nota 07). -->
+        <p v-if="autorDoEspelho" class="mt-1 text-sm font-medium">
+            {{ cartaoNome }}
+            <span class="font-normal text-saldo-foreground/75"
+                >de {{ autorDoEspelho }}</span
+            >
+        </p>
         <p class="mt-3 text-sm text-saldo-foreground/75">
             {{ credito ? 'Crédito' : 'A pagar' }}
         </p>

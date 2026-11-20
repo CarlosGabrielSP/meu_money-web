@@ -10,6 +10,8 @@ export type CarteiraResumo = {
     icone: string;
     /** A contact's mirror of an author's card: never offered in the entry form (RN-262). */
     espelho?: boolean;
+    /** The author of the selected mirror, shown on its invoice card (RN-246). */
+    autorDoEspelho?: string | null;
 };
 
 /** What the entry form needs to tell the invoice of a date in a card (RN-192, RN-232). */

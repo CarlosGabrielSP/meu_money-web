@@ -119,6 +119,17 @@ function sair(escopo: EscopoSerie | null = null): void {
     });
 }
 
+/**
+ * A share in the contact's mirror changes only its category: no wallet and no leaving (RN-205,
+ * RN-208, RN-246).
+ */
+const noEspelho = computed(
+    () =>
+        props.carteiras.find(
+            (carteira) => carteira.id === props.item?.participacao?.carteiraId,
+        )?.espelho === true,
+);
+
 const modoSimples = useModoSimples();
 
 /**
@@ -198,7 +209,7 @@ const rotuloExecutado = computed(() => {
                         {{ item.participacao.anexoNome }}
                     </a>
 
-                    <div class="grid gap-2">
+                    <div v-if="!noEspelho" class="grid gap-2">
                         <Label for="participacao_carteira">Carteira</Label>
                         <CampoSelecao
                             id="participacao_carteira"
@@ -234,6 +245,10 @@ const rotuloExecutado = computed(() => {
                         />
                         <InputError :message="form.errors.categoria_id" />
                     </div>
+                    <InputError
+                        v-if="noEspelho"
+                        :message="form.errors.carteira_id"
+                    />
 
                     <!-- A share moved to a card has no status (RN-194, RN-231). -->
                     <label
@@ -258,6 +273,7 @@ const rotuloExecutado = computed(() => {
                             Salvar
                         </Button>
                         <Button
+                            v-if="!noEspelho"
                             type="button"
                             variant="outline"
                             class="ml-auto"

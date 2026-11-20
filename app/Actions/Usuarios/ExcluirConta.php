@@ -3,8 +3,11 @@
 namespace App\Actions\Usuarios;
 
 use App\Actions\Rateio\SairDoRateio;
+use App\Models\Cartao;
+use App\Models\Carteira;
 use App\Models\Lancamento;
 use App\Models\Parcelamento;
+use App\Models\QuitacaoContato;
 use App\Models\User;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
@@ -24,6 +27,10 @@ class ExcluirConta
      * Attachment files live under anexos/{user_id} and are removed after the commit.
      * Shared entries follow RN-113: the author's participants keep their shares as their own entries
      * (CA-007.3), and shares the user received go back to each author (CA-007.4).
+     *
+     * Card mirrors (RN-248): the mirrors of the user's cards become the contacts' own cards, with
+     * their invoices, payments and dates; the user's shares in other authors' mirrors go back to the
+     * authors and the user's settlements and "a receber" items in the authors' invoices are deleted.
      */
     public function handle(User $user, string $campoErro = 'password'): void
     {
@@ -34,6 +41,9 @@ class ExcluirConta
 
             $this->entregarCotasAosParticipantes($user);
             $this->sairDosRateiosDeOutros($user);
+
+            Cartao::query()->whereIn('cartao_origem_id', Carteira::query()->where('user_id', $user->id)->select('id'))->update(['cartao_origem_id' => null]);
+            QuitacaoContato::query()->where('contato_id', $user->id)->delete();
 
             $user->lancamentos()->delete();
             $user->cotas()->delete();
@@ -74,7 +84,8 @@ class ExcluirConta
     }
 
     /**
-     * Shares the user received go back to the authors, also in series models (RN-081, RN-113, CA-007.4).
+     * Shares the user received go back to the authors, also in series models and from mirrors (RN-081,
+     * RN-113, CA-007.4, RN-248).
      */
     private function sairDosRateiosDeOutros(User $user): void
     {
@@ -84,7 +95,7 @@ class ExcluirConta
             ->get();
 
         foreach ($recebidos as $recebido) {
-            $this->sairDoRateio->handle($user, $recebido, permitirFechadas: true);
+            $this->sairDoRateio->handle($user, $recebido, permitirFechadas: true, permitirEspelho: true);
         }
 
         $series = Parcelamento::query()

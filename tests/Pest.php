@@ -4,6 +4,7 @@ use App\Actions\Cartoes\AtribuirFaturas;
 use App\Actions\Cartoes\PagarFatura;
 use App\Enums\CompetenciaFatura;
 use App\Enums\IconeCarteira;
+use App\Enums\OrigemQuitacao;
 use App\Enums\TipoCarteira;
 use App\Enums\TipoCategoria;
 use App\Models\Carteira;
@@ -12,12 +13,15 @@ use App\Models\Contato;
 use App\Models\Cota;
 use App\Models\Fatura;
 use App\Models\Lancamento;
+use App\Models\PagamentoFatura;
 use App\Models\Parcelamento;
+use App\Models\QuitacaoContato;
 use App\Models\User;
 use Carbon\CarbonImmutable;
 use Database\Seeders\CategoriasGlobaisSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Testing\TestResponse;
+use Inertia\Testing\AssertableInertia as Assert;
 use Tests\TestCase;
 
 /*
@@ -267,7 +271,7 @@ function cenarioEspelho(): void
     $teste->lazer = Categoria::query()->whereNull('user_id')->where('tipo', '!=', TipoCategoria::Receita)->firstOrFail();
     $entrada = Categoria::factory()->for($teste->user)->create(['tipo' => TipoCategoria::Ambos]);
     lancamentoComCota($teste->user, $teste->x, $entrada, ['data' => '2026-11-05', 'tipo' => 'receita', 'valor' => 500000], ['executado' => true]);
-    lancamentoComCota($teste->b, $teste->z, $entrada, ['data' => '2026-11-05', 'tipo' => 'receita', 'valor' => 300000], ['executado' => true]);
+    lancamentoComCota($teste->b, $teste->z, Categoria::factory()->for($teste->b)->create(['tipo' => TipoCategoria::Ambos]), ['data' => '2026-11-05', 'tipo' => 'receita', 'valor' => 300000], ['executado' => true]);
     $teste->nubank = cartaoDe($teste->user, 'Nubank', $teste->x);
 
     $teste->restaurante = compraRateada($teste->nubank, 'Restaurante', '200,00', '2026-11-05');
@@ -334,4 +338,60 @@ function espelhoDe(Carteira $cartao): ?Carteira
 function cotaDeB(Lancamento $lancamento): Cota
 {
     return $lancamento->cotas()->where('user_id', test()->b->id)->with('fatura')->sole();
+}
+
+/**
+ * Pay an invoice of the card as its owner, through the "Pagar" form (RF-165, RF-185).
+ *
+ * @param  list<int>  $contatos
+ */
+function pagarComo(User $user, Carteira $cartao, string $mes, string $valor, array $contatos = [], string $data = '2026-11-14'): TestResponse
+{
+    return test()->actingAs($user)->post(route('faturas.pagar', [$cartao, $mes]), ['valor' => $valor, 'data' => $data, 'contatos' => $contatos]);
+}
+
+function pagarNoEspelho(string $valor, string $mes = '2026-12', string $data = '2026-11-14'): PagamentoFatura
+{
+    $espelho = espelhoDe(test()->nubank);
+    pagarComo(test()->b, $espelho, $mes, $valor, data: $data)->assertSessionHasNoErrors();
+
+    return PagamentoFatura::query()->whereHas('fatura', fn ($query) => $query->where('carteira_id', $espelho->id))->latest('id')->firstOrFail();
+}
+
+function pagarComB(string $valor = '200,00', string $mes = '2026-12'): PagamentoFatura
+{
+    pagarComo(test()->user, test()->nubank, $mes, $valor, [test()->b->id])->assertSessionHasNoErrors();
+
+    return PagamentoFatura::query()->whereHas('fatura', fn ($query) => $query->where('carteira_id', test()->nubank->id))->latest('id')->firstOrFail();
+}
+
+/**
+ * Settlements of B on the Nubank as [reference month, origin, amount], oldest first.
+ *
+ * @return list<array{0: string, 1: string, 2: int}>
+ */
+function quitacoesDeB(): array
+{
+    return QuitacaoContato::query()
+        ->where('contato_id', test()->b->id)
+        ->with('fatura:id,referencia')
+        ->orderBy('id')
+        ->get()
+        ->map(fn (QuitacaoContato $quitacao): array => [$quitacao->fatura->referencia->format('Y-m'), $quitacao->origem->value, $quitacao->valor])
+        ->all();
+}
+
+function aReceberDeB(): QuitacaoContato
+{
+    return QuitacaoContato::query()->where('origem', OrigemQuitacao::Autor->value)->where('contato_id', test()->b->id)->sole();
+}
+
+function aPagarDoNubank(string $mes): int
+{
+    $aPagar = 0;
+    telaDe(test()->nubank, ['mes' => $mes])->assertInertia(function (Assert $page) use (&$aPagar) {
+        $aPagar = $page->toArray()['props']['fatura']['aPagar'];
+    });
+
+    return $aPagar;
 }

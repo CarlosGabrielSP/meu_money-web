@@ -69,7 +69,8 @@ class InicioController extends Controller
         }
 
         return Inertia::render('Inicio', [
-            'carteira' => $this->carteira($carteira),
+            // The contact's mirror shows its author on the invoice card (RN-246, CA-188.1).
+            'carteira' => [...$this->carteira($carteira), 'autorDoEspelho' => $noCartao ? Carteira::autorDoEspelho($carteira->id) : null],
             'carteiras' => $user->carteiras()
                 ->orderByDesc('padrao')
                 ->orderBy('tipo', 'desc')

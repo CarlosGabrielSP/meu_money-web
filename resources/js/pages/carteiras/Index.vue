@@ -35,6 +35,7 @@ type Carteira = {
         | (DadosCartao & {
               carteiraVinculadaNome: string | null;
               autorDoEspelho: string | null;
+              contatosDosEspelhos: string[];
           })
         | null;
 };
@@ -94,6 +95,15 @@ function resumoDoCartao(carteira: Carteira): string {
     }
 
     return `Vence dia ${cartao.diaVencimento} · ${cartao.carteiraVinculadaNome === null ? 'independente' : `paga por ${cartao.carteiraVinculadaNome}`}`;
+}
+
+/**
+ * "B", "B e C", "B, C e D".
+ */
+function juntarNomes(nomes: string[]): string {
+    return nomes.length < 2
+        ? (nomes[0] ?? '')
+        : `${nomes.slice(0, -1).join(', ')} e ${nomes[nomes.length - 1]}`;
 }
 
 /**
@@ -273,6 +283,20 @@ function tornarPadrao(carteira: Carteira): void {
                         eles.
                         <template v-if="excluindo.tipo === 'cartao'">
                             As compras de faturas fechadas também vão junto.
+                        </template>
+                        <!-- The contacts' parts follow the purchases (RF-190, nota 07, DEC-092). -->
+                        <template
+                            v-if="excluindo.cartao?.contatosDosEspelhos.length"
+                        >
+                            As partes de
+                            {{
+                                juntarNomes(
+                                    excluindo.cartao.contatosDosEspelhos,
+                                )
+                            }}
+                            vão junto: para o cartão de destino, para a carteira
+                            de destino como rateio comum, ou são excluídas com
+                            os pagamentos deles.
                         </template>
                     </DialogDescription>
                 </DialogHeader>

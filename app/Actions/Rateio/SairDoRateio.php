@@ -2,8 +2,12 @@
 
 namespace App\Actions\Rateio;
 
+use App\Actions\Cartoes\AtribuirFaturas;
 use App\Enums\EscopoSerie;
 use App\Enums\ModoRateio;
+use App\Enums\TipoCarteira;
+use App\Models\Cartao;
+use App\Models\Carteira;
 use App\Models\Categoria;
 use App\Models\Cota;
 use App\Models\Lancamento;
@@ -16,7 +20,10 @@ use Illuminate\Validation\ValidationException;
 
 class SairDoRateio
 {
-    public function __construct(private CalcularCotas $calcularCotas) {}
+    public function __construct(
+        private CalcularCotas $calcularCotas,
+        private AtribuirFaturas $atribuirFaturas,
+    ) {}
 
     /**
      * Remove a participant from a split (RF-073, RN-081).
@@ -33,11 +40,16 @@ class SairDoRateio
      * installment fails, others in the scope stay. $permitirFechadas lifts this when the card or the
      * account is deleted (RN-113, RN-233).
      *
+     * A contact never leaves a purchase whose share is in the mirror (RN-208, RN-266): the open
+     * installment fails, others in the scope stay, and the contact stays in a series model in a card
+     * (RN-267). $permitirEspelho lifts this when the contact deletes the account (RN-248); a missing
+     * author share is then created in the entry's card, in the invoice of the date (RN-268).
+     *
      * @throws ValidationException
      */
-    public function handle(User $participante, Lancamento $lancamento, EscopoSerie $escopo = EscopoSerie::Esta, bool $permitirFechadas = false): void
+    public function handle(User $participante, Lancamento $lancamento, EscopoSerie $escopo = EscopoSerie::Esta, bool $permitirFechadas = false, bool $permitirEspelho = false): void
     {
-        DB::transaction(function () use ($participante, $lancamento, $escopo, $permitirFechadas): void {
+        DB::transaction(function () use ($participante, $lancamento, $escopo, $permitirFechadas, $permitirEspelho): void {
             $hoje = CarbonImmutable::today();
             $serie = $lancamento->parcelamento;
 
@@ -46,16 +58,22 @@ class SairDoRateio
                 : $serie->lancamentos()
                     ->when($escopo === EscopoSerie::Proximas, fn ($query) => $query->where('numero_parcela', '>=', $lancamento->numero_parcela))
                     ->whereHas('cotas', fn ($query) => $query->where('user_id', $participante->id))
-                    ->where(fn ($query) => $query->whereKey($lancamento->id)->orWhereDoesntHave('cotas', fn ($cotas) => $cotas
-                        ->whereIn('user_id', [$participante->id, $serie->user_id])
-                        ->travadas($hoje)))
+                    ->where(fn ($query) => $query->whereKey($lancamento->id)->orWhere(fn ($livres) => $livres
+                        ->whereDoesntHave('cotas', fn ($cotas) => $cotas
+                            ->whereIn('user_id', [$participante->id, $serie->user_id])
+                            ->travadas($hoje))
+                        ->when(! $permitirEspelho, fn ($semEspelho) => $semEspelho->whereDoesntHave('cotas', fn ($cotas) => $cotas
+                            ->where('user_id', $participante->id)
+                            ->whereIn('carteira_id', Cartao::query()->whereNotNull('cartao_origem_id')->select('carteira_id'))))))
                     ->get();
 
             foreach ($lancamentos as $item) {
-                $this->sairDoLancamento($participante, $item, $permitirFechadas ? null : $hoje);
+                $this->sairDoLancamento($participante, $item, $permitirFechadas ? null : $hoje, $permitirEspelho);
             }
 
-            if ($serie !== null && $escopo !== EscopoSerie::Esta) {
+            $modeloNoCartao = ! $permitirEspelho && $serie !== null && Carteira::query()->whereKey($serie->carteira_id)->value('tipo') === TipoCarteira::Cartao;
+
+            if ($serie !== null && $escopo !== EscopoSerie::Esta && ! $modeloNoCartao) {
                 $this->sairDaSerie($participante, $serie);
             }
         });
@@ -66,7 +84,7 @@ class SairDoRateio
      *
      * @throws ValidationException
      */
-    private function sairDoLancamento(User $participante, Lancamento $lancamento, ?CarbonImmutable $hoje): void
+    private function sairDoLancamento(User $participante, Lancamento $lancamento, ?CarbonImmutable $hoje, bool $permitirEspelho): void
     {
         $cotas = $lancamento->cotas()->with('fatura:id,fechamento')->lockForUpdate()->get()->keyBy('user_id');
 
@@ -81,14 +99,21 @@ class SairDoRateio
             throw ValidationException::withMessages(['cota' => 'Fatura fechada: a cota não pode sair da divisão.']);
         }
 
+        if (! $permitirEspelho && ($autor = Carteira::autorDoEspelho($saindo->carteira_id)) !== null) {
+            throw ValidationException::withMessages(['cota' => "Este cartão tem compras divididas com {$autor}."]);
+        }
+
         /** @var Cota|null $doAutor */
         $doAutor = $cotas->get($lancamento->user_id);
+        $noCartao = false;
 
         if ($doAutor === null) {
-            $executado = $lancamento->tipo->executadoPorPadrao($lancamento->data, CarbonImmutable::now());
+            $carteiraDoLancamento = Carteira::query()->find($lancamento->carteira_id);
+            $noCartao = $carteiraDoLancamento?->isCartao() === true;
+            $executado = ! $noCartao && $lancamento->tipo->executadoPorPadrao($lancamento->data, CarbonImmutable::now());
             $doAutor = new Cota([
                 'user_id' => $lancamento->user_id,
-                'carteira_id' => $lancamento->user->carteiraPadrao()->id,
+                'carteira_id' => $noCartao ? $carteiraDoLancamento->id : $lancamento->user->carteiraPadrao()->id,
                 'categoria_id' => Categoria::outros()->id,
                 'valor' => 0,
                 'executado' => $executado,
@@ -112,6 +137,10 @@ class SairDoRateio
         }
 
         $doAutor->save();
+
+        if ($noCartao) {
+            $this->atribuirFaturas->handle([$doAutor->id], permitirFechadas: true, permitirQuitadas: true);
+        }
     }
 
     /**

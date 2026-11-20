@@ -27,13 +27,14 @@ class AtribuirFaturas
      * instead (DEC-087, RN-232). $permitirFechadas lifts these limits for
      * deleting a card (RN-233) and for recalculating invoices whose dates changed (RN-193, RN-220).
      * A contact's share whose part was settled never changes invoice (RN-250, RN-260, RN-263): the
-     * change fails with the message of RN-258 on the field $campoDaQuitacao.
+     * change fails with the message of RN-258 on the field $campoDaQuitacao; $permitirQuitadas lifts
+     * this when the card is deleted (RN-234, RN-235) or the account (RN-248, RN-268).
      *
      * @param  iterable<int>  $cotaIds
      *
      * @throws ValidationException
      */
-    public function handle(iterable $cotaIds, ?User $ator = null, bool $permitirFechadas = false, string $campoDaQuitacao = 'data'): void
+    public function handle(iterable $cotaIds, ?User $ator = null, bool $permitirFechadas = false, string $campoDaQuitacao = 'data', bool $permitirQuitadas = false): void
     {
         $ids = collect($cotaIds)->values()->all();
 
@@ -96,7 +97,7 @@ class AtribuirFaturas
                 $alvo = $aberta;
             }
 
-            if ($atual !== null && $cota->isQuitada() && ! $alvo->referencia->equalTo($atual->referencia)) {
+            if (! $permitirQuitadas && $atual !== null && $cota->isQuitada() && ! $alvo->referencia->equalTo($atual->referencia)) {
                 $quitadas[] = $cota->user->name;
 
                 continue;
