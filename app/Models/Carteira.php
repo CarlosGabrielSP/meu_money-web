@@ -116,6 +116,16 @@ class Carteira extends Model
         return $this->hasMany(Fatura::class);
     }
 
+    /**
+     * Members and member invitations of a delegated wallet (RN-269, RN-270).
+     *
+     * @return HasMany<CarteiraMembro, $this>
+     */
+    public function membros(): HasMany
+    {
+        return $this->hasMany(CarteiraMembro::class);
+    }
+
     public function isCartao(): bool
     {
         return $this->tipo === TipoCarteira::Cartao;

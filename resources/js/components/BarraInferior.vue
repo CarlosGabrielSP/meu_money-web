@@ -16,6 +16,16 @@ const modoSimples = useModoSimples();
 const { isCurrentUrl } = useCurrentUrl();
 
 /**
+ * "Mais" counts contact invitations (full mode only, RN-163) and member invitations (both modes,
+ * nota 07, RN-271).
+ */
+const convitesDoMais = computed(
+    () =>
+        (modoSimples.value ? 0 : page.props.contadores.convites) +
+        page.props.contadores.membros,
+);
+
+/**
  * The item of the current page, by URL path (wallet and month parameters do not count); any page
  * outside the three main ones marks "Mais" (DEC-096).
  */
@@ -133,10 +143,10 @@ function classeDoIcone(item: string): string {
             /></span>
             Mais
             <span
-                v-if="!modoSimples && page.props.contadores.convites > 0"
+                v-if="convitesDoMais > 0"
                 class="absolute top-1 right-1/4 rounded-full bg-destaque px-1.5 text-[10px] text-destaque-foreground"
-                :aria-label="`${page.props.contadores.convites} convites pendentes`"
-                >{{ page.props.contadores.convites }}</span
+                :aria-label="`${convitesDoMais} convites pendentes`"
+                >{{ convitesDoMais }}</span
             >
         </button>
     </nav>

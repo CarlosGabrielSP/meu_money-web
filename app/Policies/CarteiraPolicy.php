@@ -24,4 +24,12 @@ class CarteiraPolicy
     {
         return $carteira->user_id === $user->id;
     }
+
+    /**
+     * Only the owner invites, cancels and removes members (RN-272, CA-200.6, CA-203.6).
+     */
+    public function gerenciarMembros(User $user, Carteira $carteira): bool
+    {
+        return $carteira->user_id === $user->id;
+    }
 }

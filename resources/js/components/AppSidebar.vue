@@ -90,6 +90,7 @@ const navSimples = computed<NavItem[]>(() => [
         title: 'Carteiras',
         href: carteirasIndex(),
         icon: Wallet,
+        contador: page.props.contadores.membros,
     },
     {
         title: 'Recebidas',
@@ -116,6 +117,7 @@ const navCompleta = computed<NavItem[]>(() => [
         title: 'Carteiras',
         href: carteirasIndex(),
         icon: Wallet,
+        contador: page.props.contadores.membros,
     },
     {
         title: 'Categorias',

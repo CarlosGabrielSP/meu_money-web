@@ -3,6 +3,7 @@
 use App\Http\Controllers\AReceberController;
 use App\Http\Controllers\Auth\GoogleController;
 use App\Http\Controllers\CarteiraController;
+use App\Http\Controllers\CarteiraMembroController;
 use App\Http\Controllers\CategoriaController;
 use App\Http\Controllers\ContatoController;
 use App\Http\Controllers\CotaController;
@@ -42,6 +43,10 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
     Route::resource('carteiras', CarteiraController::class)->only(['index', 'store', 'update', 'destroy']);
     Route::post('carteiras/{carteira}/padrao', [CarteiraController::class, 'definirPadrao'])->name('carteiras.padrao');
+    Route::post('carteiras/{carteira}/membros', [CarteiraMembroController::class, 'store'])->name('carteiras.membros.store');
+    Route::post('membros/{membro}/aceitar', [CarteiraMembroController::class, 'aceitar'])->name('membros.aceitar');
+    Route::post('membros/{membro}/recusar', [CarteiraMembroController::class, 'recusar'])->name('membros.recusar');
+    Route::delete('membros/{membro}', [CarteiraMembroController::class, 'destroy'])->name('membros.destroy');
     Route::post('cartoes/{carteira}/faturas/{referencia}/pagamentos', [FaturaController::class, 'pagar'])
         ->where('referencia', '\d{4}-(0[1-9]|1[0-2])')
         ->name('faturas.pagar');

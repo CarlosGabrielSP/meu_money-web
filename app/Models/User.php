@@ -150,6 +150,16 @@ class User extends Authenticatable implements MustVerifyEmail
     }
 
     /**
+     * Wallet delegations and member invitations received by the user (RN-270, RN-279).
+     *
+     * @return HasMany<CarteiraMembro, $this>
+     */
+    public function delegacoes(): HasMany
+    {
+        return $this->hasMany(CarteiraMembro::class);
+    }
+
+    /**
      * Last wallet shown on the home screen (RN-115).
      *
      * @return BelongsTo<Carteira, $this>

@@ -1,8 +1,9 @@
 <script setup lang="ts">
 import CampoSelecao from '@/components/CampoSelecao.vue';
-import { Form, Head, router } from '@inertiajs/vue3';
+import { Form, Head, Link, router } from '@inertiajs/vue3';
 import { computed, ref } from 'vue';
 import CarteiraController from '@/actions/App/Http/Controllers/CarteiraController';
+import CarteiraMembroController from '@/actions/App/Http/Controllers/CarteiraMembroController';
 import CarteiraCampos from '@/components/carteiras/CarteiraCampos.vue';
 import type { DadosCartao } from '@/components/carteiras/CarteiraCampos.vue';
 import CarteiraIcone from '@/components/carteiras/CarteiraIcone.vue';
@@ -20,7 +21,26 @@ import {
 } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 import { useModoSimples } from '@/composables/useModoSimples';
+import { home } from '@/routes';
 import { index, padrao } from '@/routes/carteiras';
+import { index as contatosIndex } from '@/routes/contatos';
+
+type Membro = {
+    id: number;
+    userId: number;
+    nome: string;
+    status: 'pendente' | 'aceito' | 'recusado';
+};
+
+type Delegada = {
+    id: number;
+    carteiraId: number;
+    nome: string;
+    cor: string;
+    icone: string;
+    donoId: number;
+    dono: string;
+};
 
 type Carteira = {
     id: number;
@@ -31,6 +51,7 @@ type Carteira = {
     icone: string;
     temConteudo: boolean;
     temCotas: boolean;
+    membros: Membro[];
     cartao:
         | (DadosCartao & {
               carteiraVinculadaNome: string | null;
@@ -42,6 +63,8 @@ type Carteira = {
 
 const props = defineProps<{
     carteiras: Carteira[];
+    contatos: { id: number; nome: string }[];
+    delegadas: { convites: Delegada[]; carteiras: Delegada[] };
     cores: string[];
     icones: string[];
 }>();
@@ -113,6 +136,132 @@ function espelhoComPartes(carteira: Carteira): boolean {
     return Boolean(carteira.cartao?.autorDoEspelho) && carteira.temCotas;
 }
 
+const gerenciandoId = ref<number | null>(null);
+const erroDeNovoConvite = ref<string | null>(null);
+const convidadoId = ref<number | null>(null);
+
+/**
+ * The wallet whose members dialog is open, kept fresh from the props after each action.
+ */
+const gerenciando = computed(
+    () =>
+        props.carteiras.find(
+            (carteira) => carteira.id === gerenciandoId.value,
+        ) ?? null,
+);
+
+/**
+ * Contacts without any record in the wallet; a refused one uses "Convidar de novo" (DEC-098).
+ */
+const contatosParaConvidar = computed(() =>
+    gerenciando.value === null
+        ? []
+        : props.contatos.filter(
+              (contato) =>
+                  !gerenciando.value!.membros.some(
+                      (membro) => membro.userId === contato.id,
+                  ),
+          ),
+);
+
+function abrirMembros(carteira: Carteira): void {
+    gerenciandoId.value = carteira.id;
+    convidadoId.value = null;
+    erroDeNovoConvite.value = null;
+}
+
+function membrosAceitos(carteira: Carteira): number {
+    return carteira.membros.filter((membro) => membro.status === 'aceito')
+        .length;
+}
+
+const situacaoDoMembro: Record<Membro['status'], string> = {
+    aceito: 'Membro',
+    pendente: 'Convite pendente',
+    recusado: 'Recusou',
+};
+
+function convidarDeNovo(carteira: Carteira, membro: Membro): void {
+    router.post(
+        CarteiraMembroController.store(carteira.id).url,
+        { user_id: membro.userId },
+        {
+            preserveScroll: true,
+            onStart: () => (erroDeNovoConvite.value = null),
+            onError: (errors) =>
+                (erroDeNovoConvite.value = errors.user_id ?? null),
+        },
+    );
+}
+
+function cancelarConvite(membro: Membro): void {
+    router.delete(CarteiraMembroController.destroy(membro.id).url, {
+        preserveScroll: true,
+    });
+}
+
+function responderConvite(convite: Delegada, aceitar: boolean): void {
+    const rota = aceitar
+        ? CarteiraMembroController.aceitar(convite.id)
+        : CarteiraMembroController.recusar(convite.id);
+
+    router.post(rota.url, {}, { preserveScroll: true });
+}
+
+/**
+ * Removing a member or leaving asks for confirmation (nota 07).
+ */
+const confirmando = ref<{ id: number; titulo: string; texto: string } | null>(
+    null,
+);
+
+function confirmarRemocao(carteira: Carteira, membro: Membro): void {
+    confirmando.value = {
+        id: membro.id,
+        titulo: `Remover ${membro.nome}?`,
+        texto: `${membro.nome} perde o acesso a ${carteira.nome}. Os lançamentos ficam.`,
+    };
+}
+
+function confirmarSaida(delegada: Delegada): void {
+    confirmando.value = {
+        id: delegada.id,
+        titulo: `Sair de ${delegada.nome}?`,
+        texto: `Você perde o acesso a ${delegada.nome} de ${delegada.dono}.`,
+    };
+}
+
+function confirmar(): void {
+    if (confirmando.value === null) {
+        return;
+    }
+
+    router.delete(CarteiraMembroController.destroy(confirmando.value.id).url, {
+        preserveScroll: true,
+        onSuccess: () => (confirmando.value = null),
+    });
+}
+
+/**
+ * "Delegadas a mim" grouped by owner, already sorted by the server (DEC-098).
+ */
+const delegadasPorDono = computed(() => {
+    const grupos = new Map<number, Delegada[]>();
+
+    for (const delegada of props.delegadas.carteiras) {
+        grupos.set(delegada.donoId, [
+            ...(grupos.get(delegada.donoId) ?? []),
+            delegada,
+        ]);
+    }
+
+    return [...grupos.entries()].map(([donoId, carteiras]) => ({
+        donoId,
+        dono: carteiras[0].dono,
+        carteiras,
+    }));
+});
+
 function tornarPadrao(carteira: Carteira): void {
     router.post(padrao(carteira.id).url, {}, { preserveScroll: true });
 }
@@ -151,6 +300,17 @@ function tornarPadrao(carteira: Carteira): void {
                         >
                             {{ resumoDoCartao(carteira) }}
                         </p>
+                        <p
+                            v-else-if="membrosAceitos(carteira) > 0"
+                            class="truncate text-sm text-muted-foreground"
+                        >
+                            {{ membrosAceitos(carteira) }}
+                            {{
+                                membrosAceitos(carteira) === 1
+                                    ? 'membro'
+                                    : 'membros'
+                            }}
+                        </p>
                     </div>
                     <Badge v-if="carteira.padrao" variant="secondary"
                         >Padrão</Badge
@@ -174,6 +334,14 @@ function tornarPadrao(carteira: Carteira): void {
                         @click="tornarPadrao(carteira)"
                     >
                         Tornar padrão
+                    </Button>
+                    <Button
+                        v-if="carteira.tipo === 'comum' && !modoSimples"
+                        variant="outline"
+                        size="sm"
+                        @click="abrirMembros(carteira)"
+                    >
+                        Membros
                     </Button>
                     <Button
                         variant="outline"
@@ -201,7 +369,217 @@ function tornarPadrao(carteira: Carteira): void {
                 </p>
             </li>
         </ul>
+
+        <!-- Wallets delegated to the user and member invitations (RF-201, RF-202, RN-279). -->
+        <section
+            v-if="delegadas.convites.length || delegadas.carteiras.length"
+            class="flex flex-col gap-3"
+        >
+            <h2
+                class="text-sm font-semibold tracking-wide text-muted-foreground uppercase"
+            >
+                Delegadas a mim
+            </h2>
+            <div v-if="delegadas.convites.length" class="flex flex-col gap-2">
+                <h3 class="text-sm font-medium">Convites</h3>
+                <ul class="divide-y overflow-hidden rounded-2xl border bg-card">
+                    <li
+                        v-for="convite in delegadas.convites"
+                        :key="convite.id"
+                        class="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between"
+                    >
+                        <div class="flex min-w-0 items-center gap-3">
+                            <CarteiraIcone
+                                :cor="convite.cor"
+                                :icone="convite.icone"
+                            />
+                            <p class="truncate font-medium">
+                                {{ convite.nome }} · de {{ convite.dono }}
+                            </p>
+                        </div>
+                        <div class="flex gap-2">
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                @click="responderConvite(convite, false)"
+                            >
+                                Recusar
+                            </Button>
+                            <Button
+                                size="sm"
+                                @click="responderConvite(convite, true)"
+                            >
+                                Aceitar
+                            </Button>
+                        </div>
+                    </li>
+                </ul>
+            </div>
+            <div
+                v-for="grupo in delegadasPorDono"
+                :key="grupo.donoId"
+                class="flex flex-col gap-2"
+            >
+                <h3 class="text-sm font-medium">{{ grupo.dono }}</h3>
+                <ul class="divide-y overflow-hidden rounded-2xl border bg-card">
+                    <li
+                        v-for="delegada in grupo.carteiras"
+                        :key="delegada.id"
+                        class="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between"
+                    >
+                        <div class="flex min-w-0 items-center gap-3">
+                            <CarteiraIcone
+                                :cor="delegada.cor"
+                                :icone="delegada.icone"
+                            />
+                            <p class="truncate font-medium">
+                                {{ delegada.nome }}
+                            </p>
+                        </div>
+                        <div class="flex gap-2">
+                            <Button variant="outline" size="sm" as-child>
+                                <Link
+                                    :href="
+                                        home({
+                                            query: {
+                                                carteira: delegada.carteiraId,
+                                            },
+                                        })
+                                    "
+                                    >Abrir</Link
+                                >
+                            </Button>
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                @click="confirmarSaida(delegada)"
+                            >
+                                Sair
+                            </Button>
+                        </div>
+                    </li>
+                </ul>
+            </div>
+        </section>
     </div>
+
+    <!-- Members of an owner's wallet (RF-200, RF-202, nota 07). -->
+    <Dialog
+        :open="gerenciando !== null"
+        @update:open="gerenciandoId = $event ? gerenciandoId : null"
+    >
+        <DialogContent v-if="gerenciando">
+            <DialogHeader>
+                <DialogTitle>Membros de {{ gerenciando.nome }}</DialogTitle>
+                <DialogDescription>
+                    Membros lançam, editam e excluem nesta carteira em seu nome.
+                    O saldo continua só seu.
+                </DialogDescription>
+            </DialogHeader>
+
+            <ul
+                v-if="gerenciando.membros.length"
+                class="divide-y rounded-xl border"
+            >
+                <li
+                    v-for="membro in gerenciando.membros"
+                    :key="membro.id"
+                    class="flex items-center justify-between gap-3 p-3"
+                >
+                    <div class="min-w-0">
+                        <p class="truncate font-medium">{{ membro.nome }}</p>
+                        <p class="text-sm text-muted-foreground">
+                            {{ situacaoDoMembro[membro.status] }}
+                        </p>
+                    </div>
+                    <Button
+                        v-if="membro.status === 'aceito'"
+                        variant="outline"
+                        size="sm"
+                        @click="confirmarRemocao(gerenciando, membro)"
+                    >
+                        Remover
+                    </Button>
+                    <Button
+                        v-else-if="membro.status === 'pendente'"
+                        variant="outline"
+                        size="sm"
+                        @click="cancelarConvite(membro)"
+                    >
+                        Cancelar
+                    </Button>
+                    <Button
+                        v-else
+                        variant="outline"
+                        size="sm"
+                        @click="convidarDeNovo(gerenciando, membro)"
+                    >
+                        Convidar de novo
+                    </Button>
+                </li>
+            </ul>
+
+            <!-- "Convidar de novo" posts outside the form; its error (e.g. a deactivated contact) shows here. -->
+            <InputError :message="erroDeNovoConvite ?? undefined" />
+            <p v-if="!contatos.length" class="text-sm text-muted-foreground">
+                Adicione um contato antes de convidar.
+                <Link :href="contatosIndex()" class="underline">Contatos</Link>
+            </p>
+            <Form
+                v-else-if="contatosParaConvidar.length"
+                v-bind="CarteiraMembroController.store.form(gerenciando.id)"
+                class="grid gap-2"
+                :options="{ preserveScroll: true }"
+                @success="convidadoId = null"
+                v-slot="{ errors, processing }"
+            >
+                <Label for="user_id">Convidar</Label>
+                <div class="flex gap-2">
+                    <CampoSelecao
+                        id="user_id"
+                        v-model="convidadoId"
+                        name="user_id"
+                        class="flex-1"
+                        placeholder="Escolha um contato"
+                        :opcoes="
+                            contatosParaConvidar.map((contato) => ({
+                                valor: contato.id,
+                                rotulo: contato.nome,
+                            }))
+                        "
+                    />
+                    <Button :disabled="processing || convidadoId === null">
+                        Convidar
+                    </Button>
+                </div>
+                <InputError :message="errors.user_id ?? errors.carteira" />
+            </Form>
+        </DialogContent>
+    </Dialog>
+
+    <Dialog
+        :open="confirmando !== null"
+        @update:open="confirmando = $event ? confirmando : null"
+    >
+        <DialogContent v-if="confirmando">
+            <DialogHeader>
+                <DialogTitle>{{ confirmando.titulo }}</DialogTitle>
+                <DialogDescription>{{ confirmando.texto }}</DialogDescription>
+            </DialogHeader>
+            <DialogFooter>
+                <Button variant="outline" @click="confirmando = null">
+                    Voltar
+                </Button>
+                <Button variant="destructive" @click="confirmar">
+                    {{
+                        confirmando.titulo.startsWith('Sair')
+                            ? 'Sair'
+                            : 'Remover'
+                    }}
+                </Button>
+            </DialogFooter>
+        </DialogContent>
+    </Dialog>
 
     <Dialog :open="criando" @update:open="criando = $event">
         <DialogContent>

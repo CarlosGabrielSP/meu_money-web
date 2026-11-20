@@ -6,10 +6,12 @@ use App\Actions\Contatos\EnviarConvite;
 use App\Actions\Contatos\ResponderConvite;
 use App\Enums\StatusContato;
 use App\Http\Requests\Contatos\ConvidarContatoRequest;
+use App\Models\CarteiraMembro;
 use App\Models\Contato;
 use App\Models\User;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\RateLimiter;
 use Inertia\Inertia;
@@ -102,6 +104,8 @@ class ContatoController extends Controller
 
     /**
      * Cancel a sent invitation (RN-068) or remove a contact, keeping existing shares (RN-063, RN-064).
+     * Removing a contact also deletes the wallet delegations and member invitations between the two,
+     * in both directions (RN-283, CA-209.3).
      */
     public function destroy(Contato $contato): RedirectResponse
     {
@@ -109,7 +113,10 @@ class ContatoController extends Controller
 
         $pendente = $contato->status === StatusContato::Pendente;
 
-        $contato->delete();
+        DB::transaction(function () use ($contato): void {
+            CarteiraMembro::query()->entre($contato->solicitante, $contato->convidado)->delete();
+            $contato->delete();
+        });
 
         Inertia::flash('toast', ['type' => 'success', 'message' => $pendente ? 'Convite cancelado.' : 'Contato removido.']);
 
