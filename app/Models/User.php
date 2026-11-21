@@ -163,7 +163,8 @@ class User extends Authenticatable implements MustVerifyEmail
 
     /**
      * Wallets the user operates as an accepted member while the owner is active (RN-272, RN-284).
-     * Only common wallets are delegated (RN-269), so a card never counts even with a stray record.
+     * Own cards are delegated too (RN-313), but until stage 17.2 opens card operation only common
+     * wallets count here, so an accepted card is listed in "Delegadas a mim" and still gives 403.
      *
      * @return Builder<Carteira>
      */

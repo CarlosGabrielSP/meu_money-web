@@ -3,7 +3,6 @@
 use App\Actions\Usuarios\DesativarUsuario;
 use App\Actions\Usuarios\ExcluirConta;
 use App\Enums\StatusMembro;
-use App\Enums\TipoCarteira;
 use App\Models\Carteira;
 use App\Models\CarteiraMembro;
 use App\Models\Contato;
@@ -65,12 +64,15 @@ it('CA-200.2 rejects a user who is not an active accepted contact, or the owner'
     Notification::assertNothingSent();
 })->with(['sem contato', 'contato pendente', 'desativado', 'o próprio dono']);
 
-it('CA-200.3 rejects delegating a card', function () {
-    $cartao = Carteira::factory()->for($this->dono)->create(['tipo' => TipoCarteira::Cartao]);
+it('CA-211.2 rejects delegating a mirror', function () {
+    $nubank = cartaoDe($this->dono, 'Nubank', $this->principal);
+    $espelho = cartaoDe($this->membro, 'Nubank · Carlos');
+    $espelho->cartao->forceFill(['cartao_origem_id' => $nubank->id])->save();
 
-    convidarMembro($this->dono, $cartao, $this->membro)->assertSessionHasErrors(['carteira' => 'Só carteira comum pode ser delegada.']);
+    convidarMembro($this->membro, $espelho, $this->dono)->assertSessionHasErrors(['carteira' => 'Espelho não pode ser delegado.']);
 
     expect(CarteiraMembro::query()->count())->toBe(0);
+    Notification::assertNothingSent();
 });
 
 it('CA-200.4 RN-287 creates nothing for a member or a pending invitation', function (string $estado) {
@@ -260,6 +262,123 @@ it('CA-209.4 keeps the delegation of a deactivated member', function () {
     $registro = membroDe($this->principal, $this->membro);
 
     app(DesativarUsuario::class)->handle($this->membro);
+
+    expect($registro->fresh())->not->toBeNull();
+});
+
+it('CA-211.1 invites a contact to an own card and emails a card invitation', function (bool $vinculado) {
+    $nubank = cartaoDe($this->dono, 'Nubank', $vinculado ? $this->principal : null);
+
+    convidarMembro($this->dono, $nubank, $this->membro)
+        ->assertSessionHasNoErrors()
+        ->assertInertiaFlash('toast.message', 'Convite enviado.');
+
+    expect(CarteiraMembro::query()->sole())
+        ->carteira_id->toBe($nubank->id)
+        ->status->toBe(StatusMembro::Pendente);
+    Notification::assertSentTo($this->membro, ConviteMembroNotification::class, function (ConviteMembroNotification $notificacao) {
+        $email = $notificacao->toMail($this->membro);
+
+        return $email->subject === 'Convite para o cartão Nubank no '.config('app.name')
+            && $email->actionUrl === route('carteiras.index')
+            && in_array('Carlos convidou você para lançar no cartão Nubank em nome dele. A fatura continua só de Carlos.', $email->introLines, true);
+    });
+})->with(['vinculado' => true, 'independente' => false]);
+
+it('CA-211.3 delegating the card and its linked wallet are independent', function () {
+    $nubank = cartaoDe($this->dono, 'Nubank', $this->principal);
+    membroDe($this->principal, $this->membro);
+
+    convidarMembro($this->dono, $nubank, $this->membro)->assertSessionHasNoErrors();
+
+    expect(CarteiraMembro::query()->where('carteira_id', $nubank->id)->sole()->status)->toBe(StatusMembro::Pendente)
+        ->and(CarteiraMembro::query()->where('carteira_id', $this->principal->id)->sole()->status)->toBe(StatusMembro::Aceito);
+});
+
+it('CA-211.5 CA-212.1 the member accepts a card invitation and the card joins "Delegadas a mim" by name', function () {
+    $nubank = cartaoDe($this->dono, 'Nubank', $this->principal);
+    $convite = membroDe($nubank, $this->membro, 'pendente');
+    membroDe($this->principal, $this->membro);
+
+    $this->actingAs($this->membro)->get(route('carteiras.index'))
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('contadores.membros', 1)
+            ->where('delegadas.convites.0', ['id' => $convite->id, 'carteiraId' => $nubank->id, 'nome' => 'Nubank', 'cor' => $nubank->cor->value, 'icone' => 'credit-card', 'donoId' => $this->dono->id, 'dono' => 'Carlos']));
+
+    $this->actingAs($this->membro)->post(route('membros.aceitar', $convite))->assertInertiaFlash('toast.message', 'Convite aceito.');
+
+    $this->actingAs($this->membro)->get(route('carteiras.index'))
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('delegadas.carteiras', fn ($carteiras) => collect($carteiras)->pluck('nome')->all() === ['Nubank', 'Principal']));
+});
+
+it('CA-211.5 the owner lists, cancels and removes card members; a mirror lists none', function () {
+    $nubank = cartaoDe($this->dono, 'Nubank', $this->principal);
+    $membro = membroDe($nubank, $this->membro);
+    $espelho = cartaoDe($this->dono, 'Itaú · Ana');
+    $espelho->cartao->forceFill(['cartao_origem_id' => cartaoDe($this->membro, 'Itaú')->id])->save();
+    membroDe($espelho, $this->membro);
+
+    $this->actingAs($this->dono)->get(route('carteiras.index'))
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('carteiras', fn ($carteiras) => collect($carteiras)->firstWhere('nome', 'Nubank')['membros'][0]['nome'] === 'Ana'
+                && collect($carteiras)->firstWhere('nome', 'Itaú · Ana')['membros'] === []));
+
+    $this->actingAs($this->dono)->delete(route('membros.destroy', $membro))->assertInertiaFlash('toast.message', 'Membro removido.');
+
+    expect($membro->fresh())->toBeNull();
+});
+
+it('CA-216.1 deleting the card, moving or in cascade, deletes its members', function (string $modo) {
+    $nubank = cartaoDe($this->dono, 'Nubank', $this->principal);
+    membroDe($nubank, $this->membro);
+    membroDe($this->principal, $this->membro);
+
+    $this->actingAs($this->dono)->delete(route('carteiras.destroy', $nubank), $modo === 'mover' ? ['modo' => 'mover', 'destino_id' => $this->principal->id] : ['modo' => 'excluir'])
+        ->assertSessionHasNoErrors();
+
+    expect(CarteiraMembro::query()->pluck('carteira_id')->all())->toBe([$this->principal->id]);
+})->with(['mover', 'excluir']);
+
+it('CA-216.2 changing the linked wallet of the card keeps its delegation', function () {
+    $nubank = cartaoDe($this->dono, 'Nubank', $this->principal);
+    $outra = Carteira::factory()->for($this->dono)->create(['nome' => 'Reserva']);
+    $registro = membroDe($nubank, $this->membro);
+
+    $this->actingAs($this->dono)->put(route('carteiras.update', $nubank), [
+        'nome' => 'Nubank', 'tipo' => 'cartao', 'cor' => $nubank->cor->value, 'icone' => 'credit-card',
+        'dia_vencimento' => 10, 'dias_fechamento' => 10, 'competencia' => 'vencimento', 'carteira_vinculada_id' => $outra->id,
+    ])->assertSessionHasNoErrors();
+
+    expect($nubank->cartao->fresh()->carteira_vinculada_id)->toBe($outra->id)
+        ->and($registro->fresh()?->status)->toBe(StatusMembro::Aceito);
+});
+
+it('CA-216.3 removing the contact or deleting an account ends card delegations', function (string $caso) {
+    $nubank = cartaoDe($this->dono, 'Nubank', $this->principal);
+    membroDe($nubank, $this->membro);
+
+    match ($caso) {
+        'contato removido' => $this->actingAs($this->dono)->delete(route('contatos.destroy', $this->contato))->assertSessionHasNoErrors(),
+        'conta do membro' => app(ExcluirConta::class)->handle($this->membro),
+        'conta do dono' => app(ExcluirConta::class)->handle($this->dono),
+    };
+
+    expect(CarteiraMembro::query()->count())->toBe(0);
+})->with(['contato removido', 'conta do membro', 'conta do dono']);
+
+it('RN-313 a stray record on a mirror stays out of "Delegadas a mim" and the mirror has no members', function () {
+    $nubank = cartaoDe($this->membro, 'Nubank');
+    $espelho = cartaoDe($this->dono, 'Nubank · Ana');
+    $espelho->cartao->forceFill(['cartao_origem_id' => $nubank->id])->save();
+    $registro = membroDe($espelho, $this->membro);
+
+    $this->actingAs($this->membro)->get(route('carteiras.index'))
+        ->assertInertia(fn (Assert $page) => $page->has('delegadas.carteiras', 0));
+    $this->actingAs($this->dono)->get(route('carteiras.index'))
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('carteiras', fn ($carteiras) => collect($carteiras)->firstWhere('nome', 'Nubank · Ana')['espelho'] === true
+                && collect($carteiras)->firstWhere('nome', 'Nubank · Ana')['membros'] === []));
 
     expect($registro->fresh())->not->toBeNull();
 });

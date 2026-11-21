@@ -21,14 +21,20 @@ class ConviteMembroNotification extends Notification
 
     /**
      * Email telling the invited user about a member invitation, with a link to the wallets page
-     * (RN-271, RN-289).
+     * (RN-271, RN-289); a card invitation speaks of the card and its invoice (RN-328).
      */
     public function toMail(User $notifiable): MailMessage
     {
+        $nome = $this->carteira->nome;
+        $dono = $this->dono->name;
+        $noCartao = $this->carteira->isCartao();
+
         return (new MailMessage)
-            ->subject("Convite para a carteira {$this->carteira->nome} no ".config('app.name'))
+            ->subject(($noCartao ? "Convite para o cartão {$nome}" : "Convite para a carteira {$nome}").' no '.config('app.name'))
             ->greeting('Olá, '.$notifiable->name.'!')
-            ->line("{$this->dono->name} convidou você para lançar na carteira {$this->carteira->nome} em nome dele. O saldo continua só de {$this->dono->name}.")
+            ->line($noCartao
+                ? "{$dono} convidou você para lançar no cartão {$nome} em nome dele. A fatura continua só de {$dono}."
+                : "{$dono} convidou você para lançar na carteira {$nome} em nome dele. O saldo continua só de {$dono}.")
             ->action('Ver convites', route('carteiras.index'));
     }
 }

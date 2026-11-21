@@ -16,15 +16,15 @@ class ConvidarMembroRequest extends FormRequest
     }
 
     /**
-     * The invited user is an active accepted contact of the owner (RN-269, RN-270, CA-200.2); only a
-     * common wallet is delegated (CA-200.3).
+     * The invited user is an active accepted contact of the owner (RN-269, RN-270, CA-200.2); a
+     * common wallet or an own card is delegated, never a mirror (RN-313, CA-211.2).
      *
      * @return array<string, ValidationRule|array<mixed>|string>
      */
     public function rules(): array
     {
         return [
-            'carteira' => [$this->carteiraComum(...)],
+            'carteira' => [$this->semEspelho(...)],
             'user_id' => ['required', 'integer', $this->contatoDoDono(...)],
         ];
     }
@@ -39,10 +39,10 @@ class ConvidarMembroRequest extends FormRequest
         return [...$this->all(), 'carteira' => $this->route('carteira')];
     }
 
-    private function carteiraComum(string $attribute, mixed $value, Closure $fail): void
+    private function semEspelho(string $attribute, mixed $value, Closure $fail): void
     {
-        if ($value instanceof Carteira && $value->isCartao()) {
-            $fail('Só carteira comum pode ser delegada.');
+        if ($value instanceof Carteira && $value->isEspelho()) {
+            $fail('Espelho não pode ser delegado.');
         }
     }
 

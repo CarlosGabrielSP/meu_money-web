@@ -140,6 +140,14 @@ class Carteira extends Model
     }
 
     /**
+     * Whether the wallet is a contact's mirror of an author's card (RN-203).
+     */
+    public function isEspelho(): bool
+    {
+        return $this->isCartao() && $this->cartao?->cartao_origem_id !== null;
+    }
+
+    /**
      * Name of the author whose card the wallet mirrors; null when it is no mirror (RN-203).
      */
     public static function autorDoEspelho(mixed $carteiraId): ?string

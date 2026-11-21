@@ -52,6 +52,7 @@ type Carteira = {
     temConteudo: boolean;
     temCotas: boolean;
     membros: Membro[];
+    espelho: boolean;
     cartao:
         | (DadosCartao & {
               carteiraVinculadaNome: string | null;
@@ -173,6 +174,15 @@ function abrirMembros(carteira: Carteira): void {
 function membrosAceitos(carteira: Carteira): number {
     return carteira.membros.filter((membro) => membro.status === 'aceito')
         .length;
+}
+
+/**
+ * "1 membro", "2 membros"; counts only accepted members (DEC-098).
+ */
+function rotuloDeMembros(carteira: Carteira): string {
+    const total = membrosAceitos(carteira);
+
+    return `${total} ${total === 1 ? 'membro' : 'membros'}`;
 }
 
 const situacaoDoMembro: Record<Membro['status'], string> = {
@@ -299,17 +309,15 @@ function tornarPadrao(carteira: Carteira): void {
                             class="truncate text-sm text-muted-foreground"
                         >
                             {{ resumoDoCartao(carteira) }}
+                            <template v-if="membrosAceitos(carteira) > 0">
+                                · {{ rotuloDeMembros(carteira) }}
+                            </template>
                         </p>
                         <p
                             v-else-if="membrosAceitos(carteira) > 0"
                             class="truncate text-sm text-muted-foreground"
                         >
-                            {{ membrosAceitos(carteira) }}
-                            {{
-                                membrosAceitos(carteira) === 1
-                                    ? 'membro'
-                                    : 'membros'
-                            }}
+                            {{ rotuloDeMembros(carteira) }}
                         </p>
                     </div>
                     <Badge v-if="carteira.padrao" variant="secondary"
@@ -336,7 +344,7 @@ function tornarPadrao(carteira: Carteira): void {
                         Tornar padrão
                     </Button>
                     <Button
-                        v-if="carteira.tipo === 'comum' && !modoSimples"
+                        v-if="!carteira.espelho && !modoSimples"
                         variant="outline"
                         size="sm"
                         @click="abrirMembros(carteira)"
@@ -463,7 +471,7 @@ function tornarPadrao(carteira: Carteira): void {
         </section>
     </div>
 
-    <!-- Members of an owner's wallet (RF-200, RF-202, nota 07). -->
+    <!-- Members of an owner's wallet or own card (RF-200, RF-202, RF-211, nota 07). -->
     <Dialog
         :open="gerenciando !== null"
         @update:open="gerenciandoId = $event ? gerenciandoId : null"
@@ -471,7 +479,11 @@ function tornarPadrao(carteira: Carteira): void {
         <DialogContent v-if="gerenciando">
             <DialogHeader>
                 <DialogTitle>Membros de {{ gerenciando.nome }}</DialogTitle>
-                <DialogDescription>
+                <DialogDescription v-if="gerenciando.tipo === 'cartao'">
+                    Membros lançam, editam, excluem e pagam a fatura deste
+                    cartão em seu nome. A fatura continua só sua.
+                </DialogDescription>
+                <DialogDescription v-else>
                     Membros lançam, editam e excluem nesta carteira em seu nome.
                     O saldo continua só seu.
                 </DialogDescription>
