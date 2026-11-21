@@ -3,7 +3,6 @@
 use App\Enums\StatusMembro;
 use App\Enums\TipoCategoria;
 use App\Models\Carteira;
-use App\Models\CarteiraMembro;
 use App\Models\Categoria;
 use App\Models\Contato;
 use App\Models\Cota;
@@ -30,16 +29,6 @@ beforeEach(function () {
     Contato::factory()->aceito()->create(['solicitante_id' => $this->dono->id, 'convidado_id' => $this->membro->id]);
     $this->delegacao = delegarCarteira($this->principal, $this->membro);
 });
-
-function delegarCarteira(Carteira $carteira, User $user, StatusMembro $status = StatusMembro::Aceito): CarteiraMembro
-{
-    return CarteiraMembro::factory()->create([
-        'carteira_id' => $carteira->id,
-        'user_id' => $user->id,
-        'status' => $status,
-        'respondido_em' => $status === StatusMembro::Pendente ? null : now(),
-    ]);
-}
 
 /**
  * @param  array<string, mixed>  $dados
@@ -126,11 +115,13 @@ it('CA-203.4 forbids the wallet without an accepted delegation of an active owne
     $this->actingAs($this->membro)->post(route('lancamentos.store'), dadosDelegados())->assertSessionHasErrors('carteira_id');
 })->with(['pendente', 'recusado', 'ex-membro', 'dono desativado']);
 
-it('CA-203.4 forbids a card even with an accepted member record', function () {
+it('CA-211.2 forbids a mirror even with an accepted member record', function () {
     $cartao = cartaoDe($this->dono, 'Nubank', $this->principal);
-    delegarCarteira($cartao, $this->membro);
+    $espelho = cartaoDe($this->dono, 'Nubank · Bia', $this->principal);
+    $espelho->cartao->forceFill(['cartao_origem_id' => $cartao->id])->save();
+    delegarCarteira($espelho, $this->membro);
 
-    $this->actingAs($this->membro)->get(route('home', ['carteira' => $cartao->id]))->assertForbidden();
+    $this->actingAs($this->membro)->get(route('home', ['carteira' => $espelho->id]))->assertForbidden();
 });
 
 it('CA-203.6 forbids the member from managing the delegated wallet', function (string $acao) {

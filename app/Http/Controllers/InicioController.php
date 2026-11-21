@@ -40,6 +40,10 @@ class InicioController extends Controller
      * wallets delegated to the member. No wallet balances highlight, no tour, and the member's last
      * wallet stays (RN-296, CA-203.2, CA-203.7). The interface mode is the member's (RN-297). Each
      * invoice row carries the invoice for the member's "Pagar" and payments (RF-208).
+     *
+     * A delegated card opens the owner's card screen the same way (RN-319, RN-320): the form offers
+     * the owner's wallets and cards delegated to the member, with the data of those cards (RN-321,
+     * RN-331); the member never edits the invoice dates (DEC-102).
      */
     public function __invoke(
         InicioRequest $request,
@@ -69,6 +73,11 @@ class InicioController extends Controller
         $vinculados = $saldosVinculados->handle($dono, $mes, $faturas);
         $fatura = $noCartao ? $faturaDoMes->handle($dono, $carteira, $mes, $hoje, $faturas) : null;
 
+        if ($fatura !== null && $delegada) {
+            // Only the owner edits the invoice dates (RN-320, CA-212.4, DEC-102).
+            $fatura['editavel'] = false;
+        }
+
         if ($noCartao) {
             $filtros['status'] = null;
         }
@@ -90,7 +99,7 @@ class InicioController extends Controller
                 ->with('cartao:id,carteira_id,cartao_origem_id')
                 ->get(['id', 'nome', 'tipo', 'cor', 'icone'])
                 ->map($this->carteira(...)),
-            'cartoes' => (object) ($delegada ? [] : $cartoesDoFormulario->handle($user, $hoje)),
+            'cartoes' => (object) $cartoesDoFormulario->handle($dono, $hoje, $delegada ? $user->carteirasDelegadasPor($dono) : null),
             'categorias' => Categoria::query()
                 ->visiveisPara($dono)
                 ->orderBy('nome')
@@ -144,8 +153,8 @@ class InicioController extends Controller
     /**
      * The member's actions on each invoice row of the delegated wallet (RN-281, RN-302, RN-311): the
      * invoice as the card screen has it, for the "Pagar" form, with only the payments that left this
-     * wallet. The card is not delegated, so the row items open no form (RN-312, CA-208.14). The
-     * owner's rows do not change (RN-306), so they get null.
+     * wallet. The row items open no form (RN-312, CA-208.14), also while the card is delegated to the
+     * member until stage 17.3 (RN-330). The owner's rows do not change (RN-306), so they get null.
      *
      * @param  list<array<string, mixed>>  $linhas
      * @param  array<int, list<array{fatura: Fatura, compras: int, receitas: int, comprasContatos: int, receitasContatos: int, quitadoPeloAutor: int, pagamentos: int, saldoAnterior: int, aPagar: int, aPagarAutor: int}>>  $faturas  CalcularFaturas

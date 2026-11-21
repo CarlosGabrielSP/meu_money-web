@@ -465,8 +465,8 @@ onMounted(() => {
 
         <div class="grid gap-4 p-4 md:gap-5 md:p-6">
             <div class="flex items-center gap-3">
-                <!-- A delegated wallet shows the owner's band instead of the wallet cards and the
-                     selector, in both modes (RN-279, nota 07). -->
+                <!-- A delegated wallet or card shows the owner's band instead of the wallet cards and
+                     the selector, in both modes (RN-279, RN-319, nota 07). -->
                 <div
                     v-if="delegacao"
                     class="flex min-w-0 flex-1 flex-wrap items-center gap-3"
@@ -487,8 +487,8 @@ onMounted(() => {
                                 carteira.nome
                             }}</span>
                             <span class="block text-xs text-muted-foreground"
-                                >Carteira de {{ delegacao.donoNome }} · você é
-                                membro</span
+                                >{{ ehCartao ? 'Cartão' : 'Carteira' }} de
+                                {{ delegacao.donoNome }} · você é membro</span
                             >
                         </span>
                     </span>
@@ -622,6 +622,7 @@ onMounted(() => {
                         :fatura="fatura"
                         :hoje="hoje"
                         :simples="modoSimples"
+                        :membro="delegacao !== null"
                     />
                     <CardSaldos
                         v-else-if="saldos"
@@ -630,8 +631,16 @@ onMounted(() => {
                     />
                 </div>
                 <div v-if="destaques" class="grid gap-4">
-                    <PartesFatura v-if="fatura" :partes="fatura.partes" />
-                    <PagamentosFatura v-if="fatura" :fatura="fatura" />
+                    <PartesFatura
+                        v-if="fatura"
+                        :partes="fatura.partes"
+                        :dono="delegacao?.donoNome ?? null"
+                    />
+                    <PagamentosFatura
+                        v-if="fatura"
+                        :fatura="fatura"
+                        :membro="delegacao !== null"
+                    />
                     <AvisosPendencias
                         v-if="destaques.vencidas && destaques.proximas"
                         :vencidas="destaques.vencidas"

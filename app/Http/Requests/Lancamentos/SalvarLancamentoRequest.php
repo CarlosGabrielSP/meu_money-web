@@ -109,7 +109,8 @@ class SalvarLancamentoRequest extends FormRequest
     }
 
     /**
-     * A member only picks wallets of the same owner delegated to them (RN-278, CA-204.4).
+     * A member only picks wallets and cards of the same owner delegated to them (RN-278, RN-321,
+     * CA-204.4, CA-213.3).
      */
     private function delegadaAoMembro(string $attribute, mixed $value, Closure $fail): void
     {

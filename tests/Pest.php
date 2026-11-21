@@ -5,9 +5,11 @@ use App\Actions\Cartoes\PagarFatura;
 use App\Enums\CompetenciaFatura;
 use App\Enums\IconeCarteira;
 use App\Enums\OrigemQuitacao;
+use App\Enums\StatusMembro;
 use App\Enums\TipoCarteira;
 use App\Enums\TipoCategoria;
 use App\Models\Carteira;
+use App\Models\CarteiraMembro;
 use App\Models\Categoria;
 use App\Models\Contato;
 use App\Models\Cota;
@@ -394,4 +396,17 @@ function aPagarDoNubank(string $mes): int
     });
 
     return $aPagar;
+}
+
+/**
+ * A member record of the wallet or card for the user, accepted by default (RN-270, RN-313).
+ */
+function delegarCarteira(Carteira $carteira, User $user, StatusMembro $status = StatusMembro::Aceito): CarteiraMembro
+{
+    return CarteiraMembro::factory()->create([
+        'carteira_id' => $carteira->id,
+        'user_id' => $user->id,
+        'status' => $status,
+        'respondido_em' => $status === StatusMembro::Pendente ? null : now(),
+    ]);
 }

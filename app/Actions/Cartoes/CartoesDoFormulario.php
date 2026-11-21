@@ -13,14 +13,17 @@ class CartoesDoFormulario
      * What the entry form needs to tell the invoice of a date in each card of the user (RN-192,
      * RN-232, nota 07): due day and closing days for the default dates, the dates of open and future
      * invoices edited one by one, and the first day a new purchase may have (the start of the open
-     * invoice). Two queries whatever the number of cards.
+     * invoice). Two queries whatever the number of cards. A member gets only the owner's cards
+     * delegated to the member, passed as wallet ids (RN-321, RN-331).
      *
+     * @param  list<int>|null  $somenteCarteiras  wallet ids to keep; null keeps every card of the user
      * @return array<int, array{diaVencimento: int, diasFechamento: int, abertaDesde: string, editadas: list<array{referencia: string, fechamento: string, vencimento: string}>}> by card wallet id
      */
-    public function handle(User $user, CarbonImmutable $hoje): array
+    public function handle(User $user, CarbonImmutable $hoje, ?array $somenteCarteiras = null): array
     {
         $cartoes = Cartao::query()
             ->whereHas('carteira', fn ($carteira) => $carteira->where('user_id', $user->id))
+            ->when($somenteCarteiras !== null, fn ($cartoes) => $cartoes->whereIn('carteira_id', $somenteCarteiras))
             ->get();
 
         if ($cartoes->isEmpty()) {

@@ -2,17 +2,24 @@
 import { formatarMoeda } from '@/lib/dinheiro';
 import type { ParteDaFatura } from '@/types';
 
-defineProps<{
+const props = defineProps<{
     partes: ParteDaFatura[];
+    /** Owner's name for a member of a delegated card, shown in place of "Você" (RN-332). */
+    dono?: string | null;
 }>();
 
+function nome(parte: ParteDaFatura): string {
+    return parte.voce && props.dono ? props.dono : parte.nome;
+}
+
 /**
- * Who settled a contact's part: "por B", "por você" or both (nota 07).
+ * Who settled a contact's part: "por B", "por você" (the owner's name for a member, RN-332) or both
+ * (nota 07).
  */
 function quemQuitou(parte: ParteDaFatura): string {
     const quem = [
         ...(parte.quitadoPeloContato > 0 ? [parte.nome] : []),
-        ...(parte.quitadoPeloAutor > 0 ? ['você'] : []),
+        ...(parte.quitadoPeloAutor > 0 ? [props.dono || 'você'] : []),
     ];
 
     return quem.length === 0 ? '' : ` · por ${quem.join(' e ')}`;
@@ -34,7 +41,7 @@ function quitado(parte: ParteDaFatura): number {
                 class="flex items-start gap-3 px-3 py-2 text-sm"
             >
                 <span class="min-w-0 flex-1 truncate font-medium">{{
-                    parte.nome
+                    nome(parte)
                 }}</span>
                 <span class="font-medium tabular-nums">{{
                     formatarMoeda(parte.parte)

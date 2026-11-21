@@ -5,7 +5,6 @@ namespace App\Models;
 use App\Enums\Paleta;
 use App\Enums\StatusContato;
 use App\Enums\StatusMembro;
-use App\Enums\TipoCarteira;
 use Carbon\CarbonImmutable;
 use Database\Factories\UserFactory;
 use Illuminate\Contracts\Auth\MustVerifyEmail;
@@ -162,16 +161,16 @@ class User extends Authenticatable implements MustVerifyEmail
     }
 
     /**
-     * Wallets the user operates as an accepted member while the owner is active (RN-272, RN-284).
-     * Own cards are delegated too (RN-313), but until stage 17.2 opens card operation only common
-     * wallets count here, so an accepted card is listed in "Delegadas a mim" and still gives 403.
+     * Wallets and own cards the user operates as an accepted member while the owner is active
+     * (RN-272, RN-284, RN-315). A mirror is never delegated (RN-313), so it stays out even with a
+     * stray record. Payment checks pass only common wallet ids here, so they do not widen (DEC-102).
      *
      * @return Builder<Carteira>
      */
     public function carteirasDelegadas(): Builder
     {
         return Carteira::query()
-            ->where('carteiras.tipo', TipoCarteira::Comum->value)
+            ->whereDoesntHave('cartao', fn (Builder $cartao) => $cartao->whereNotNull('cartao_origem_id'))
             ->whereHas('membros', fn (Builder $membros) => $membros
                 ->where('user_id', $this->id)
                 ->where('status', StatusMembro::Aceito))
