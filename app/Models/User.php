@@ -4,6 +4,8 @@ namespace App\Models;
 
 use App\Enums\Paleta;
 use App\Enums\StatusContato;
+use App\Enums\StatusMembro;
+use App\Enums\TipoCarteira;
 use Carbon\CarbonImmutable;
 use Database\Factories\UserFactory;
 use Illuminate\Contracts\Auth\MustVerifyEmail;
@@ -157,6 +159,37 @@ class User extends Authenticatable implements MustVerifyEmail
     public function delegacoes(): HasMany
     {
         return $this->hasMany(CarteiraMembro::class);
+    }
+
+    /**
+     * Wallets the user operates as an accepted member while the owner is active (RN-272, RN-284).
+     * Only common wallets are delegated (RN-269), so a card never counts even with a stray record.
+     *
+     * @return Builder<Carteira>
+     */
+    public function carteirasDelegadas(): Builder
+    {
+        return Carteira::query()
+            ->where('carteiras.tipo', TipoCarteira::Comum->value)
+            ->whereHas('membros', fn (Builder $membros) => $membros
+                ->where('user_id', $this->id)
+                ->where('status', StatusMembro::Aceito))
+            ->whereHas('user', fn (Builder $dono) => $dono->whereNull('desativado_em'));
+    }
+
+    /**
+     * Ids of the owner's wallets delegated to the user, which limit what a member reaches in a series
+     * (RN-278, RN-291, RN-300); null when the user is the owner, who reaches everything.
+     *
+     * @return list<int>|null
+     */
+    public function carteirasDelegadasPor(User $dono): ?array
+    {
+        if ($dono->id === $this->id) {
+            return null;
+        }
+
+        return array_values(array_map(intval(...), $this->carteirasDelegadas()->where('carteiras.user_id', $dono->id)->pluck('carteiras.id')->all()));
     }
 
     /**

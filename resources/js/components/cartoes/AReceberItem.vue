@@ -12,12 +12,18 @@ const props = defineProps<{
     item: ItemAReceber;
     /** Simple mode: bigger row with the "Recebido" label (RN-265). */
     simples?: boolean;
+    /** Delegated wallet until stage 16.3: shown without action (DEC-099). */
+    somenteLeitura?: boolean;
 }>();
 
 const todoRecebido = computed(() => props.item.recebido >= props.item.valor);
 const parcial = computed(() => props.item.recebido > 0 && !todoRecebido.value);
 /** Unmarking undoes only manual receipts, so an item received only automatically stays checked (RN-242, RN-265). */
-const travado = computed(() => todoRecebido.value && !props.item.manual);
+const travado = computed(
+    () =>
+        props.somenteLeitura === true ||
+        (todoRecebido.value && !props.item.manual),
+);
 
 function alternar(marcado: boolean): void {
     router.patch(

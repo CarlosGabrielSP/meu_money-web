@@ -126,6 +126,14 @@ class Carteira extends Model
         return $this->hasMany(CarteiraMembro::class);
     }
 
+    /**
+     * The user is an accepted member of this wallet and its owner is active (RN-272, RN-284).
+     */
+    public function isDelegadaA(User $user): bool
+    {
+        return $this->user_id !== $user->id && $user->carteirasDelegadas()->whereKey($this->id)->exists();
+    }
+
     public function isCartao(): bool
     {
         return $this->tipo === TipoCarteira::Cartao;

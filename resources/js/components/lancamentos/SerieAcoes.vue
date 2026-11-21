@@ -27,6 +27,8 @@ const props = defineProps<{
     comCota: boolean;
     /** Unsaved changes in the form disable the link, so leaving does not drop them (RN-213). */
     alteracoesPendentes: boolean;
+    /** A member of a delegated wallet gets no "Ver parcelas", "Encerrar" nor "Alterar total" (RN-290, RN-295). */
+    membro?: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -84,7 +86,7 @@ function confirmarTotal(): void {
                 Parcela {{ serie.numero }}/{{ serie.total }}
             </template>
         </span>
-        <template v-if="comCota">
+        <template v-if="comCota && !membro">
             <Button
                 v-if="alteracoesPendentes"
                 type="button"
@@ -106,7 +108,7 @@ function confirmarTotal(): void {
             >
         </template>
         <Button
-            v-if="serie.recorrente && !serie.encerradaEm"
+            v-if="!membro && serie.recorrente && !serie.encerradaEm"
             type="button"
             variant="outline"
             size="sm"
@@ -115,7 +117,7 @@ function confirmarTotal(): void {
             Encerrar série
         </Button>
         <Button
-            v-if="!serie.recorrente"
+            v-if="!membro && !serie.recorrente"
             type="button"
             variant="outline"
             size="sm"

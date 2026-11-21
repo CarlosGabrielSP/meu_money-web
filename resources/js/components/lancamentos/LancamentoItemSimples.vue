@@ -32,6 +32,8 @@ const indicadores = computed(() =>
         props.item.compartilhado && 'Dividido',
         props.item.autor && `de ${props.item.autor}`,
         props.item.temAnexo && 'Anexo',
+        props.item.registro?.lancadoPor &&
+            `Lançado por ${props.item.registro.lancadoPor}`,
     ].filter((indicador): indicador is string => Boolean(indicador)),
 );
 

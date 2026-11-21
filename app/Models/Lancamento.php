@@ -28,10 +28,16 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * @property string|null $observacao
  * @property string|null $anexo_caminho
  * @property string|null $anexo_nome
+ * @property int|null $criado_por_id
+ * @property string|null $criado_por_nome
+ * @property int|null $alterado_por_id
+ * @property string|null $alterado_por_nome
+ * @property CarbonImmutable|null $alterado_em
+ * @property int|null $alterado_para_id
  * @property CarbonImmutable|null $created_at
  * @property CarbonImmutable|null $updated_at
  *
- * Attachment and series fields are set by the server only, never mass assigned.
+ * Attachment, series and who-acted fields are set by the server only, never mass assigned.
  */
 #[Fillable(['descricao', 'tipo', 'valor', 'data', 'modo_rateio', 'observacao'])]
 class Lancamento extends Model
@@ -50,6 +56,7 @@ class Lancamento extends Model
             'data' => 'date',
             'modo_rateio' => ModoRateio::class,
             'numero_parcela' => 'integer',
+            'alterado_em' => 'datetime',
         ];
     }
 
@@ -96,6 +103,39 @@ class Lancamento extends Model
             ->where(fn (Builder $semCotaDoAutor) => $semCotaDoAutor
                 ->whereHas('cotas', fn (Builder $cotas) => $cotas->whereColumn('cotas.user_id', 'lancamentos.user_id'))
                 ->orWhereDoesntHave('cotas', fn (Builder $cotas) => $cotas->travadas($hoje)));
+    }
+
+    /**
+     * Entries whose author's share is in one of the wallets, or, without an author share, whose entry
+     * wallet is one of them (RN-145, RN-278).
+     *
+     * @param  Builder<self>  $query
+     * @param  list<int>  $carteiras
+     */
+    #[Scope]
+    protected function doAutorNasCarteiras(Builder $query, array $carteiras): void
+    {
+        $query->where(fn (Builder $nasCarteiras) => $nasCarteiras
+            ->whereHas('cotas', fn (Builder $cotas) => $cotas
+                ->whereColumn('cotas.user_id', 'lancamentos.user_id')
+                ->whereIn('cotas.carteira_id', $carteiras))
+            ->orWhere(fn (Builder $semCota) => $semCota
+                ->whereDoesntHave('cotas', fn (Builder $cotas) => $cotas->whereColumn('cotas.user_id', 'lancamentos.user_id'))
+                ->whereIn('lancamentos.carteira_id', $carteiras)));
+    }
+
+    /**
+     * The owner on whose behalf the member acts as author: the author, when the author's share (or,
+     * without one, the entry wallet) is in a wallet delegated to the member (RN-272, RN-145). Null
+     * when the entry is not in a wallet delegated to the member.
+     */
+    public function autorRepresentadoPor(User $membro): ?User
+    {
+        $carteiraDoAutor = $this->cotas()->where('user_id', $this->user_id)->value('carteira_id') ?? $this->carteira_id;
+
+        return $carteiraDoAutor !== null && $membro->carteirasDelegadas()->whereKey($carteiraDoAutor)->exists()
+            ? $this->user
+            : null;
     }
 
     /**

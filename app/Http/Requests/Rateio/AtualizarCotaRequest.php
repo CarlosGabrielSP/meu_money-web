@@ -5,6 +5,7 @@ namespace App\Http\Requests\Rateio;
 use App\Models\Carteira;
 use App\Models\Categoria;
 use App\Models\Cota;
+use App\Models\User;
 use Closure;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
@@ -13,7 +14,8 @@ use Illuminate\Validation\Rule;
 class AtualizarCotaRequest extends FormRequest
 {
     /**
-     * Only the participant who owns the share (CA-071.3).
+     * Only the participant who owns the share (CA-071.3), or a member of its delegated wallet
+     * (RN-277, CA-206.2).
      */
     public function authorize(): bool
     {
@@ -21,7 +23,8 @@ class AtualizarCotaRequest extends FormRequest
     }
 
     /**
-     * Own wallet and a category visible to the participant that accepts the entry type (RN-080, RN-033).
+     * Own wallet and a category visible to the participant that accepts the entry type (RN-080, RN-033);
+     * a member picks only the participant's wallets delegated to them (RN-278, CA-204.4).
      * A share never moves into a mirror; a share already in one may keep it (RN-262) and never leaves
      * it (RN-205, RN-266).
      *
@@ -30,10 +33,20 @@ class AtualizarCotaRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'carteira_id' => ['required', 'integer', Rule::exists(Carteira::class, 'id')->where('user_id', $this->user()?->id), $this->foraDeOutroEspelho(...)],
+            'carteira_id' => ['required', 'integer', Rule::exists(Carteira::class, 'id')->where('user_id', $this->cota()->user_id), $this->delegadaAoMembro(...), $this->foraDeOutroEspelho(...)],
             'categoria_id' => ['required', 'integer', $this->categoriaCompativel(...)],
             'executado' => ['required', 'boolean'],
         ];
+    }
+
+    private function delegadaAoMembro(string $attribute, mixed $value, Closure $fail): void
+    {
+        /** @var User $user */
+        $user = $this->user();
+
+        if ($this->cota()->user_id !== $user->id && ! $user->carteirasDelegadas()->whereKey((int) $value)->exists()) {
+            $fail('Selecione uma carteira válida.');
+        }
     }
 
     private function foraDeOutroEspelho(string $attribute, mixed $value, Closure $fail): void
@@ -59,7 +72,7 @@ class AtualizarCotaRequest extends FormRequest
 
     private function categoriaCompativel(string $attribute, mixed $value, Closure $fail): void
     {
-        $categoria = Categoria::query()->visiveisPara($this->user())->whereKey($value)->first();
+        $categoria = Categoria::query()->visiveisPara($this->cota()->user)->whereKey($value)->first();
 
         if ($categoria === null || ! $categoria->tipo->aceita($this->cota()->lancamento->tipo)) {
             $fail('Selecione uma categoria válida para este lançamento.');

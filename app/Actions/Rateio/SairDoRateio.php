@@ -45,11 +45,17 @@ class SairDoRateio
      * (RN-267). $permitirEspelho lifts this when the contact deletes the account (RN-248); a missing
      * author share is then created in the entry's card, in the invoice of the date (RN-268).
      *
+     * A member leaving for the participant passes the wallets delegated to them: the other scopes
+     * reach only installments with the participant's share in those wallets, and the participant
+     * leaves the series model only when their default wallet is one of them (RN-300).
+     *
+     * @param  list<int>|null  $carteiras  wallets delegated to the member acting; null for the participant
+     *
      * @throws ValidationException
      */
-    public function handle(User $participante, Lancamento $lancamento, EscopoSerie $escopo = EscopoSerie::Esta, bool $permitirFechadas = false, bool $permitirEspelho = false): void
+    public function handle(User $participante, Lancamento $lancamento, EscopoSerie $escopo = EscopoSerie::Esta, bool $permitirFechadas = false, bool $permitirEspelho = false, ?array $carteiras = null): void
     {
-        DB::transaction(function () use ($participante, $lancamento, $escopo, $permitirFechadas, $permitirEspelho): void {
+        DB::transaction(function () use ($participante, $lancamento, $escopo, $permitirFechadas, $permitirEspelho, $carteiras): void {
             $hoje = CarbonImmutable::today();
             $serie = $lancamento->parcelamento;
 
@@ -57,7 +63,9 @@ class SairDoRateio
                 ? collect([$lancamento])
                 : $serie->lancamentos()
                     ->when($escopo === EscopoSerie::Proximas, fn ($query) => $query->where('numero_parcela', '>=', $lancamento->numero_parcela))
-                    ->whereHas('cotas', fn ($query) => $query->where('user_id', $participante->id))
+                    ->whereHas('cotas', fn ($query) => $query
+                        ->where('user_id', $participante->id)
+                        ->when($carteiras !== null, fn ($nasCarteiras) => $nasCarteiras->whereIn('carteira_id', $carteiras ?? [])))
                     ->where(fn ($query) => $query->whereKey($lancamento->id)->orWhere(fn ($livres) => $livres
                         ->whereDoesntHave('cotas', fn ($cotas) => $cotas
                             ->whereIn('user_id', [$participante->id, $serie->user_id])
@@ -73,7 +81,9 @@ class SairDoRateio
 
             $modeloNoCartao = ! $permitirEspelho && $serie !== null && Carteira::query()->whereKey($serie->carteira_id)->value('tipo') === TipoCarteira::Cartao;
 
-            if ($serie !== null && $escopo !== EscopoSerie::Esta && ! $modeloNoCartao) {
+            $modeloAlcancado = $carteiras === null || in_array($participante->carteiraPadrao()->id, $carteiras, true);
+
+            if ($serie !== null && $escopo !== EscopoSerie::Esta && ! $modeloNoCartao && $modeloAlcancado) {
                 $this->sairDaSerie($participante, $serie);
             }
         });

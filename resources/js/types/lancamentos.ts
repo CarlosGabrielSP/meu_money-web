@@ -167,6 +167,19 @@ export type SerieDaParcela = {
 
 export type EscopoSerie = 'esta' | 'proximas' | 'todas';
 
+/** Member who created and who last changed an entry (RN-274, RN-299). */
+export type RegistroDeMembro = {
+    lancadoPor: string | null;
+    alteradoPor: string | null;
+    alteradoEm: string | null;
+};
+
+/** Owner of the delegated wallet the member is viewing (RN-279, RN-280). */
+export type Delegacao = {
+    donoId: number;
+    donoNome: string;
+};
+
 export type ItemLancamento = {
     chave: string;
     cotaId: number | null;
@@ -191,6 +204,8 @@ export type ItemLancamento = {
     recorrente: boolean;
     compartilhado: boolean;
     temAnexo: boolean;
+    /** Who-acted record for the owner a member acted for (RN-274, RN-294); null when the owner acted. */
+    registro: RegistroDeMembro | null;
     serie: SerieDaParcela | null;
     edicao: LancamentoEdicao | null;
     participacao: Participacao | null;
@@ -253,7 +268,8 @@ export type GastoDoMes = {
 
 /** Highlights of the main screen in the full mode (RN-171 to RN-174). */
 export type DestaquesInicio = {
-    saldosCarteiras: Record<string, number>;
+    /** Null on a delegated wallet, which has no wallet cards (RN-296). */
+    saldosCarteiras: Record<string, number> | null;
     /** Null for a card (RN-224). */
     vencidas: { quantidade: number; receitas: number; despesas: number } | null;
     proximas: { quantidade: number; total: number } | null;

@@ -17,6 +17,14 @@ class InicioRequest extends FormRequest
     use EscolheCarteira;
 
     /**
+     * A member opens a delegated wallet on the home screen (RN-279, CA-203.1).
+     */
+    protected function habilidadeDaCarteira(): string
+    {
+        return 'operar';
+    }
+
+    /**
      * @return array<string, ValidationRule|array<mixed>|string>
      */
     public function rules(): array

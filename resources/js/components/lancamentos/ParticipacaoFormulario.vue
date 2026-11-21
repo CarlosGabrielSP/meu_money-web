@@ -43,6 +43,8 @@ const props = defineProps<{
     tipo: TipoLancamento;
     carteiras: CarteiraResumo[];
     categorias: CategoriaOpcao[];
+    /** A member of a delegated wallet gets no "Ver parcelas" (RN-295). */
+    membro?: boolean;
 }>();
 
 const page = usePage();
@@ -166,7 +168,7 @@ const rotuloExecutado = computed(() =>
                             >
                         </span>
                         <!-- Tracking of the series (RN-213, CA-152.1). -->
-                        <template v-if="item.serie">
+                        <template v-if="item.serie && !membro">
                             <Button
                                 v-if="form.isDirty"
                                 type="button"
@@ -263,6 +265,15 @@ const rotuloExecutado = computed(() =>
                         />
                         {{ rotuloExecutado }}
                     </label>
+
+                    <p
+                        v-if="item.registro?.alteradoPor"
+                        class="text-xs text-muted-foreground"
+                        data-test="registro-membro"
+                    >
+                        Alterado por {{ item.registro.alteradoPor }} em
+                        {{ dataCompleta(item.registro.alteradoEm ?? '') }}
+                    </p>
 
                     <div class="flex flex-wrap gap-2">
                         <Button type="submit" :disabled="form.processing">

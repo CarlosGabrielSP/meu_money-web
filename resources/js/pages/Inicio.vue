@@ -1,6 +1,7 @@
 <script setup lang="ts">
-import { Head, router } from '@inertiajs/vue3';
+import { Head, Link, router } from '@inertiajs/vue3';
 import {
+    ArrowLeft,
     ChevronLeft,
     ChevronRight,
     ListChecks,
@@ -45,6 +46,7 @@ import type {
     CarteiraResumo,
     CategoriaOpcao,
     ContatoOpcao,
+    Delegacao,
     DestaquesInicio,
     EscopoSerie,
     FaturaDoMes,
@@ -53,6 +55,7 @@ import type {
     GrupoOpcao,
     ItemLancamento,
     LancamentoEdicao,
+    RegistroDeMembro,
     SaldosInicio,
     SerieDaParcela,
     Subsecoes,
@@ -68,6 +71,8 @@ type Filtros = {
 
 const props = defineProps<{
     carteira: CarteiraResumo;
+    /** Owner of a wallet delegated to the user; null on the user's own wallet (RN-279). */
+    delegacao: Delegacao | null;
     carteiras: CarteiraResumo[];
     categorias: CategoriaOpcao[];
     contatos: ContatoOpcao[];
@@ -140,6 +145,7 @@ const emEdicao = ref<{
     edicao: LancamentoEdicao;
     serie: SerieDaParcela | null;
     faturaFechada: boolean;
+    registro: RegistroDeMembro | null;
 } | null>(null);
 const participacaoAberta = ref(false);
 const emParticipacao = ref<{
@@ -272,6 +278,7 @@ function editar(item: ItemLancamento, tipo: TipoLancamento): void {
             edicao: item.edicao,
             serie: item.serie,
             faturaFechada: item.faturaFechada,
+            registro: item.registro,
         };
         formularioAberto.value = true;
     } else if (item.participacao !== null) {
@@ -445,7 +452,11 @@ onMounted(() => {
     <div class="flex flex-col">
         <FaixaSaldos
             :visivel="!cardVisivel"
-            :carteira="carteira.nome"
+            :carteira="
+                delegacao
+                    ? `${carteira.nome} · de ${delegacao.donoNome}`
+                    : carteira.nome
+            "
             :mes="nomeDoMes(mes)"
             :saldos="saldos"
             :a-pagar="fatura?.aPagar ?? null"
@@ -454,8 +465,36 @@ onMounted(() => {
 
         <div class="grid gap-4 p-4 md:gap-5 md:p-6">
             <div class="flex items-center gap-3">
+                <!-- A delegated wallet shows the owner's band instead of the wallet cards and the
+                     selector, in both modes (RN-279, nota 07). -->
+                <div
+                    v-if="delegacao"
+                    class="flex min-w-0 flex-1 flex-wrap items-center gap-3"
+                    data-test="faixa-delegada"
+                >
+                    <Button variant="outline" size="sm" as-child>
+                        <Link :href="home()">
+                            <ArrowLeft /> Minhas carteiras
+                        </Link>
+                    </Button>
+                    <span class="flex min-w-0 items-center gap-2">
+                        <CarteiraIcone
+                            :cor="carteira.cor"
+                            :icone="carteira.icone"
+                        />
+                        <span class="min-w-0">
+                            <span class="block truncate font-medium">{{
+                                carteira.nome
+                            }}</span>
+                            <span class="block text-xs text-muted-foreground"
+                                >Carteira de {{ delegacao.donoNome }} · você é
+                                membro</span
+                            >
+                        </span>
+                    </span>
+                </div>
                 <CartoesCarteira
-                    v-if="destaques"
+                    v-else-if="destaques && destaques.saldosCarteiras"
                     class="min-w-0 flex-1"
                     :carteiras="carteiras"
                     :atual="carteira.id"
@@ -606,6 +645,7 @@ onMounted(() => {
                         "
                         :carteira-id="carteira.id"
                         :titulo="ehCartao ? 'Gastos da fatura' : undefined"
+                        :sem-relatorio="delegacao !== null"
                     />
                 </div>
             </div>
@@ -735,6 +775,7 @@ onMounted(() => {
                                 :key="linha.chave"
                                 :fatura="linha"
                                 simples
+                                :somente-leitura="delegacao !== null"
                             />
                         </template>
                         <template v-else>
@@ -743,6 +784,7 @@ onMounted(() => {
                                 :key="linha.chave"
                                 :item="linha"
                                 simples
+                                :somente-leitura="delegacao !== null"
                             />
                         </template>
                     </ul>
@@ -827,6 +869,7 @@ onMounted(() => {
                                 v-for="linha in aReceber"
                                 :key="linha.chave"
                                 :item="linha"
+                                :somente-leitura="delegacao !== null"
                             />
                         </ul>
                     </div>
@@ -845,6 +888,7 @@ onMounted(() => {
                                 v-for="linha in faturasVinculadas"
                                 :key="linha.chave"
                                 :fatura="linha"
+                                :somente-leitura="delegacao !== null"
                                 @editar="editar($event, 'despesa')"
                             />
                         </ul>
@@ -914,6 +958,8 @@ onMounted(() => {
             :categorias="categorias"
             :cartoes="cartoes"
             :fatura-fechada="emEdicao?.faturaFechada ?? false"
+            :delegacao="delegacao"
+            :registro="emEdicao?.registro ?? null"
         />
 
         <PerguntaModoSimples :perguntar="perguntarModoSimples" />
@@ -940,6 +986,7 @@ onMounted(() => {
             :tipo="emParticipacao?.tipo ?? 'despesa'"
             :carteiras="carteiras"
             :categorias="categorias"
+            :membro="delegacao !== null"
         />
     </div>
 </template>

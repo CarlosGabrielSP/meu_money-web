@@ -37,18 +37,26 @@ class EditarParcelas
      * an open installment in a closed invoice keeps amount, date, wallet and split, and changes only
      * description and category. Moved shares then follow their wallet's invoices (RN-228).
      *
+     * A member passes the wallets delegated to them: only installments with the author's share in
+     * those wallets change, and the model changes only when its wallet is one of them (RN-278, RN-291).
+     * Returns the ids of the installments changed, for the who-acted record (RN-293).
+     *
      * @param  array{tipo: TipoLancamento, descricao: string, valor: int, data: string, categoria_id: int, carteira_id: int, observacao: string|null, executado: bool|null, rateio?: array{modo: ModoRateio, participantes: list<array{user_id: int, percentual: string|null, valor: int|null}>}|null}  $dados
+     * @param  list<int>|null  $carteiras  wallets delegated to the member acting; null for the author
+     * @return list<int>
      *
      * @throws Throwable
      */
-    public function handle(User $autor, Lancamento $parcela, EscopoSerie $escopo, array $dados, ?int $diaVencimento, ?UploadedFile $anexo = null): Lancamento
+    public function handle(User $autor, Lancamento $parcela, EscopoSerie $escopo, array $dados, ?int $diaVencimento, ?UploadedFile $anexo = null, ?array $carteiras = null): array
     {
         /** @var Parcelamento $serie */
         $serie = $parcela->parcelamento;
         $dados['tipo'] = $serie->tipo;
 
         if ($escopo === EscopoSerie::Esta) {
-            return $this->salvarLancamento->handle($autor, $dados, $anexo, $parcela);
+            $this->salvarLancamento->handle($autor, $dados, $anexo, $parcela);
+
+            return [$parcela->id];
         }
 
         $diaVencimento ??= $serie->dia_vencimento;
@@ -84,37 +92,44 @@ class EditarParcelas
         // A settled contact part refused by a new due day shows on that field (RN-263).
         $campoDaQuitacao = $diaVencimento !== $serie->dia_vencimento ? 'dia_vencimento' : 'data';
 
-        return $this->salvarLancamento->handle(
+        $alteradas = [$parcela->id];
+
+        $this->salvarLancamento->handle(
             $autor,
             $dadosDaAberta,
             $anexo,
             $parcela,
-            function (Lancamento $aberta) use ($autor, $serie, $escopo, $dados, $diaVencimento, $hoje, $campoDaQuitacao): void {
+            function (Lancamento $aberta) use ($autor, $serie, $escopo, $dados, $diaVencimento, $hoje, $campoDaQuitacao, $carteiras, &$alteradas): void {
                 $diaAnterior = $serie->dia_vencimento;
                 $rateio = $dados['rateio'] ?? null;
-                $gruposDoModelo = $serie->cotas()->pluck('grupo_id', 'user_id');
 
-                $serie->update([
-                    'grupo_id' => $serie->carteira_id === $dados['carteira_id'] ? $serie->grupo_id : null,
-                    'descricao' => $dados['descricao'],
-                    'valor_parcela' => $dados['valor'],
-                    'categoria_id' => $dados['categoria_id'],
-                    'carteira_id' => $dados['carteira_id'],
-                    'dia_vencimento' => $diaVencimento,
-                    'modo_rateio' => $rateio['modo'] ?? null,
-                ]);
-                $serie->cotas()->delete();
+                if ($carteiras === null || in_array($serie->carteira_id, $carteiras, true)) {
+                    $gruposDoModelo = $serie->cotas()->pluck('grupo_id', 'user_id');
 
-                foreach ($rateio['participantes'] ?? [] as $participante) {
-                    $serie->cotas()->create([...$participante, 'grupo_id' => $gruposDoModelo[$participante['user_id']] ?? null]);
+                    $serie->update([
+                        'grupo_id' => $serie->carteira_id === $dados['carteira_id'] ? $serie->grupo_id : null,
+                        'descricao' => $dados['descricao'],
+                        'valor_parcela' => $dados['valor'],
+                        'categoria_id' => $dados['categoria_id'],
+                        'carteira_id' => $dados['carteira_id'],
+                        'dia_vencimento' => $diaVencimento,
+                        'modo_rateio' => $rateio['modo'] ?? null,
+                    ]);
+                    $serie->cotas()->delete();
+
+                    foreach ($rateio['participantes'] ?? [] as $participante) {
+                        $serie->cotas()->create([...$participante, 'grupo_id' => $gruposDoModelo[$participante['user_id']] ?? null]);
+                    }
                 }
 
                 $pendentes = $serie->lancamentos()
                     ->whereKeyNot($aberta->id)
                     ->when($escopo === EscopoSerie::Proximas, fn ($query) => $query->where('numero_parcela', '>', $aberta->numero_parcela))
+                    ->when($carteiras !== null, fn ($query) => $query->doAutorNasCarteiras($carteiras ?? []))
                     ->pendentesDoAutor()
                     ->with('cotas.fatura')
                     ->get();
+                $alteradas = [$aberta->id, ...$pendentes->modelKeys()];
                 Cota::marcarQuitadas($pendentes->flatMap->cotas);
 
                 Lancamento::query()->whereKey($pendentes->modelKeys())->update(['descricao' => $dados['descricao']]);
@@ -160,6 +175,8 @@ class EditarParcelas
             },
             $campoDaQuitacao,
         );
+
+        return $alteradas;
     }
 
     /**

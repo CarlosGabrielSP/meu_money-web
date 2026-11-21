@@ -14,8 +14,8 @@ trait EscolheCarteira
 {
     /**
      * Wallet from the URL, else the last used one, else the default (RN-090, CA-080.1 to CA-080.4,
-     * CA-140.1 to CA-140.4). A wallet of another user is forbidden; a wallet that no longer exists
-     * falls back.
+     * CA-140.1 to CA-140.4). A wallet of another user is forbidden, except a wallet delegated to the
+     * user on the home screen (RN-279, CA-203.1); a wallet that no longer exists falls back.
      */
     public function carteira(): Carteira
     {
@@ -27,13 +27,21 @@ trait EscolheCarteira
             : Carteira::query()->whereKey($this->carteiraInformada())->first();
 
         if ($informada !== null) {
-            Gate::authorize('view', $informada);
+            Gate::authorize($this->habilidadeDaCarteira(), $informada);
 
             return $informada;
         }
 
         return $user->carteiras()->whereKey($user->ultima_carteira_id)->first()
             ?? $user->carteiras()->where('padrao', true)->firstOrFail();
+    }
+
+    /**
+     * Ability the wallet from the URL needs; only the home screen accepts a delegated wallet (RN-279).
+     */
+    protected function habilidadeDaCarteira(): string
+    {
+        return 'view';
     }
 
     public function carteiraInformada(): ?int

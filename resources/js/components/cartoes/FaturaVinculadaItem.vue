@@ -14,6 +14,8 @@ defineProps<{
     fatura: FaturaVinculada;
     /** Simple mode: a plain item, without expanding (DEC-087). */
     simples?: boolean;
+    /** Delegated wallet until stage 16.3: no expanding and no link to the card (DEC-099). */
+    somenteLeitura?: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -38,7 +40,7 @@ const situacoes = {
             :class="simples ? 'py-3' : 'py-2.5'"
         >
             <button
-                v-if="!simples"
+                v-if="!simples && !somenteLeitura"
                 type="button"
                 class="shrink-0"
                 :aria-expanded="expandido"
@@ -50,11 +52,17 @@ const situacoes = {
                     :class="{ 'rotate-90': expandido }"
                 />
             </button>
-            <Link
+            <component
+                :is="somenteLeitura ? 'div' : Link"
                 :href="
-                    home({
-                        query: { carteira: fatura.carteiraId, mes: fatura.mes },
-                    })
+                    somenteLeitura
+                        ? undefined
+                        : home({
+                              query: {
+                                  carteira: fatura.carteiraId,
+                                  mes: fatura.mes,
+                              },
+                          })
                 "
                 class="flex min-h-10 min-w-0 flex-1 items-center gap-3"
             >
@@ -80,10 +88,10 @@ const situacoes = {
                         >{{ situacoes[fatura.situacao] }}</Badge
                     >
                 </span>
-            </Link>
+            </component>
         </div>
         <ul
-            v-if="expandido && !simples"
+            v-if="expandido && !simples && !somenteLeitura"
             class="divide-y border-t bg-muted/30 pl-4"
         >
             <LancamentoItem

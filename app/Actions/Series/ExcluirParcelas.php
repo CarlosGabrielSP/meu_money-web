@@ -24,14 +24,20 @@ class ExcluirParcelas
      * the installment date. A series left without installments is removed (CA-054.4); otherwise
      * "todas" ends a recurring series on the last executed installment (RN-139).
      *
+     * A member passes the wallets delegated to them: the other scopes remove only installments with
+     * the author's share in those wallets, and the series ends only when its model wallet is one of
+     * them (RN-278, RN-291).
+     *
+     * @param  list<int>|null  $carteiras  wallets delegated to the member acting; null for the author
+     *
      * @throws ValidationException
      */
-    public function handle(Lancamento $parcela, EscopoSerie $escopo): void
+    public function handle(Lancamento $parcela, EscopoSerie $escopo, ?array $carteiras = null): void
     {
         /** @var Parcelamento $serie */
         $serie = $parcela->parcelamento;
 
-        $anexos = DB::transaction(function () use ($parcela, $serie, $escopo): array {
+        $anexos = DB::transaction(function () use ($parcela, $serie, $escopo, $carteiras): array {
             if ($escopo === EscopoSerie::Esta && $parcela->emFaturaFechada(CarbonImmutable::today())) {
                 throw ValidationException::withMessages(['lancamento' => 'Compra em fatura fechada não pode ser excluída.']);
             }
@@ -41,6 +47,7 @@ class ExcluirParcelas
             } else {
                 $pendentes = $serie->lancamentos()
                     ->when($escopo === EscopoSerie::Proximas, fn ($query) => $query->where('numero_parcela', '>=', $parcela->numero_parcela))
+                    ->when($carteiras !== null, fn ($query) => $query->doAutorNasCarteiras($carteiras ?? []))
                     ->pendentesDoAutor()
                     ->get();
 
@@ -48,9 +55,12 @@ class ExcluirParcelas
             }
 
             $ultimaRestante = $serie->lancamentos()->max('data');
+            $encerra = $carteiras === null || in_array($serie->carteira_id, $carteiras, true);
 
             if ($ultimaRestante === null) {
                 $serie->delete();
+            } elseif (! $encerra) {
+                return $anexos;
             } elseif ($serie->isRecorrente() && $escopo === EscopoSerie::Proximas) {
                 $serie->update(['encerrado_em' => $parcela->data->toDateString()]);
             } elseif ($serie->isRecorrente() && $escopo === EscopoSerie::Todas) {

@@ -11,6 +11,8 @@ const props = defineProps<{
     carteiraId: number;
     /** "Gastos da fatura" on a card (RN-224, nota 07). */
     titulo?: string;
+    /** A delegated wallet has no "Ver relatório" (RN-279, CA-203.5). */
+    semRelatorio?: boolean;
 }>();
 
 function proporcao(valor: number): string {
@@ -54,6 +56,7 @@ function proporcao(valor: number): string {
             </li>
         </ul>
         <Link
+            v-if="!semRelatorio"
             :href="
                 relatorio({ query: { carteira: carteiraId, periodo: 'mes' } })
             "

@@ -26,6 +26,8 @@ const divisao = defineModel<Divisao>({ required: true });
 const props = defineProps<{
     contatos: ContatoOpcao[];
     autorId: number;
+    /** A member sees the owner by name instead of "Eu" (nota 07, Fase 16). */
+    nomeDoAutor?: string;
     total: number;
     bloqueado: boolean;
     /** Lock reason when it is not an executed share, e.g. a settled part (RN-258). */
@@ -112,7 +114,12 @@ function alternarAutor(incluir: boolean): void {
 
     if (incluir && !participa(props.autorId)) {
         divisao.value.participantes = [
-            { userId: props.autorId, nome: 'Eu', percentual: '', valor: '' },
+            {
+                userId: props.autorId,
+                nome: props.nomeDoAutor ?? 'Eu',
+                percentual: '',
+                valor: '',
+            },
             ...divisao.value.participantes,
         ];
     }
@@ -162,7 +169,11 @@ function alternarAutor(incluir: boolean): void {
                         :disabled="bloqueado"
                         @update:model-value="alternarAutor($event === true)"
                     />
-                    Eu participo
+                    {{
+                        nomeDoAutor
+                            ? `${nomeDoAutor} participa`
+                            : 'Eu participo'
+                    }}
                 </label>
                 <label
                     v-for="contato in opcoes"
@@ -192,7 +203,7 @@ function alternarAutor(incluir: boolean): void {
                 >
                     <span class="truncate">{{
                         participante.userId === autorId
-                            ? 'Eu'
+                            ? (nomeDoAutor ?? 'Eu')
                             : participante.nome
                     }}</span>
                     <span class="flex items-center gap-2">

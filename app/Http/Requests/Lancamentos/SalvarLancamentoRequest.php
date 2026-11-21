@@ -10,6 +10,7 @@ use App\Enums\TipoLancamento;
 use App\Models\Carteira;
 use App\Models\Categoria;
 use App\Models\Lancamento;
+use App\Models\User;
 use Carbon\CarbonImmutable;
 use Closure;
 use Illuminate\Contracts\Validation\ValidationRule;
@@ -25,7 +26,8 @@ class SalvarLancamentoRequest extends FormRequest
     public const int VALOR_MAXIMO = 99_999_999_999;
 
     /**
-     * Creating is open to any user; updating only to the author (RN-079, CA-041.3).
+     * Creating is open to any user; updating only to the author (RN-079, CA-041.3) or to a member of
+     * the entry's delegated wallet (RN-272, CA-204.2).
      */
     public function authorize(): bool
     {
@@ -84,7 +86,8 @@ class SalvarLancamentoRequest extends FormRequest
             'carteira_id' => [
                 'required',
                 'integer',
-                Rule::exists(Carteira::class, 'id')->where('user_id', $this->user()?->id),
+                Rule::exists(Carteira::class, 'id')->where('user_id', $this->dono()->id),
+                $this->delegadaAoMembro(...),
                 $this->foraDoEspelho(...),
             ],
             'observacao' => ['nullable', 'string', 'max:1000'],
@@ -103,6 +106,40 @@ class SalvarLancamentoRequest extends FormRequest
             'rateio.participantes.*.percentual' => ['nullable', 'numeric', 'gt:0', 'max:100', 'decimal:0,2'],
             'rateio.participantes.*.valor' => ['nullable', 'integer', 'min:1', 'max:'.self::VALOR_MAXIMO],
         ];
+    }
+
+    /**
+     * A member only picks wallets of the same owner delegated to them (RN-278, CA-204.4).
+     */
+    private function delegadaAoMembro(string $attribute, mixed $value, Closure $fail): void
+    {
+        /** @var User $user */
+        $user = $this->user();
+
+        if ($this->dono()->id !== $user->id && ! $user->carteirasDelegadas()->whereKey((int) $value)->exists()) {
+            $fail('Selecione uma carteira válida.');
+        }
+    }
+
+    /**
+     * The user the entry is saved for: the author of an existing entry, the owner of a wallet
+     * delegated to the user, else the user (RN-273, CA-204.1). A member never becomes the author.
+     */
+    public function dono(): User
+    {
+        return once(function (): User {
+            /** @var User $user */
+            $user = $this->user();
+            $lancamento = $this->lancamento();
+
+            if ($lancamento !== null) {
+                return $lancamento->user;
+            }
+
+            $carteira = is_numeric($this->input('carteira_id')) ? Carteira::query()->find((int) $this->input('carteira_id')) : null;
+
+            return $carteira !== null && $carteira->isDelegadaA($user) ? $carteira->user : $user;
+        });
     }
 
     /**
@@ -190,7 +227,7 @@ class SalvarLancamentoRequest extends FormRequest
             return;
         }
 
-        $autorId = (int) $this->user()?->id;
+        $autorId = $this->dono()->id;
         $ids = array_map(fn (mixed $participante): int => (int) data_get($participante, 'user_id'), $participantes);
         $outros = array_values(array_diff($ids, [$autorId]));
 
@@ -200,7 +237,7 @@ class SalvarLancamentoRequest extends FormRequest
             return;
         }
 
-        $permitidos = $this->user()?->consultaDeContatos()->whereKey($outros)->pluck('id')->all() ?? [];
+        $permitidos = $this->dono()->consultaDeContatos()->whereKey($outros)->pluck('id')->all();
         $atuais = $this->lancamento()?->cotas()->pluck('user_id')->all() ?? [];
 
         if (array_diff($outros, $permitidos, $atuais) !== []) {
@@ -269,7 +306,7 @@ class SalvarLancamentoRequest extends FormRequest
      */
     private function categoriaCompativel(string $attribute, mixed $value, Closure $fail): void
     {
-        $categoria = Categoria::query()->visiveisPara($this->user())->whereKey($value)->first();
+        $categoria = Categoria::query()->visiveisPara($this->dono())->whereKey($value)->first();
 
         if ($categoria === null) {
             $fail('Selecione uma categoria válida.');

@@ -163,6 +163,16 @@ function alternar(marcado: boolean): void {
                         class="size-3.5 shrink-0 text-muted-foreground"
                         aria-label="Com anexo"
                     />
+                    <span
+                        v-if="item.registro?.lancadoPor"
+                        class="inline-flex size-4 shrink-0 items-center justify-center rounded-full bg-muted text-[10px] font-semibold text-muted-foreground"
+                        role="img"
+                        :aria-label="`Lançado por ${item.registro.lancadoPor}`"
+                        data-test="lancado-por"
+                        >{{
+                            item.registro.lancadoPor.charAt(0).toUpperCase()
+                        }}</span
+                    >
                 </span>
                 <span
                     class="flex items-center gap-2 text-xs text-muted-foreground"

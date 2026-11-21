@@ -42,8 +42,10 @@ import type {
     CarteiraResumo,
     CategoriaOpcao,
     ContatoOpcao,
+    Delegacao,
     EscopoSerie,
     LancamentoEdicao,
+    RegistroDeMembro,
     SerieDaParcela,
     TipoLancamento,
 } from '@/types';
@@ -64,6 +66,10 @@ const props = defineProps<{
     cartoes?: Record<string, CartaoDoFormulario>;
     /** The entry is in a closed invoice (RN-200). */
     faturaFechada?: boolean;
+    /** Owner of the delegated wallet a member is in: the author of what the member saves (RN-273). */
+    delegacao?: Delegacao | null;
+    /** Who-acted record of the entry being edited (RN-274). */
+    registro?: RegistroDeMembro | null;
 }>();
 
 type Campos = {
@@ -89,7 +95,10 @@ const form = useForm<Campos>(camposIniciais());
 const confirmandoExclusao = ref(false);
 const escolhendoEscopo = ref<'editar' | 'excluir' | null>(null);
 const page = usePage();
-const autorId = computed(() => page.props.auth.user.id as number);
+const autorId = computed(
+    () => props.delegacao?.donoId ?? (page.props.auth.user.id as number),
+);
+const nomeDoAutor = computed(() => props.delegacao?.donoNome);
 const divisao = ref<Divisao>(divisaoInicial());
 
 function divisaoInicial(): Divisao {
@@ -109,7 +118,7 @@ function divisaoInicial(): Divisao {
             : [
                   {
                       userId: autorId.value,
-                      nome: 'Eu',
+                      nome: nomeDoAutor.value ?? 'Eu',
                       percentual: '',
                       valor: '',
                   },
@@ -460,6 +469,7 @@ function removerAnexo(): void {
                         :hoje="hoje"
                         :com-cota="edicao?.rateio?.autorParticipa ?? true"
                         :alteracoes-pendentes="form.isDirty"
+                        :membro="delegacao != null"
                         @concluido="aberto = false"
                     />
 
@@ -682,6 +692,7 @@ function removerAnexo(): void {
                         v-model="divisao"
                         :contatos="contatos"
                         :autor-id="autorId"
+                        :nome-do-autor="nomeDoAutor"
                         :total="centavosDe(form.valor)"
                         :bloqueado="bloqueado"
                         :aviso="avisoDeQuitacao"
@@ -755,6 +766,24 @@ function removerAnexo(): void {
                     </div>
 
                     <InputError :message="erros.lancamento" />
+
+                    <p
+                        v-if="editando && registro"
+                        class="text-xs text-muted-foreground"
+                        data-test="registro-membro"
+                    >
+                        {{
+                            [
+                                registro.lancadoPor &&
+                                    `Lançado por ${registro.lancadoPor}`,
+                                registro.alteradoPor &&
+                                    registro.alteradoEm &&
+                                    `Alterado por ${registro.alteradoPor} em ${dataCompleta(registro.alteradoEm)}`,
+                            ]
+                                .filter(Boolean)
+                                .join(' · ')
+                        }}
+                    </p>
 
                     <div class="flex flex-wrap gap-2">
                         <Button type="submit" :disabled="form.processing">

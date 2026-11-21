@@ -397,6 +397,7 @@ class ListarLancamentosDoMes
             'recorrente' => $serie?->isRecorrente() ?? false,
             'compartilhado' => $lancamento->modo_rateio !== null,
             'temAnexo' => $lancamento->anexo_caminho !== null,
+            'registro' => $this->registro($user, $lancamento),
             'serie' => $serie === null ? null : [
                 'id' => $serie->id,
                 'recorrente' => $serie->isRecorrente(),
@@ -436,6 +437,29 @@ class ListarLancamentosDoMes
                 'observacao' => $lancamento->observacao,
                 'anexoNome' => $lancamento->anexo_nome,
             ],
+        ];
+    }
+
+    /**
+     * Who-acted record shown to the owner the member acted for, and so to the members of the owner's
+     * wallet (RN-274, RN-294, RN-299): who created it, for the author; who changed it last, for the
+     * owner the change was for. Null when nothing applies (CA-205.6).
+     *
+     * @return array{lancadoPor: string|null, alteradoPor: string|null, alteradoEm: string|null}|null
+     */
+    private function registro(User $user, Lancamento $lancamento): ?array
+    {
+        $lancadoPor = $lancamento->user_id === $user->id ? $lancamento->criado_por_nome : null;
+        $alterado = $lancamento->alterado_para_id === $user->id && $lancamento->alterado_por_nome !== null;
+
+        if ($lancadoPor === null && ! $alterado) {
+            return null;
+        }
+
+        return [
+            'lancadoPor' => $lancadoPor,
+            'alteradoPor' => $alterado ? $lancamento->alterado_por_nome : null,
+            'alteradoEm' => $alterado ? $lancamento->alterado_em?->toDateString() : null,
         ];
     }
 

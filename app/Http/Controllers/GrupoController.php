@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Actions\Grupos\AgruparCotas;
 use App\Actions\Grupos\DesagruparCotas;
+use App\Actions\Lancamentos\RegistrarQuemAgiu;
 use App\Http\Requests\Grupos\AgruparRequest;
 use App\Http\Requests\Grupos\DesagruparRequest;
 use App\Http\Requests\Grupos\ExecutarGrupoRequest;
@@ -12,20 +13,19 @@ use App\Models\Cota;
 use App\Models\Grupo;
 use App\Models\User;
 use Illuminate\Http\RedirectResponse;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
 use Inertia\Inertia;
 
 class GrupoController extends Controller
 {
     /**
-     * Group the selected shares (RF-090).
+     * Group the selected shares (RF-090). A member groups the owner's shares and a new group is the
+     * owner's (RN-292, CA-204.7).
      */
     public function agrupar(AgruparRequest $request, AgruparCotas $agruparCotas): RedirectResponse
     {
-        /** @var User $user */
-        $user = $request->user();
-
-        $agruparCotas->handle($user, $request->cotas(), $request->grupo() ?? (string) $request->validated('nome'), $request->escopo());
+        $agruparCotas->handle($request->dono(), $request->cotas(), $request->grupo() ?? (string) $request->validated('nome'), $request->escopo());
 
         Inertia::flash('toast', ['type' => 'success', 'message' => 'Itens agrupados.']);
 
@@ -37,10 +37,7 @@ class GrupoController extends Controller
      */
     public function desagrupar(DesagruparRequest $request, DesagruparCotas $desagruparCotas): RedirectResponse
     {
-        /** @var User $user */
-        $user = $request->user();
-
-        $desagruparCotas->handle($user, $request->cotas(), $request->escopo());
+        $desagruparCotas->handle($request->dono(), $request->cotas(), $request->escopo());
 
         Inertia::flash('toast', ['type' => 'success', 'message' => 'Itens desagrupados.']);
 
@@ -48,16 +45,21 @@ class GrupoController extends Controller
     }
 
     /**
-     * Mark or unmark every visible share of the group in the month (RF-092, RN-014, RN-128).
+     * Mark or unmark every visible share of the group in the month (RF-092, RN-014, RN-128). The
+     * changed entries record who acted (RN-293, CA-205.8).
      */
-    public function executar(ExecutarGrupoRequest $request, Grupo $grupo): RedirectResponse
+    public function executar(ExecutarGrupoRequest $request, Grupo $grupo, RegistrarQuemAgiu $registrarQuemAgiu): RedirectResponse
     {
+        /** @var User $user */
+        $user = $request->user();
         $executado = $request->boolean('executado');
+        DB::transaction(function () use ($request, $executado, $registrarQuemAgiu, $user, $grupo): void {
+            $alteradas = Cota::query()->whereKey($request->cotas())->where('executado', ! $executado);
+            $lancamentos = array_values(array_map(intval(...), (clone $alteradas)->pluck('lancamento_id')->all()));
 
-        Cota::query()
-            ->whereKey($request->cotas())
-            ->where('executado', ! $executado)
-            ->update(['executado' => $executado, 'executado_em' => $executado ? now() : null]);
+            $alteradas->update(['executado' => $executado, 'executado_em' => $executado ? now() : null]);
+            $registrarQuemAgiu->alterou($user, $grupo->user, $lancamentos);
+        });
 
         return back();
     }
