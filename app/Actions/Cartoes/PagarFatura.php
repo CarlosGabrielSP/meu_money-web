@@ -35,9 +35,10 @@ class PagarFatura
      * author's card row is locked so two payments never settle the same part.
      *
      * A member of the linked wallet pays as the owner; the payment stores who paid, with the stored
-     * name (RN-281, RN-309, CA-208.2). The link is checked again under the card lock, so a card
-     * relinked meanwhile never takes the member's payment from a wallet not delegated (RN-303).
-     *
+     * name (RN-281, RN-309, CA-208.2). A member of the card pays as well, from the linked wallet even
+     * when it is not delegated to them, or as money from outside on an independent card (RN-316). The
+     * access is checked again under the card lock, so a card relinked meanwhile never takes the payment
+     * of a member of the old wallet only; a member of the card still pays (RN-303, RN-326, RN-335).
      *
      * @param  list<int>  $contatos  user ids of the marked contacts
      * @param  User|null  $pagoPor  the member who pays; null is the owner
@@ -57,7 +58,7 @@ class PagarFatura
             $calendario = FaturasDoCartao::carregar($cartao);
             $fatura = $calendario->salvar($calendario->daReferencia($referencia));
 
-            if ($pagoPor !== null && ! $fatura->isVinculadaADelegadaDe($pagoPor)) {
+            if ($pagoPor !== null && ! $cartao->isDelegadaA($pagoPor) && ! $fatura->isVinculadaADelegadaDe($pagoPor)) {
                 throw new AuthorizationException;
             }
             $quitar = $contatos === [] || $calendario->origem !== null

@@ -131,6 +131,7 @@ class InicioController extends Controller
             'faturasVinculadas' => $noCartao ? [] : $this->comAcoesDoMembro(
                 $listarLancamentos->faturasVinculadas($dono, $carteira, $mes, $filtros, $hoje, $faturas),
                 $delegada,
+                $user,
                 $dono,
                 $carteira,
                 $hoje,
@@ -153,22 +154,30 @@ class InicioController extends Controller
     /**
      * The member's actions on each invoice row of the delegated wallet (RN-281, RN-302, RN-311): the
      * invoice as the card screen has it, for the "Pagar" form, with only the payments that left this
-     * wallet. The row items open no form (RN-312, CA-208.14), also while the card is delegated to the
-     * member until stage 17.3 (RN-330). The owner's rows do not change (RN-306), so they get null.
+     * wallet. The row items open no form (RN-312, CA-208.14). A card also delegated to the member keeps
+     * the owner's row: it opens the card, where the member pays, and its items open the form (RN-322,
+     * RN-334, CA-215.1). The owner's rows do not change (RN-306), so they get null.
      *
      * @param  list<array<string, mixed>>  $linhas
      * @param  array<int, list<array{fatura: Fatura, compras: int, receitas: int, comprasContatos: int, receitasContatos: int, quitadoPeloAutor: int, pagamentos: int, saldoAnterior: int, aPagar: int, aPagarAutor: int}>>  $faturas  CalcularFaturas
      * @return list<array<string, mixed>>
      */
-    private function comAcoesDoMembro(array $linhas, bool $delegada, User $dono, Carteira $carteira, CarbonImmutable $hoje, array $faturas, FaturaDoMes $faturaDoMes): array
+    private function comAcoesDoMembro(array $linhas, bool $delegada, User $user, User $dono, Carteira $carteira, CarbonImmutable $hoje, array $faturas, FaturaDoMes $faturaDoMes): array
     {
+        $doDono = fn (array $linha): array => [...$linha, 'faturaDoMes' => null];
+
         if (! $delegada) {
-            return array_map(fn (array $linha): array => [...$linha, 'faturaDoMes' => null], $linhas);
+            return array_map($doDono, $linhas);
         }
 
-        $cartoes = Carteira::query()->findMany(array_column($linhas, 'carteiraId'))->keyBy('id');
+        $delegadas = $user->carteirasDelegadasPor($dono) ?? [];
+        $cartoes = Carteira::query()->findMany(array_diff(array_column($linhas, 'carteiraId'), $delegadas))->keyBy('id');
 
-        return array_map(function (array $linha) use ($cartoes, $dono, $carteira, $hoje, $faturas, $faturaDoMes): array {
+        return array_map(function (array $linha) use ($cartoes, $dono, $carteira, $hoje, $faturas, $faturaDoMes, $delegadas, $doDono): array {
+            if (in_array($linha['carteiraId'], $delegadas, true)) {
+                return $doDono($linha);
+            }
+
             /** @var Carteira $cartao */
             $cartao = $cartoes->get($linha['carteiraId']);
             $fatura = $faturaDoMes->handle($dono, $cartao, CarbonImmutable::createFromFormat('!Y-m', (string) $linha['mes']) ?? $hoje, $hoje, $faturas);

@@ -15,7 +15,7 @@ const props = defineProps<{
     fatura: FaturaDoMes;
     hoje: string;
     simples: boolean;
-    /** Until stage 17.3 a member of the card does not pay the invoice (RN-329). */
+    /** A member of the card pays only an invoice already stored (RN-316, RN-333). */
     membro?: boolean;
 }>();
 
@@ -122,9 +122,9 @@ const credito = computed(() => props.fatura.aPagar < 0);
             </dl>
         </template>
 
-        <!-- Only with something left to pay (RN-223); not for a member until stage 17.3 (RN-329). -->
+        <!-- Only with something left to pay (RN-223); a member only on a stored invoice (RN-333). -->
         <Button
-            v-if="fatura.aPagar > 0 && !membro"
+            v-if="fatura.aPagar > 0 && !(membro && fatura.id === null)"
             class="mt-5 w-full bg-saldo-foreground text-saldo hover:bg-saldo-foreground/90"
             data-test="pagar-fatura"
             @click="pagando = true"
@@ -134,7 +134,6 @@ const credito = computed(() => props.fatura.aPagar < 0);
     </section>
 
     <PagarFaturaPainel
-        v-if="!membro"
         v-model:open="pagando"
         :cartao-id="cartaoId"
         :cartao-nome="cartaoNome"

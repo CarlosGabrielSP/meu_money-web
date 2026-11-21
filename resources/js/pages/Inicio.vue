@@ -636,11 +636,7 @@ onMounted(() => {
                         :partes="fatura.partes"
                         :dono="delegacao?.donoNome ?? null"
                     />
-                    <PagamentosFatura
-                        v-if="fatura"
-                        :fatura="fatura"
-                        :membro="delegacao !== null"
-                    />
+                    <PagamentosFatura v-if="fatura" :fatura="fatura" />
                     <AvisosPendencias
                         v-if="destaques.vencidas && destaques.proximas"
                         :vencidas="destaques.vencidas"

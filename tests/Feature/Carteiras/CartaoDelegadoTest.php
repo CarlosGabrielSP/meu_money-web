@@ -1,6 +1,7 @@
 <?php
 
 use App\Actions\Cartoes\AtribuirFaturas;
+use App\Actions\Cartoes\PagarFatura;
 use App\Enums\StatusMembro;
 use App\Enums\TipoCategoria;
 use App\Models\Carteira;
@@ -8,7 +9,9 @@ use App\Models\Categoria;
 use App\Models\Contato;
 use App\Models\Cota;
 use App\Models\Lancamento;
+use App\Models\PagamentoFatura;
 use App\Models\Parcelamento;
+use App\Models\QuitacaoContato;
 use App\Models\User;
 use Carbon\CarbonImmutable;
 use Database\Seeders\CategoriasGlobaisSeeder;
@@ -266,4 +269,136 @@ it('CA-217.1 opens the delegated card in the member simple mode', function () {
 
     expect($props['fatura'])->not->toBeNull()
         ->and($props['delegacao']['donoNome'])->toBe('Carlos');
+});
+
+/**
+ * A purchase of the owner in the card, already in the invoice of its date (RN-192).
+ */
+function compraDoDonoNoCartao(?Carteira $cartao = null, string $data = '2026-11-20', int $valor = 10000): Lancamento
+{
+    $lancamento = lancamentoComCota(test()->dono, $cartao ?? test()->nubank, test()->categoriaDoDono, ['data' => $data, 'valor' => $valor]);
+    app(AtribuirFaturas::class)->porLancamentos([$lancamento->id], permitirFechadas: true);
+
+    return $lancamento;
+}
+
+it('CA-214.1 pays from the linked wallet not delegated to the member and stores who paid', function () {
+    compraDoDonoNoCartao();
+
+    pagarComo($this->membro, $this->nubank, '2026-12', '40,00')->assertSessionHasNoErrors();
+
+    expect(PagamentoFatura::query()->sole())
+        ->carteira_id->toBe($this->principal->id)
+        ->valor->toBe(4000)
+        ->pago_por_id->toBe($this->membro->id)
+        ->pago_por_nome->toBe('Ana');
+});
+
+it('CA-214.2 pays an independent card as money from outside', function () {
+    $inter = cartaoDe($this->dono, 'Inter');
+    delegarCarteira($inter, $this->membro);
+    compraDoDonoNoCartao($inter);
+
+    pagarComo($this->membro, $inter, '2026-12', '40,00')->assertSessionHasNoErrors();
+
+    expect(PagamentoFatura::query()->sole())
+        ->carteira_id->toBeNull()
+        ->pago_por_nome->toBe('Ana');
+});
+
+it('CA-214.3 refuses paying an invoice that does not exist', function () {
+    compraDoDonoNoCartao();
+
+    pagarComo($this->membro, $this->nubank, '2027-03', '40,00')->assertForbidden();
+
+    expect(PagamentoFatura::query()->exists())->toBeFalse();
+});
+
+it('RN-335 lets the member of the card pay after the owner relinks it to another wallet', function () {
+    compraDoDonoNoCartao();
+    $outra = Carteira::factory()->for($this->dono)->create(['nome' => 'Outra']);
+    $this->nubank->cartao->update(['carteira_vinculada_id' => $outra->id]);
+    faturaDe($this->nubank, '2026-12')->update(['carteira_vinculada_id' => $outra->id]);
+
+    $pagamento = app(PagarFatura::class)->handle($this->nubank, CarbonImmutable::parse('2026-12-01'), 4000, '2026-11-14', pagoPor: $this->membro);
+
+    expect($pagamento->carteira_id)->toBe($outra->id)
+        ->and($pagamento->pago_por_nome)->toBe('Ana');
+});
+
+it('CA-214.4 deletes any payment of the delegated card invoice', function () {
+    compraDoDonoNoCartao();
+    pagarComo($this->dono, $this->nubank, '2026-12', '40,00')->assertSessionHasNoErrors();
+    $pagamento = PagamentoFatura::query()->sole();
+
+    $this->actingAs($this->membro)->delete(route('faturas.pagamentos.destroy', $pagamento))
+        ->assertSessionHasNoErrors()
+        ->assertInertiaFlash('toast.message', 'Pagamento excluído.');
+
+    expect(PagamentoFatura::query()->exists())->toBeFalse();
+});
+
+it('CA-214.5 keeps the "a receber" of the member payment in the linked wallet, out of the member reach', function () {
+    $contato = User::factory()->create(['name' => 'Bia']);
+    Carteira::factory()->for($contato)->padrao()->create();
+    Contato::factory()->aceito()->create(['solicitante_id' => $this->dono->id, 'convidado_id' => $contato->id]);
+    $this->actingAs($this->dono)->post(route('lancamentos.store'), dadosRateio($this->nubank, $this->categoriaDoDono, 'iguais', [
+        ['user_id' => $this->dono->id], ['user_id' => $contato->id],
+    ]))->assertSessionHasNoErrors();
+
+    pagarComo($this->membro, $this->nubank, '2026-12', '0,00', [$contato->id])->assertSessionHasNoErrors();
+    $quitacao = QuitacaoContato::query()->sole();
+
+    expect($quitacao->pagamento->carteira_id)->toBe($this->principal->id);
+
+    $this->actingAs($this->membro)->patch(route('a-receber.recebido', $quitacao), ['recebido' => true])->assertForbidden();
+    $this->actingAs($this->membro)->get(route('home', ['carteira' => $this->principal->id]))->assertForbidden();
+    $this->actingAs($this->dono)->get(route('home', ['carteira' => $this->principal->id]))
+        ->assertInertia(fn (Assert $page) => $page->has('aReceber', 1));
+});
+
+it('CA-215.1 gives the member of the wallet and the card the owner invoice row', function () {
+    delegarCarteira($this->principal, $this->membro);
+    compraDoDonoNoCartao();
+
+    $linhas = [];
+    $this->actingAs($this->membro)->get(route('home', ['carteira' => $this->principal->id, 'mes' => '2026-12']))
+        ->assertInertia(function (Assert $page) use (&$linhas) {
+            $linhas = $page->toArray()['props']['faturasVinculadas'];
+        });
+
+    expect($linhas)->toHaveCount(1)
+        ->and($linhas[0]['faturaDoMes'])->toBeNull()
+        ->and(collect($linhas[0]['itens'])->every(fn (array $item) => $item['edicao'] !== null))->toBeTrue();
+});
+
+it('CA-215.2 keeps the member row of RF-208 for a member of the wallet only', function () {
+    $this->delegacao->delete();
+    delegarCarteira($this->principal, $this->membro);
+    compraDoDonoNoCartao();
+
+    $linhas = [];
+    $this->actingAs($this->membro)->get(route('home', ['carteira' => $this->principal->id, 'mes' => '2026-12']))
+        ->assertInertia(function (Assert $page) use (&$linhas) {
+            $linhas = $page->toArray()['props']['faturasVinculadas'];
+        });
+
+    expect($linhas[0]['faturaDoMes'])->not->toBeNull()
+        ->and(collect($linhas[0]['itens'])->every(fn (array $item) => $item['edicao'] === null))->toBeTrue();
+});
+
+it('CA-213.5 RN-323 lets the member settle the own part of the delegated card invoice', function () {
+    $this->actingAs($this->membro)->post(route('lancamentos.store'), dadosRateio($this->nubank, $this->categoriaDoDono, 'iguais', [
+        ['user_id' => $this->dono->id], ['user_id' => $this->membro->id],
+    ]))->assertSessionHasNoErrors();
+
+    $partes = telaDoCartaoDelegado($this->membro, ['mes' => '2026-12'])['fatura']['partes'];
+
+    expect(collect($partes)->where('voce', false)->pluck('aberto', 'userId')->all())->toBe([$this->membro->id => 5000]);
+
+    pagarComo($this->membro, $this->nubank, '2026-12', '0,00', [$this->membro->id])->assertSessionHasNoErrors();
+
+    expect(QuitacaoContato::query()->sole())
+        ->contato_id->toBe($this->membro->id)
+        ->valor->toBe(5000);
 });

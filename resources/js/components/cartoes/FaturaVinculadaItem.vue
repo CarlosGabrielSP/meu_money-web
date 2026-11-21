@@ -28,7 +28,10 @@ const expandido = ref(false);
 const pagando = ref(false);
 const excluindo = ref<PagamentoFatura | null>(null);
 
-/** The member's row (RF-208): it expands instead of opening the card, which the member never opens. */
+/**
+ * The row of a member of the wallet only (RF-208): it expands instead of opening the card, which is not
+ * delegated to them. A member of the card too gets the owner's row (RN-322, RN-334).
+ */
 const doMembro = computed(() => props.fatura.faturaDoMes);
 /** "Pagar" only with something left to pay (RN-223, RN-281). */
 const podePagar = computed(() => (doMembro.value?.aPagar ?? 0) > 0);
@@ -55,8 +58,8 @@ function tocar(): void {
 <template>
     <!-- One invoice of a card paid by this wallet, due in the month (RN-219): no checkbox; the
          name opens the card screen in the invoice month, the arrow expands its items. For a member of
-         the delegated wallet the name expands too, with the payments from the wallet and "Pagar"
-         (RN-281, RN-311). -->
+         the delegated wallet only the name expands too, with the payments from the wallet and "Pagar"
+         (RN-281, RN-311); with the card also delegated the row is the owner's (RN-334). -->
     <li>
         <div
             class="flex items-center gap-3 px-3"

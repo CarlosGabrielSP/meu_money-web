@@ -64,16 +64,17 @@ class FaturaController extends Controller
      * automatic receipts go with it (foreign keys), and the contacts' mirror payments of the card are
      * redistributed when the payment was a contact's or settled a part (RN-240, RN-241, RN-255). A mirror left without shares and payments is deleted
      * (RN-261 c). A member deletes a payment that left a wallet delegated to them, of an invoice linked
-     * to a delegated wallet, with the same effects (RN-281, RN-304, CA-208.3, CA-208.7).
+     * to a delegated wallet, with the same effects (RN-281, RN-304, CA-208.3, CA-208.7); a member of
+     * the card deletes any payment of its invoices (RN-317, CA-214.4).
      */
     public function excluirPagamento(Request $request, PagamentoFatura $pagamentoFatura, Espelhos $espelhos, DistribuirPagamentosDoContato $distribuir): RedirectResponse
     {
         /** @var User $user */
         $user = $request->user();
         $cartao = $pagamentoFatura->fatura->carteira;
-        $doMembro = $pagamentoFatura->carteira_id !== null
+        $doMembro = $cartao->isDelegadaA($user) || ($pagamentoFatura->carteira_id !== null
             && $pagamentoFatura->fatura->isVinculadaADelegadaDe($user)
-            && $user->carteirasDelegadas()->whereKey($pagamentoFatura->carteira_id)->exists();
+            && $user->carteirasDelegadas()->whereKey($pagamentoFatura->carteira_id)->exists());
         abort_unless($doMembro || $user->can('update', $cartao), 403);
 
         DB::transaction(function () use ($pagamentoFatura, $espelhos, $distribuir, $cartao): void {

@@ -9,8 +9,6 @@ import type { FaturaDoMes, PagamentoFatura } from '@/types';
 
 defineProps<{
     fatura: FaturaDoMes;
-    /** Until stage 17.3 a member of the card does not delete payments (RN-329). */
-    membro?: boolean;
 }>();
 
 const excluindo = ref<PagamentoFatura | null>(null);
@@ -43,7 +41,6 @@ const excluindo = ref<PagamentoFatura | null>(null);
                         formatarMoeda(pagamento.valor)
                     }}</span>
                     <Button
-                        v-if="!membro"
                         variant="ghost"
                         size="icon"
                         class="size-8"
@@ -56,6 +53,6 @@ const excluindo = ref<PagamentoFatura | null>(null);
             </ul>
         </section>
 
-        <ExcluirPagamentoDialog v-if="!membro" v-model="excluindo" />
+        <ExcluirPagamentoDialog v-model="excluindo" />
     </div>
 </template>

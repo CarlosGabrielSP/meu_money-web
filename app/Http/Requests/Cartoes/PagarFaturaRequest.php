@@ -12,7 +12,8 @@ class PagarFaturaRequest extends FormRequest
 {
     /**
      * The card owner pays (CA-165.6); the route resolves only cards. A member pays only an invoice
-     * that already exists and is linked to a wallet delegated to them (RN-281, RN-303, CA-208.6).
+     * that already exists, of a card delegated to them or linked to a wallet delegated to them
+     * (RN-281, RN-303, RN-316, CA-208.6, CA-214.3).
      */
     public function authorize(): bool
     {
@@ -29,7 +30,7 @@ class PagarFaturaRequest extends FormRequest
 
         $fatura = $cartao->faturas()->whereDate('referencia', $this->route('referencia').'-01')->first();
 
-        return $fatura?->isVinculadaADelegadaDe($user) ?? false;
+        return $fatura !== null && ($cartao->isDelegadaA($user) || $fatura->isVinculadaADelegadaDe($user));
     }
 
     /**
