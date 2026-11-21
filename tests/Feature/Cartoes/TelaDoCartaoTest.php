@@ -282,7 +282,7 @@ it('CA-169.5 shows the to pay of the month invoice in the card wallet tile', fun
 
 it('CA-169.6 lists the payments of the invoice with their source', function () {
     inicioDe($this->nubank, ['mes' => '2026-11'])->assertInertia(fn (Assert $page) => $page
-        ->where('fatura.pagamentosLista', [['id' => $this->pagamento->id, 'data' => '2026-11-10', 'valor' => 30000, 'origem' => 'X']])
+        ->where('fatura.pagamentosLista', [['id' => $this->pagamento->id, 'data' => '2026-11-10', 'valor' => 30000, 'origem' => 'X', 'carteiraId' => $this->x->id, 'pagoPor' => null]])
         ->where('fatura.estado', 'fechada')
         ->where('fatura.editavel', false));
 });

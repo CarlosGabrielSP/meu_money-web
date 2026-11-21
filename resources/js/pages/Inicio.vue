@@ -774,8 +774,8 @@ onMounted(() => {
                                 v-for="linha in faturasVinculadas"
                                 :key="linha.chave"
                                 :fatura="linha"
+                                :hoje="hoje"
                                 simples
-                                :somente-leitura="delegacao !== null"
                             />
                         </template>
                         <template v-else>
@@ -784,7 +784,6 @@ onMounted(() => {
                                 :key="linha.chave"
                                 :item="linha"
                                 simples
-                                :somente-leitura="delegacao !== null"
                             />
                         </template>
                     </ul>
@@ -869,7 +868,6 @@ onMounted(() => {
                                 v-for="linha in aReceber"
                                 :key="linha.chave"
                                 :item="linha"
-                                :somente-leitura="delegacao !== null"
                             />
                         </ul>
                     </div>
@@ -888,7 +886,7 @@ onMounted(() => {
                                 v-for="linha in faturasVinculadas"
                                 :key="linha.chave"
                                 :fatura="linha"
-                                :somente-leitura="delegacao !== null"
+                                :hoje="hoje"
                                 @editar="editar($event, 'despesa')"
                             />
                         </ul>

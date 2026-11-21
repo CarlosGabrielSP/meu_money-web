@@ -68,6 +68,16 @@ class Fatura extends Model
     }
 
     /**
+     * The invoice's linked wallet is delegated to the user, so the member pays it, deletes its payments
+     * from a delegated wallet and marks its "a receber" items (RN-303 to RN-305).
+     */
+    public function isVinculadaADelegadaDe(User $user): bool
+    {
+        return $this->carteira_vinculada_id !== null
+            && $user->carteirasDelegadas()->whereKey($this->carteira_vinculada_id)->exists();
+    }
+
+    /**
      * @return HasMany<Cota, $this>
      */
     public function cotas(): HasMany

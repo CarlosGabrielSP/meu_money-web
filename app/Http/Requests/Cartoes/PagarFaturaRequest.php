@@ -3,6 +3,7 @@
 namespace App\Http\Requests\Cartoes;
 
 use App\Http\Requests\Lancamentos\SalvarLancamentoRequest;
+use App\Models\Carteira;
 use Carbon\CarbonImmutable;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
@@ -10,11 +11,25 @@ use Illuminate\Foundation\Http\FormRequest;
 class PagarFaturaRequest extends FormRequest
 {
     /**
-     * Only the card owner pays (CA-165.6); the route resolves only cards.
+     * The card owner pays (CA-165.6); the route resolves only cards. A member pays only an invoice
+     * that already exists and is linked to a wallet delegated to them (RN-281, RN-303, CA-208.6).
      */
     public function authorize(): bool
     {
-        return $this->user()?->can('update', $this->route('carteira')) ?? false;
+        $user = $this->user();
+        $cartao = $this->route('carteira');
+
+        if ($user === null || ! $cartao instanceof Carteira) {
+            return false;
+        }
+
+        if ($user->can('update', $cartao)) {
+            return true;
+        }
+
+        $fatura = $cartao->faturas()->whereDate('referencia', $this->route('referencia').'-01')->first();
+
+        return $fatura?->isVinculadaADelegadaDe($user) ?? false;
     }
 
     /**

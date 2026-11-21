@@ -10,25 +10,31 @@ use App\Http\Requests\Cartoes\EditarDatasFaturaRequest;
 use App\Http\Requests\Cartoes\PagarFaturaRequest;
 use App\Models\Carteira;
 use App\Models\PagamentoFatura;
+use App\Models\User;
 use Carbon\CarbonImmutable;
 use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Gate;
 use Inertia\Inertia;
 
 class FaturaController extends Controller
 {
     /**
-     * Pay the invoice due in the month, settling the marked contacts' parts too (RF-165, RF-185).
+     * Pay the invoice due in the month, settling the marked contacts' parts too (RF-165, RF-185). A
+     * member of the linked wallet pays as the owner and is stored as who paid (RN-281, CA-208.2).
      */
     public function pagar(PagarFaturaRequest $request, Carteira $carteira, string $referencia, PagarFatura $pagarFatura): RedirectResponse
     {
+        /** @var User $user */
+        $user = $request->user();
+
         $pagarFatura->handle(
             $this->cartao($carteira),
             $this->referencia($referencia),
             (int) $request->validated('valor'),
             (string) $request->validated('data'),
             array_values(array_map(intval(...), $request->validated('contatos') ?? [])),
+            $carteira->user_id === $user->id ? null : $user,
         );
 
         Inertia::flash('toast', ['type' => 'success', 'message' => 'Pagamento registrado.']);
@@ -57,12 +63,18 @@ class FaturaController extends Controller
      * Delete a payment; payments are never edited (RF-166, RN-222). Its settlements, "a receber" and
      * automatic receipts go with it (foreign keys), and the contacts' mirror payments of the card are
      * redistributed when the payment was a contact's or settled a part (RN-240, RN-241, RN-255). A mirror left without shares and payments is deleted
-     * (RN-261 c).
+     * (RN-261 c). A member deletes a payment that left a wallet delegated to them, of an invoice linked
+     * to a delegated wallet, with the same effects (RN-281, RN-304, CA-208.3, CA-208.7).
      */
-    public function excluirPagamento(PagamentoFatura $pagamentoFatura, Espelhos $espelhos, DistribuirPagamentosDoContato $distribuir): RedirectResponse
+    public function excluirPagamento(Request $request, PagamentoFatura $pagamentoFatura, Espelhos $espelhos, DistribuirPagamentosDoContato $distribuir): RedirectResponse
     {
+        /** @var User $user */
+        $user = $request->user();
         $cartao = $pagamentoFatura->fatura->carteira;
-        Gate::authorize('update', $cartao);
+        $doMembro = $pagamentoFatura->carteira_id !== null
+            && $pagamentoFatura->fatura->isVinculadaADelegadaDe($user)
+            && $user->carteirasDelegadas()->whereKey($pagamentoFatura->carteira_id)->exists();
+        abort_unless($doMembro || $user->can('update', $cartao), 403);
 
         DB::transaction(function () use ($pagamentoFatura, $espelhos, $distribuir, $cartao): void {
             DistribuirPagamentosDoContato::travar($cartao);

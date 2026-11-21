@@ -14,6 +14,7 @@ use App\Actions\Inicio\SaldosDasCarteiras;
 use App\Http\Requests\InicioRequest;
 use App\Models\Carteira;
 use App\Models\Categoria;
+use App\Models\Fatura;
 use App\Models\Grupo;
 use App\Models\User;
 use Carbon\CarbonImmutable;
@@ -37,7 +38,8 @@ class InicioController extends Controller
      * A member sees a delegated wallet as its owner sees it, under the owner's name (RN-279, CA-203.1):
      * the owner's balances, list, categories, contacts and groups; the form offers only the owner's
      * wallets delegated to the member. No wallet balances highlight, no tour, and the member's last
-     * wallet stays (RN-296, CA-203.2, CA-203.7). The interface mode is the member's (RN-297).
+     * wallet stays (RN-296, CA-203.2, CA-203.7). The interface mode is the member's (RN-297). Each
+     * invoice row carries the invoice for the member's "Pagar" and payments (RF-208).
      */
     public function __invoke(
         InicioRequest $request,
@@ -117,13 +119,14 @@ class InicioController extends Controller
             'lancamentos' => $user->modo_simples
                 ? $listarLancamentos->semSubsecoes($dono, $carteira, $mes, $hoje, $fatura['id'] ?? null)
                 : $listarLancamentos->handle($dono, $carteira, $mes, $filtros, $hoje, $fatura['id'] ?? null),
-            'faturasVinculadas' => $noCartao ? [] : $listarLancamentos->faturasVinculadas(
+            'faturasVinculadas' => $noCartao ? [] : $this->comAcoesDoMembro(
+                $listarLancamentos->faturasVinculadas($dono, $carteira, $mes, $filtros, $hoje, $faturas),
+                $delegada,
                 $dono,
                 $carteira,
-                $mes,
-                $filtros,
                 $hoje,
                 $faturas,
+                $faturaDoMes,
             ),
             'aReceber' => $noCartao ? [] : $listarLancamentos->aReceber($carteira, $mes, $filtros),
             'perguntarModoSimples' => $perguntarModoSimples,
@@ -136,6 +139,44 @@ class InicioController extends Controller
             'cotasVencidas' => Inertia::optional(fn (): array => $noCartao ? [] : $pendencias->listaVencidas($dono, $carteira, $hoje)),
             'cotasProximas' => Inertia::optional(fn (): array => $noCartao ? [] : $pendencias->listaProximas($dono, $carteira, $hoje)),
         ]);
+    }
+
+    /**
+     * The member's actions on each invoice row of the delegated wallet (RN-281, RN-302, RN-311): the
+     * invoice as the card screen has it, for the "Pagar" form, with only the payments that left this
+     * wallet. The card is not delegated, so the row items open no form (RN-312, CA-208.14). The
+     * owner's rows do not change (RN-306), so they get null.
+     *
+     * @param  list<array<string, mixed>>  $linhas
+     * @param  array<int, list<array{fatura: Fatura, compras: int, receitas: int, comprasContatos: int, receitasContatos: int, quitadoPeloAutor: int, pagamentos: int, saldoAnterior: int, aPagar: int, aPagarAutor: int}>>  $faturas  CalcularFaturas
+     * @return list<array<string, mixed>>
+     */
+    private function comAcoesDoMembro(array $linhas, bool $delegada, User $dono, Carteira $carteira, CarbonImmutable $hoje, array $faturas, FaturaDoMes $faturaDoMes): array
+    {
+        if (! $delegada) {
+            return array_map(fn (array $linha): array => [...$linha, 'faturaDoMes' => null], $linhas);
+        }
+
+        $cartoes = Carteira::query()->findMany(array_column($linhas, 'carteiraId'))->keyBy('id');
+
+        return array_map(function (array $linha) use ($cartoes, $dono, $carteira, $hoje, $faturas, $faturaDoMes): array {
+            /** @var Carteira $cartao */
+            $cartao = $cartoes->get($linha['carteiraId']);
+            $fatura = $faturaDoMes->handle($dono, $cartao, CarbonImmutable::createFromFormat('!Y-m', (string) $linha['mes']) ?? $hoje, $hoje, $faturas);
+            $fatura['pagamentosLista'] = array_values(array_filter(
+                $fatura['pagamentosLista'],
+                fn (array $pagamento): bool => $pagamento['carteiraId'] === $carteira->id,
+            ));
+
+            /** @var list<array<string, mixed>> $itens */
+            $itens = $linha['itens'];
+
+            return [
+                ...$linha,
+                'itens' => array_map(fn (array $item): array => [...$item, 'edicao' => null, 'participacao' => null], $itens),
+                'faturaDoMes' => $fatura,
+            ];
+        }, $linhas);
     }
 
     /**

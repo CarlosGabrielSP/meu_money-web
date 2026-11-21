@@ -38,7 +38,7 @@ class FaturaDoMes
      * contacts' open parts, the amount the "Pagar" form suggests (S3, RN-245).
      *
      * @param  array<int, list<array{fatura: Fatura, compras: int, receitas: int, comprasContatos: int, receitasContatos: int, quitadoPeloAutor: int, pagamentos: int, saldoAnterior: int, aPagar: int, aPagarAutor: int}>>|null  $faturas  CalcularFaturas, to reuse in the request
-     * @return array{id: int|null, referencia: string, competencia: string, estado: string, inicio: string, fechamento: string, vencimento: string, saldoAnterior: int, compras: int, receitas: int, comprasContatos: int, receitasContatos: int, pagamentos: int, aPagar: int, aPagarAutor: int, editavel: bool, limites: array{fechamentoMin: string, fechamentoMax: string, vencimentoMin: string, vencimentoMax: string}, pagaPor: string|null, pagamentosLista: list<array{id: int, data: string, valor: int, origem: string|null}>, partes: list<array{userId: int, nome: string, voce: bool, parte: int, quitadoPeloContato: int, quitadoPeloAutor: int, aberto: int}>}
+     * @return array{id: int|null, referencia: string, competencia: string, estado: string, inicio: string, fechamento: string, vencimento: string, saldoAnterior: int, compras: int, receitas: int, comprasContatos: int, receitasContatos: int, pagamentos: int, aPagar: int, aPagarAutor: int, editavel: bool, limites: array{fechamentoMin: string, fechamentoMax: string, vencimentoMin: string, vencimentoMax: string}, pagaPor: string|null, pagamentosLista: list<array{id: int, data: string, valor: int, origem: string|null, carteiraId: int|null, pagoPor: string|null}>, partes: list<array{userId: int, nome: string, voce: bool, parte: int, quitadoPeloContato: int, quitadoPeloAutor: int, aberto: int}>}
      */
     public function handle(User $user, Carteira $cartao, CarbonImmutable $mes, CarbonImmutable $hoje, ?array $faturas = null): array
     {
@@ -166,7 +166,10 @@ class FaturaDoMes
     }
 
     /**
-     * @return list<array{id: int, data: string, valor: int, origem: string|null}>
+     * Each payment with its source wallet and, when a member paid, the member's stored name (RN-306,
+     * RN-307).
+     *
+     * @return list<array{id: int, data: string, valor: int, origem: string|null, carteiraId: int|null, pagoPor: string|null}>
      */
     private function pagamentos(Fatura $fatura): array
     {
@@ -180,6 +183,8 @@ class FaturaDoMes
                 'data' => $pagamento->data->toDateString(),
                 'valor' => $pagamento->valor,
                 'origem' => $pagamento->carteira?->nome,
+                'carteiraId' => $pagamento->carteira_id,
+                'pagoPor' => $pagamento->pago_por_nome,
             ])
             ->all());
     }

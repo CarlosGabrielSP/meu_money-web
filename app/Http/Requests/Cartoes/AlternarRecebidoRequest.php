@@ -12,16 +12,22 @@ class AlternarRecebidoRequest extends FormRequest
     /**
      * Only the author of a settlement of origin `autor` from a linked card has the "a receber" item
      * (RN-216, RN-242): the owner of the card of the settled invoice, with a payment that left a
-     * wallet.
+     * wallet. A member marks it when that wallet is delegated to them (RN-281, RN-305, CA-208.4).
      */
     public function authorize(): bool
     {
         $quitacao = $this->route('quitacaoContato');
+        $user = $this->user();
 
-        return $quitacao instanceof QuitacaoContato
-            && $quitacao->origem === OrigemQuitacao::Autor
-            && $quitacao->pagamento->carteira_id !== null
-            && ($this->user()?->can('update', $quitacao->fatura->carteira) ?? false);
+        if ($user === null || ! $quitacao instanceof QuitacaoContato || $quitacao->origem !== OrigemQuitacao::Autor) {
+            return false;
+        }
+
+        $carteiraId = $quitacao->pagamento->carteira_id;
+
+        return $carteiraId !== null
+            && ($user->can('update', $quitacao->fatura->carteira)
+                || $user->carteirasDelegadas()->whereKey($carteiraId)->exists());
     }
 
     /**

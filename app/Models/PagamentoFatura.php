@@ -18,11 +18,14 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * @property int|null $carteira_id
  * @property int $valor
  * @property CarbonImmutable $data
+ * @property int|null $pago_por_id member who paid from a delegated wallet; null is the owner (RN-281)
+ * @property string|null $pago_por_nome the member's stored name, kept after the account is deleted (RN-275)
  * @property CarbonImmutable|null $created_at
  * @property CarbonImmutable|null $updated_at
  * @property-read Fatura $fatura
+ * @property-read Carteira|null $carteira
  */
-#[Fillable(['carteira_id', 'valor', 'data'])]
+#[Fillable(['carteira_id', 'valor', 'data', 'pago_por_id', 'pago_por_nome'])]
 class PagamentoFatura extends Model
 {
     /** @use HasFactory<PagamentoFaturaFactory> */

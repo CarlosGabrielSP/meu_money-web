@@ -29,6 +29,9 @@ export type PagamentoFatura = {
     data: string;
     valor: number;
     origem: string | null;
+    carteiraId: number | null;
+    /** Member who paid from a delegated wallet; null is the owner (RN-306, RN-307). */
+    pagoPor: string | null;
 };
 
 /** Invoice card of the card screen (RN-198, RN-223). */
@@ -91,6 +94,8 @@ export type FaturaVinculada = {
     valor: number;
     situacao: SituacaoFatura;
     itens: ItemLancamento[];
+    /** The member's actions (RF-208): the invoice for "Pagar" and its payments from the delegated wallet; null for the owner. */
+    faturaDoMes: FaturaDoMes | null;
 };
 
 /** "A receber" item of the wallet that paid the author's settlement (RN-216, RN-243, RN-265). */

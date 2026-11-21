@@ -3,10 +3,13 @@
 namespace App\Actions\Cartoes;
 
 use App\Enums\OrigemQuitacao;
+use App\Models\Cartao;
 use App\Models\Carteira;
 use App\Models\PagamentoFatura;
 use App\Models\QuitacaoContato;
+use App\Models\User;
 use Carbon\CarbonImmutable;
+use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
@@ -31,16 +34,32 @@ class PagarFatura
      * (RN-255), when the payment is a contact's or settles a part; otherwise nothing changes. The
      * author's card row is locked so two payments never settle the same part.
      *
-     * @param  list<int>  $contatos  user ids of the marked contacts
+     * A member of the linked wallet pays as the owner; the payment stores who paid, with the stored
+     * name (RN-281, RN-309, CA-208.2). The link is checked again under the card lock, so a card
+     * relinked meanwhile never takes the member's payment from a wallet not delegated (RN-303).
      *
+     *
+     * @param  list<int>  $contatos  user ids of the marked contacts
+     * @param  User|null  $pagoPor  the member who pays; null is the owner
+     *
+     * @throws AuthorizationException
      * @throws ValidationException
      */
-    public function handle(Carteira $cartao, CarbonImmutable $referencia, int $valor, string $data, array $contatos = []): PagamentoFatura
+    public function handle(Carteira $cartao, CarbonImmutable $referencia, int $valor, string $data, array $contatos = [], ?User $pagoPor = null): PagamentoFatura
     {
-        return DB::transaction(function () use ($cartao, $referencia, $valor, $data, $contatos): PagamentoFatura {
+        return DB::transaction(function () use ($cartao, $referencia, $valor, $data, $contatos, $pagoPor): PagamentoFatura {
             DistribuirPagamentosDoContato::travar($cartao);
+
+            if ($pagoPor !== null) {
+                // The card row, also a mirror's, so the owner relinking it waits (SalvarCartao).
+                Cartao::query()->where('carteira_id', $cartao->id)->lockForUpdate()->first();
+            }
             $calendario = FaturasDoCartao::carregar($cartao);
             $fatura = $calendario->salvar($calendario->daReferencia($referencia));
+
+            if ($pagoPor !== null && ! $fatura->isVinculadaADelegadaDe($pagoPor)) {
+                throw new AuthorizationException;
+            }
             $quitar = $contatos === [] || $calendario->origem !== null
                 ? []
                 : array_filter(
@@ -57,6 +76,8 @@ class PagarFatura
                 'carteira_id' => $fatura->carteira_vinculada_id,
                 'valor' => $total,
                 'data' => $data,
+                'pago_por_id' => $pagoPor?->id,
+                'pago_por_nome' => $pagoPor?->name,
             ]);
 
             foreach ($quitar as $contatoId => $aberto) {
