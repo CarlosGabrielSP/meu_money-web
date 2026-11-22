@@ -2,6 +2,7 @@
 import CampoData from '@/components/CampoData.vue';
 import CampoSelecao from '@/components/CampoSelecao.vue';
 import { router, useForm, usePage } from '@inertiajs/vue3';
+import { ToggleGroupItem, ToggleGroupRoot } from 'reka-ui';
 import { periodicidades } from '@/lib/periodicidades';
 import { computed, ref, watch } from 'vue';
 import LancamentoController from '@/actions/App/Http/Controllers/LancamentoController';
@@ -32,7 +33,12 @@ import {
 import { useModoSimples } from '@/composables/useModoSimples';
 import { dataCompleta, executadoPorPadrao } from '@/lib/datas';
 import { vencimentoDaCompra } from '@/lib/faturas';
-import { centavosDe, formatarCentavos, mascararValor } from '@/lib/dinheiro';
+import {
+    centavosDe,
+    formatarCentavos,
+    formatarMoeda,
+    mascararValor,
+} from '@/lib/dinheiro';
 import {
     destroy as destroyAnexo,
     show as showAnexo,
@@ -191,6 +197,43 @@ const rotuloValor = computed(() => {
     return form.repeticao === 'parcelado' && form.modo_valor === 'total'
         ? 'Valor total (R$)'
         : 'Valor da parcela (R$)';
+});
+
+const previaParcelamento = computed(() => {
+    if (
+        !mostrarRepetir.value ||
+        !form.repetir ||
+        form.repeticao !== 'parcelado'
+    ) {
+        return null;
+    }
+
+    const quantidade = form.total_parcelas;
+    const valor = centavosDe(form.valor);
+
+    if (
+        !Number.isInteger(quantidade) ||
+        quantidade < 2 ||
+        quantidade > 360 ||
+        valor === 0
+    ) {
+        return null;
+    }
+
+    if (form.modo_valor === 'parcela') {
+        return `Valor total: ${formatarMoeda(valor * quantidade)}.`;
+    }
+
+    if (valor < quantidade) {
+        return null;
+    }
+
+    const parcela = Math.floor(valor / quantidade);
+    const resto = valor % quantidade;
+
+    return resto === 0
+        ? `Valor da parcela: ${formatarMoeda(parcela)}.`
+        : `1ª parcela: ${formatarMoeda(parcela + resto)}. Demais: ${formatarMoeda(parcela)}.`;
 });
 
 const categoriasDoTipo = computed(() =>
@@ -435,31 +478,55 @@ function removerAnexo(): void {
                     class="grid gap-4 px-4 pb-6"
                     @submit.prevent="salvar(false)"
                 >
-                    <fieldset class="flex gap-4">
-                        <legend class="sr-only">Tipo</legend>
-                        <label class="flex items-center gap-2">
-                            <input
-                                v-model="form.tipo"
-                                type="radio"
-                                value="despesa"
-                                :disabled="
-                                    serie !== null || edicao?.rateio != null
-                                "
-                            />
-                            Despesa
-                        </label>
-                        <label class="flex items-center gap-2">
-                            <input
-                                v-model="form.tipo"
-                                type="radio"
-                                value="receita"
-                                :disabled="
-                                    serie !== null || edicao?.rateio != null
-                                "
-                            />
-                            Receita
-                        </label>
-                    </fieldset>
+                    <div v-if="mostrarCarteira" class="grid gap-2">
+                        <Label for="carteira_id">Carteira</Label>
+                        <CampoSelecao
+                            id="carteira_id"
+                            v-model="form.carteira_id"
+                            :disabled="faturaFechada"
+                            :opcoes="
+                                carteiras
+                                    .filter((carteira) => !carteira.espelho)
+                                    .map((carteira) => ({
+                                        valor: carteira.id,
+                                        rotulo: carteira.nome,
+                                    }))
+                            "
+                        />
+                        <InputError :message="form.errors.carteira_id" />
+                    </div>
+
+                    <ToggleGroupRoot
+                        type="single"
+                        aria-label="Tipo de lançamento"
+                        :model-value="form.tipo"
+                        :disabled="serie !== null || edicao?.rateio != null"
+                        class="grid grid-cols-2 gap-1 rounded-lg border bg-muted p-1"
+                        @update:model-value="
+                            (tipo) => {
+                                if (tipo === 'despesa' || tipo === 'receita') {
+                                    form.tipo = tipo;
+                                }
+                            }
+                        "
+                    >
+                        <ToggleGroupItem
+                            v-for="opcao in [
+                                { valor: 'despesa', rotulo: 'Despesa' },
+                                { valor: 'receita', rotulo: 'Receita' },
+                            ]"
+                            :key="opcao.valor"
+                            :value="opcao.valor"
+                            class="min-h-9 rounded-md px-3 py-2 text-sm font-medium text-muted-foreground hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none disabled:opacity-60 data-[state=on]:shadow-sm"
+                            :class="
+                                opcao.valor === 'despesa'
+                                    ? 'data-[state=on]:bg-red-600/10 data-[state=on]:text-red-800 dark:data-[state=on]:bg-red-400/10 dark:data-[state=on]:text-red-200'
+                                    : 'data-[state=on]:bg-emerald-600/10 data-[state=on]:text-emerald-800 dark:data-[state=on]:bg-emerald-400/10 dark:data-[state=on]:text-emerald-200'
+                            "
+                        >
+                            {{ opcao.rotulo }}
+                        </ToggleGroupItem>
+                    </ToggleGroupRoot>
                     <InputError :message="form.errors.tipo" />
 
                     <SerieAcoes
@@ -484,81 +551,231 @@ function removerAnexo(): void {
                         <InputError :message="form.errors.descricao" />
                     </div>
 
-                    <div class="grid grid-cols-2 items-start gap-4">
-                        <div class="grid gap-2">
-                            <Label for="valor">{{ rotuloValor }}</Label>
-                            <Input
-                                id="valor"
-                                :model-value="form.valor"
-                                inputmode="numeric"
-                                placeholder="0,00"
-                                :disabled="bloqueado"
-                                required
-                                @update:model-value="
-                                    form.valor = mascararValor(String($event))
-                                "
-                            />
-                            <InputError :message="form.errors.valor" />
-                        </div>
-                        <div class="grid gap-2">
-                            <Label for="data">Data</Label>
-                            <CampoData
-                                id="data"
-                                v-model="form.dataLancamento"
-                                :disabled="faturaFechada"
-                            />
-                            <p
-                                v-if="cartaoEscolhido && vencimentoDaFatura"
-                                class="text-xs text-muted-foreground"
+                    <div class="rounded-md border p-3">
+                        <fieldset v-if="mostrarRepetir" class="mb-3 min-w-0">
+                            <legend class="sr-only">
+                                Frequência do lançamento
+                            </legend>
+                            <div
+                                class="grid grid-cols-2 gap-1 rounded-lg border bg-muted p-1"
                             >
-                                Entra na fatura que vence em
-                                {{ dataCompleta(vencimentoDaFatura) }}.
-                            </p>
-                            <p
-                                v-else-if="cartaoEscolhido && !faturaFechada"
-                                class="text-xs text-destructive"
+                                <label
+                                    v-for="opcao in [
+                                        { repetir: false, rotulo: 'À vista' },
+                                        { repetir: true, rotulo: 'Repetir' },
+                                    ]"
+                                    :key="opcao.rotulo"
+                                    class="cursor-pointer"
+                                >
+                                    <input
+                                        v-model="form.repetir"
+                                        type="radio"
+                                        name="frequencia-lancamento"
+                                        :value="opcao.repetir"
+                                        class="peer sr-only"
+                                    />
+                                    <span
+                                        class="block rounded-md px-3 py-2 text-center text-sm font-medium text-muted-foreground peer-checked:bg-background peer-checked:text-foreground peer-checked:shadow-sm peer-focus-visible:ring-2 peer-focus-visible:ring-ring hover:text-foreground"
+                                    >
+                                        {{ opcao.rotulo }}
+                                    </span>
+                                </label>
+                            </div>
+                        </fieldset>
+                        <Transition
+                            v-if="mostrarRepetir"
+                            enter-active-class="overflow-hidden transition-[grid-template-rows,opacity] duration-[180ms] ease-out motion-reduce:transition-none"
+                            leave-active-class="overflow-hidden transition-[grid-template-rows,opacity] duration-[180ms] ease-in motion-reduce:transition-none"
+                            enter-from-class="grid-rows-[0fr] opacity-0"
+                            enter-to-class="grid-rows-[1fr] opacity-100"
+                            leave-from-class="grid-rows-[1fr] opacity-100"
+                            leave-to-class="grid-rows-[0fr] opacity-0"
+                        >
+                            <div
+                                v-show="form.repetir"
+                                :inert="!form.repetir"
+                                class="grid"
                             >
-                                Essa data cai numa fatura fechada. Use uma data
-                                a partir de
-                                {{ dataCompleta(cartaoEscolhido.abertaDesde) }}.
-                            </p>
-                            <InputError :message="erros.data" />
+                                <div class="min-h-0">
+                                    <div class="grid gap-3 pb-3">
+                                        <fieldset class="flex gap-4">
+                                            <legend class="sr-only">
+                                                Forma
+                                            </legend>
+                                            <label
+                                                class="flex items-center gap-2"
+                                            >
+                                                <input
+                                                    v-model="form.repeticao"
+                                                    type="radio"
+                                                    value="parcelado"
+                                                />
+                                                Parcelado
+                                            </label>
+                                            <label
+                                                class="flex items-center gap-2"
+                                            >
+                                                <input
+                                                    v-model="form.repeticao"
+                                                    type="radio"
+                                                    value="recorrente"
+                                                />
+                                                Recorrente
+                                            </label>
+                                        </fieldset>
+                                        <InputError
+                                            :message="erros.repeticao"
+                                        />
+                                        <div class="grid grid-cols-2 gap-4">
+                                            <div class="grid gap-2">
+                                                <Label for="periodicidade"
+                                                    >Periodicidade</Label
+                                                >
+                                                <CampoSelecao
+                                                    id="periodicidade"
+                                                    v-model="form.periodicidade"
+                                                    :opcoes="
+                                                        periodicidades.map(
+                                                            (
+                                                                periodicidade,
+                                                            ) => ({
+                                                                valor: periodicidade.valor,
+                                                                rotulo: periodicidade.titulo,
+                                                            }),
+                                                        )
+                                                    "
+                                                />
+                                                <InputError
+                                                    :message="
+                                                        erros.periodicidade
+                                                    "
+                                                />
+                                            </div>
+                                            <div
+                                                v-if="
+                                                    form.repeticao ===
+                                                    'parcelado'
+                                                "
+                                                class="grid gap-2"
+                                            >
+                                                <Label for="total_parcelas"
+                                                    >Nº de parcelas</Label
+                                                >
+                                                <Input
+                                                    id="total_parcelas"
+                                                    v-model.number="
+                                                        form.total_parcelas
+                                                    "
+                                                    type="number"
+                                                    min="2"
+                                                    max="360"
+                                                />
+                                                <InputError
+                                                    :message="
+                                                        erros.total_parcelas
+                                                    "
+                                                />
+                                            </div>
+                                        </div>
+                                        <fieldset
+                                            v-if="
+                                                form.repeticao === 'parcelado'
+                                            "
+                                            class="flex gap-4"
+                                        >
+                                            <legend class="sr-only">
+                                                Valor informado
+                                            </legend>
+                                            <label
+                                                class="flex items-center gap-2"
+                                            >
+                                                <input
+                                                    v-model="form.modo_valor"
+                                                    type="radio"
+                                                    value="total"
+                                                />
+                                                Valor total
+                                            </label>
+                                            <label
+                                                class="flex items-center gap-2"
+                                            >
+                                                <input
+                                                    v-model="form.modo_valor"
+                                                    type="radio"
+                                                    value="parcela"
+                                                />
+                                                Valor da parcela
+                                            </label>
+                                        </fieldset>
+                                        <InputError
+                                            :message="erros.modo_valor"
+                                        />
+                                    </div>
+                                </div>
+                            </div>
+                        </Transition>
+
+                        <div class="grid grid-cols-2 items-start gap-4">
+                            <div class="grid gap-2">
+                                <Label for="valor">{{ rotuloValor }}</Label>
+                                <Input
+                                    id="valor"
+                                    :model-value="form.valor"
+                                    inputmode="numeric"
+                                    placeholder="0,00"
+                                    :disabled="bloqueado"
+                                    :aria-describedby="
+                                        previaParcelamento
+                                            ? 'valor-previa'
+                                            : undefined
+                                    "
+                                    required
+                                    @update:model-value="
+                                        form.valor = mascararValor(
+                                            String($event),
+                                        )
+                                    "
+                                />
+                                <p
+                                    v-if="previaParcelamento"
+                                    id="valor-previa"
+                                    class="text-xs text-muted-foreground"
+                                >
+                                    {{ previaParcelamento }}
+                                </p>
+                                <InputError :message="form.errors.valor" />
+                            </div>
+                            <div class="grid gap-2">
+                                <Label for="data">Data</Label>
+                                <CampoData
+                                    id="data"
+                                    v-model="form.dataLancamento"
+                                    :disabled="faturaFechada"
+                                />
+                                <p
+                                    v-if="cartaoEscolhido && vencimentoDaFatura"
+                                    class="text-xs text-muted-foreground"
+                                >
+                                    Entra na fatura que vence em
+                                    {{ dataCompleta(vencimentoDaFatura) }}.
+                                </p>
+                                <p
+                                    v-else-if="
+                                        cartaoEscolhido && !faturaFechada
+                                    "
+                                    class="text-xs text-destructive"
+                                >
+                                    Essa data cai numa fatura fechada. Use uma
+                                    data a partir de
+                                    {{
+                                        dataCompleta(
+                                            cartaoEscolhido.abertaDesde,
+                                        )
+                                    }}.
+                                </p>
+                                <InputError :message="erros.data" />
+                            </div>
                         </div>
-                    </div>
-
-                    <div class="grid gap-2">
-                        <Label for="categoria_id">Categoria</Label>
-                        <CampoSelecao
-                            id="categoria_id"
-                            v-model="form.categoria_id"
-                            required
-                            placeholder="Selecione"
-                            :opcoes="
-                                categoriasDoTipo.map((categoria) => ({
-                                    valor: categoria.id,
-                                    rotulo: categoria.nome,
-                                }))
-                            "
-                        />
-                        <InputError :message="form.errors.categoria_id" />
-                    </div>
-
-                    <div v-if="mostrarCarteira" class="grid gap-2">
-                        <Label for="carteira_id">Carteira</Label>
-                        <CampoSelecao
-                            id="carteira_id"
-                            v-model="form.carteira_id"
-                            :disabled="faturaFechada"
-                            :opcoes="
-                                carteiras
-                                    .filter((carteira) => !carteira.espelho)
-                                    .map((carteira) => ({
-                                        valor: carteira.id,
-                                        rotulo: carteira.nome,
-                                    }))
-                            "
-                        />
-                        <InputError :message="form.errors.carteira_id" />
                     </div>
 
                     <div v-if="serie" class="grid gap-2">
@@ -577,106 +794,6 @@ function removerAnexo(): void {
                             Muda só nas opções "esta e as próximas" e "todas".
                         </p>
                         <InputError :message="erros.dia_vencimento" />
-                    </div>
-
-                    <div
-                        v-if="mostrarRepetir"
-                        class="grid gap-3 rounded-md border p-3"
-                    >
-                        <label class="flex items-center gap-2 font-medium">
-                            <Checkbox
-                                :model-value="form.repetir"
-                                @update:model-value="
-                                    form.repetir = $event === true
-                                "
-                            />
-                            Repetir
-                        </label>
-                        <template v-if="form.repetir">
-                            <fieldset class="flex gap-4">
-                                <legend class="sr-only">Forma</legend>
-                                <label class="flex items-center gap-2">
-                                    <input
-                                        v-model="form.repeticao"
-                                        type="radio"
-                                        value="parcelado"
-                                    />
-                                    Parcelado
-                                </label>
-                                <label class="flex items-center gap-2">
-                                    <input
-                                        v-model="form.repeticao"
-                                        type="radio"
-                                        value="recorrente"
-                                    />
-                                    Recorrente
-                                </label>
-                            </fieldset>
-                            <InputError :message="erros.repeticao" />
-                            <div class="grid grid-cols-2 gap-4">
-                                <div class="grid gap-2">
-                                    <Label for="periodicidade"
-                                        >Periodicidade</Label
-                                    >
-                                    <CampoSelecao
-                                        id="periodicidade"
-                                        v-model="form.periodicidade"
-                                        :opcoes="
-                                            periodicidades.map(
-                                                (periodicidade) => ({
-                                                    valor: periodicidade.valor,
-                                                    rotulo: periodicidade.titulo,
-                                                }),
-                                            )
-                                        "
-                                    />
-                                    <InputError
-                                        :message="erros.periodicidade"
-                                    />
-                                </div>
-                                <div
-                                    v-if="form.repeticao === 'parcelado'"
-                                    class="grid gap-2"
-                                >
-                                    <Label for="total_parcelas"
-                                        >Nº de parcelas</Label
-                                    >
-                                    <Input
-                                        id="total_parcelas"
-                                        v-model.number="form.total_parcelas"
-                                        type="number"
-                                        min="2"
-                                        max="360"
-                                    />
-                                    <InputError
-                                        :message="erros.total_parcelas"
-                                    />
-                                </div>
-                            </div>
-                            <fieldset
-                                v-if="form.repeticao === 'parcelado'"
-                                class="flex gap-4"
-                            >
-                                <legend class="sr-only">Valor informado</legend>
-                                <label class="flex items-center gap-2">
-                                    <input
-                                        v-model="form.modo_valor"
-                                        type="radio"
-                                        value="total"
-                                    />
-                                    Valor total
-                                </label>
-                                <label class="flex items-center gap-2">
-                                    <input
-                                        v-model="form.modo_valor"
-                                        type="radio"
-                                        value="parcela"
-                                    />
-                                    Valor da parcela
-                                </label>
-                            </fieldset>
-                            <InputError :message="erros.modo_valor" />
-                        </template>
                     </div>
 
                     <p
@@ -717,6 +834,23 @@ function removerAnexo(): void {
                         {{ rotuloExecutado }}
                     </label>
                     <InputError :message="form.errors.executado" />
+
+                    <div class="grid gap-2">
+                        <Label for="categoria_id">Categoria</Label>
+                        <CampoSelecao
+                            id="categoria_id"
+                            v-model="form.categoria_id"
+                            required
+                            placeholder="Selecione"
+                            :opcoes="
+                                categoriasDoTipo.map((categoria) => ({
+                                    valor: categoria.id,
+                                    rotulo: categoria.nome,
+                                }))
+                            "
+                        />
+                        <InputError :message="form.errors.categoria_id" />
+                    </div>
 
                     <div v-if="mostrarObservacao" class="grid gap-2">
                         <Label for="observacao">Observação</Label>
