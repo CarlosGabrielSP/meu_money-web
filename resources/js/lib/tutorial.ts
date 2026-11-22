@@ -10,6 +10,11 @@ export type PassoTutorial = {
 const textoMes =
     'Use as setas para mudar de mês ou escolha o mês e o ano ao lado.';
 
+const passoAtalhos: PassoTutorial = {
+    alvos: ['atalhos-lancamento'],
+    texto: 'Toque numa categoria frequente para lançar à vista. Informe o valor e, se quiser, edite a descrição antes de salvar.',
+};
+
 /**
  * Steps of the full mode (note 07). The list steps fall back to the empty list area (DEC-069).
  */
@@ -27,6 +32,7 @@ export const passosModoCompleto: PassoTutorial[] = [
         alvos: ['adicionar'],
         texto: 'Adicione lançamentos; em "Repetir" crie parcelas ou recorrências e em "Dividir" divida com contatos.',
     },
+    passoAtalhos,
     {
         alvos: ['executado', 'lista-vazia'],
         texto: 'Marque o lançamento quando ele for pago ou recebido.',
@@ -62,6 +68,7 @@ export const passosModoSimples: PassoTutorial[] = [
         alvos: ['adicionar'],
         texto: 'Use este botão para adicionar uma receita ou uma despesa.',
     },
+    passoAtalhos,
     {
         alvos: ['executado', 'lista-vazia'],
         texto: 'Toque em "Pago" ou "Recebido" quando a conta for paga ou o dinheiro entrar.',

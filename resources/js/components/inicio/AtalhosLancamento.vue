@@ -74,7 +74,11 @@ function salvar(): void {
 </script>
 
 <template>
-    <section v-if="atalhos.length" aria-label="Lançamentos rápidos">
+    <section
+        v-if="atalhos.length"
+        aria-label="Lançamentos rápidos"
+        data-tutorial="atalhos-lancamento"
+    >
         <ul class="grid grid-cols-5 gap-1 sm:gap-2">
             <li v-for="atalho in atalhos" :key="atalho.id" class="min-w-0">
                 <button
