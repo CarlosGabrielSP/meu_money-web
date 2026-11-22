@@ -139,8 +139,8 @@ class FaturaDoMes
     }
 
     /**
-     * Competence month of the open invoice, where the card screen opens without a month and with
-     * "Hoje" (RN-223, RN-253, R3).
+     * Competence month of the open invoice, where the card screen opens without a month
+     * (RN-223, RN-253, RN-340).
      */
     public function mesDaAberta(Carteira $cartao, CarbonImmutable $hoje): CarbonImmutable
     {

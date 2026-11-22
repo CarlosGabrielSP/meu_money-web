@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { Head, Link } from '@inertiajs/vue3';
+import BotaoPrivacidade from '@/components/BotaoPrivacidade.vue';
 import Heading from '@/components/Heading.vue';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -41,10 +42,13 @@ defineOptions({
     <Head title="Recebidas" />
 
     <div class="flex flex-col gap-6 p-4">
-        <Heading
-            title="Recebidas"
-            description="Lançamentos que seus contatos dividiram com você"
-        />
+        <div class="flex items-start justify-between gap-3">
+            <Heading
+                title="Recebidas"
+                description="Lançamentos que seus contatos dividiram com você"
+            />
+            <BotaoPrivacidade />
+        </div>
 
         <p
             v-if="recebidas.data.length === 0"

@@ -120,7 +120,6 @@ class InicioController extends Controller
                 ->get(['id', 'nome', 'tipo'])
                 ->map(fn (Grupo $grupo): array => ['id' => $grupo->id, 'nome' => $grupo->nome, 'tipo' => $grupo->tipo->value]),
             'mes' => $mes->format('Y-m'),
-            'mesHoje' => $mesHoje->format('Y-m'),
             'hoje' => $hoje->toDateString(),
             'filtros' => $filtros,
             'saldos' => $noCartao ? null : $calcularSaldos->handle($dono, $carteira, $mes, $vinculados),

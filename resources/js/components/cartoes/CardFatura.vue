@@ -22,7 +22,24 @@ const props = defineProps<{
 const pagando = ref(false);
 const editandoDatas = ref(false);
 
-const estados = { fechada: 'Fechada', aberta: 'Aberta', futura: 'Futura' };
+const estados = {
+    aberta: { rotulo: 'Aberta', classe: 'bg-emerald-200 text-emerald-950' },
+    fechada: { rotulo: 'Fechada', classe: 'bg-amber-200 text-amber-950' },
+    futura: { rotulo: 'Futura', classe: 'bg-slate-200 text-slate-950' },
+};
+
+const compras = computed(
+    () => props.fatura.compras + props.fatura.comprasContatos,
+);
+const receitas = computed(
+    () => props.fatura.receitas + props.fatura.receitasContatos,
+);
+const totalDaFatura = computed(() => compras.value - receitas.value);
+
+/** Balance of this cycle with the existing payment allocations (RN-343). */
+const saldoSoDestaFatura = computed(
+    () => props.fatura.aPagar - props.fatura.saldoAnterior,
+);
 
 /** A negative "to pay" is a credit (nota 07). */
 const credito = computed(() => props.fatura.aPagar < 0);
@@ -36,15 +53,30 @@ const credito = computed(() => props.fatura.aPagar < 0);
         aria-label="Fatura"
         data-tutorial="saldos"
     >
-        <div class="flex items-center justify-between gap-3">
+        <div
+            class="flex flex-wrap items-center justify-between gap-x-3 gap-y-2"
+        >
             <p class="text-sm text-saldo-foreground/75">
                 Fatura de {{ mesPorExtenso(fatura.competencia, false) }}
             </p>
-            <span
-                v-if="!simples"
-                class="rounded-full border border-saldo-foreground/30 px-2.5 py-0.5 text-xs"
-                >{{ estados[fatura.estado] }}</span
-            >
+            <div class="ml-auto flex items-center gap-2">
+                <Button
+                    v-if="fatura.aPagar > 0 && !(membro && fatura.id === null)"
+                    size="sm"
+                    class="bg-saldo-foreground text-saldo hover:bg-saldo-foreground/90"
+                    data-test="pagar-fatura"
+                    @click="pagando = true"
+                >
+                    Pagar
+                </Button>
+                <span
+                    v-if="!simples"
+                    class="rounded-full px-2.5 py-1 text-xs font-semibold"
+                    :class="estados[fatura.estado].classe"
+                >
+                    {{ estados[fatura.estado].rotulo }}
+                </span>
+            </div>
         </div>
         <!-- The contact's mirror names the card and its author (RN-246, nota 07). -->
         <p v-if="autorDoEspelho" class="mt-1 text-sm font-medium">
@@ -53,14 +85,28 @@ const credito = computed(() => props.fatura.aPagar < 0);
                 >de {{ autorDoEspelho }}</span
             >
         </p>
-        <p class="mt-3 text-sm text-saldo-foreground/75">
-            {{ credito ? 'Crédito' : 'A pagar' }}
-        </p>
+        <p class="mt-3 text-sm text-saldo-foreground/75">Total da fatura</p>
         <p
             class="mt-1 font-display text-[2.5rem] leading-none font-semibold tracking-tight tabular-nums md:text-5xl"
         >
-            {{ formatarMoeda(Math.abs(fatura.aPagar)) }}
+            {{ formatarMoeda(totalDaFatura) }}
         </p>
+        <dl
+            class="mt-2 grid grid-cols-[minmax(0,1fr)_auto] items-baseline gap-x-3 gap-y-1 text-sm"
+        >
+            <dt class="text-saldo-foreground/75">
+                {{ credito ? 'Crédito acumulado' : 'A pagar acumulado' }}
+            </dt>
+            <dd class="text-right font-semibold tabular-nums">
+                {{ formatarMoeda(Math.abs(fatura.aPagar)) }}
+            </dd>
+            <dt class="text-saldo-foreground/75">
+                Só esta fatura · sem saldo anterior
+            </dt>
+            <dd class="text-right font-semibold tabular-nums">
+                {{ formatarMoeda(saldoSoDestaFatura) }}
+            </dd>
+        </dl>
 
         <p class="mt-4 flex items-center gap-2 text-sm">
             <template v-if="!simples">
@@ -96,21 +142,13 @@ const credito = computed(() => props.fatura.aPagar < 0);
                 <div class="grid gap-0.5">
                     <dt class="text-saldo-foreground/75">Compras</dt>
                     <dd class="font-medium text-red-300 tabular-nums">
-                        {{
-                            formatarMoeda(
-                                fatura.compras + fatura.comprasContatos,
-                            )
-                        }}
+                        {{ formatarMoeda(compras) }}
                     </dd>
                 </div>
                 <div class="grid gap-0.5">
                     <dt class="text-saldo-foreground/75">Receitas</dt>
                     <dd class="font-medium text-emerald-300 tabular-nums">
-                        {{
-                            formatarMoeda(
-                                fatura.receitas + fatura.receitasContatos,
-                            )
-                        }}
+                        {{ formatarMoeda(receitas) }}
                     </dd>
                 </div>
                 <div class="grid gap-0.5">
@@ -121,16 +159,6 @@ const credito = computed(() => props.fatura.aPagar < 0);
                 </div>
             </dl>
         </template>
-
-        <!-- Only with something left to pay (RN-223); a member only on a stored invoice (RN-333). -->
-        <Button
-            v-if="fatura.aPagar > 0 && !(membro && fatura.id === null)"
-            class="mt-5 w-full bg-saldo-foreground text-saldo hover:bg-saldo-foreground/90"
-            data-test="pagar-fatura"
-            @click="pagando = true"
-        >
-            Pagar
-        </Button>
     </section>
 
     <PagarFaturaPainel

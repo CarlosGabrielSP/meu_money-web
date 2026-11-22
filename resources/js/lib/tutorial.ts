@@ -8,7 +8,7 @@ export type PassoTutorial = {
 };
 
 const textoMes =
-    'Use as setas para mudar de mês e "Hoje" para voltar ao mês atual.';
+    'Use as setas para mudar de mês ou escolha o mês e o ano ao lado.';
 
 /**
  * Steps of the full mode (note 07). The list steps fall back to the empty list area (DEC-069).
@@ -21,7 +21,7 @@ export const passosModoCompleto: PassoTutorial[] = [
     { alvos: ['mes'], texto: textoMes },
     {
         alvos: ['saldos'],
-        texto: 'Saldo atual conta o que já foi pago ou recebido, e o trilho mostra o previsto para o fim do mês.',
+        texto: 'Saldo atual conta o que já foi pago ou recebido, e o trilho mostra o estimado para o fim do mês.',
     },
     {
         alvos: ['adicionar'],

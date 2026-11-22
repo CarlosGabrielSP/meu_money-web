@@ -234,7 +234,7 @@ it('CA-169.1 sends the invoice card of the month', function () {
 });
 
 it('CA-169.2 opens the card on the due month of the open invoice', function () {
-    inicioDe($this->nubank)->assertInertia(fn (Assert $page) => $page->where('mes', '2026-12')->where('mesHoje', '2026-12'));
+    inicioDe($this->nubank)->assertInertia(fn (Assert $page) => $page->where('mes', '2026-12')->missing('mesHoje'));
 });
 
 it('CA-169.3 lists the invoice purchases by purchase date, without the status filter', function () {

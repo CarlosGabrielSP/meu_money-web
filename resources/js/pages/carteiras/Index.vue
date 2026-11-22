@@ -594,7 +594,9 @@ function tornarPadrao(carteira: Carteira): void {
     </Dialog>
 
     <Dialog :open="criando" @update:open="criando = $event">
-        <DialogContent>
+        <DialogContent
+            class="max-h-[calc(100dvh-2rem)] overflow-y-auto overscroll-contain"
+        >
             <Form
                 v-bind="CarteiraController.store.form()"
                 class="space-y-6"
@@ -622,7 +624,10 @@ function tornarPadrao(carteira: Carteira): void {
         :open="editando !== null"
         @update:open="editando = $event ? editando : null"
     >
-        <DialogContent v-if="editando">
+        <DialogContent
+            v-if="editando"
+            class="max-h-[calc(100dvh-2rem)] overflow-y-auto overscroll-contain"
+        >
             <Form
                 v-bind="CarteiraController.update.form(editando.id)"
                 class="space-y-6"

@@ -1,12 +1,14 @@
 <script setup lang="ts">
 import { computed } from 'vue';
 import { formatarMoeda } from '@/lib/dinheiro';
-import type { SaldosInicio } from '@/types';
+import type { SaldosInicio, VisaoSaldos } from '@/types';
 
 const props = defineProps<{
     saldos: SaldosInicio;
     simples: boolean;
 }>();
+
+const visao = defineModel<VisaoSaldos>({ required: true });
 
 const previsto = computed(() => props.saldos.acumulado.estimado);
 const pendente = computed(() => props.saldos.aReceber + props.saldos.aPagar);
@@ -31,15 +33,45 @@ function comSinal(valor: number): string {
         aria-label="Saldos"
         data-tutorial="saldos"
     >
-        <p v-if="simples" class="text-sm text-saldo-foreground/75">
-            Saldo atual
-        </p>
-        <p
-            v-if="simples"
-            class="mt-1 font-display text-[2.5rem] leading-none font-semibold tracking-tight tabular-nums md:text-5xl"
+        <div
+            role="group"
+            aria-label="Visão dos saldos"
+            class="mb-4 inline-flex max-w-full flex-wrap gap-1 rounded-lg bg-black/15 p-1 text-sm"
         >
-            {{ formatarMoeda(saldos.acumulado.atual) }}
-        </p>
+            <button
+                type="button"
+                :aria-pressed="visao === 'acumulado'"
+                class="rounded-md px-3 py-2 aria-pressed:bg-saldo-foreground aria-pressed:text-saldo"
+                @click="visao = 'acumulado'"
+            >
+                Acumulado
+            </button>
+            <button
+                type="button"
+                :aria-pressed="visao === 'mes'"
+                class="rounded-md px-3 py-2 aria-pressed:bg-saldo-foreground aria-pressed:text-saldo"
+                @click="visao = 'mes'"
+            >
+                Resultado do mês
+            </button>
+        </div>
+
+        <div v-if="visao === 'mes' || simples" class="@container grid gap-1">
+            <p class="text-sm text-saldo-foreground/75">
+                {{ visao === 'mes' ? 'Resultado do mês' : 'Saldo atual' }}
+            </p>
+            <p
+                class="font-display text-[clamp(1.5rem,10cqi,3rem)] leading-none font-semibold tracking-tight tabular-nums"
+            >
+                {{
+                    formatarMoeda(
+                        visao === 'mes'
+                            ? saldos.mes.estimado
+                            : saldos.acumulado.atual,
+                    )
+                }}
+            </p>
+        </div>
 
         <!-- Full mode: current balance on the left and the balance foreseen for the end of the month
              on the right, both large, at the two ends of the track (DEC-077). The size follows the
@@ -59,7 +91,7 @@ function comSinal(valor: number): string {
             </p>
             <p class="ml-auto grid gap-1 text-right">
                 <span class="text-sm text-saldo-foreground/75"
-                    >Previsto para o fim do mês</span
+                    >Saldo estimado</span
                 >
                 <!-- Secondary information: same size, softer tone (75%, at least 5.94:1, DEC-077). -->
                 <span
@@ -69,22 +101,7 @@ function comSinal(valor: number): string {
             </p>
         </div>
 
-        <dl v-if="simples" class="mt-5 grid gap-2 text-lg">
-            <div class="flex items-baseline justify-between gap-4">
-                <dt>Receitas do mês</dt>
-                <dd class="font-semibold text-emerald-300 tabular-nums">
-                    {{ formatarMoeda(saldos.receitas) }}
-                </dd>
-            </div>
-            <div class="flex items-baseline justify-between gap-4">
-                <dt>Despesas do mês</dt>
-                <dd class="font-semibold text-red-300 tabular-nums">
-                    {{ formatarMoeda(saldos.despesas) }}
-                </dd>
-            </div>
-        </dl>
-
-        <template v-else>
+        <template v-if="!simples && visao === 'acumulado'">
             <!-- Month track: from the current balance to the balance foreseen for the end of the
                  month; dashed parts are what is still to receive and to pay (RN-169). -->
             <div class="mt-4" aria-hidden="true">
@@ -124,8 +141,15 @@ function comSinal(valor: number): string {
                 >
             </p>
 
+            <p class="mt-1 text-sm text-saldo-foreground/75">
+                Até o fim do mês selecionado
+            </p>
+        </template>
+
+        <template v-if="visao === 'mes'">
             <dl
-                class="mt-5 grid grid-cols-3 gap-3 border-t border-saldo-foreground/15 pt-4 text-sm"
+                v-if="!simples"
+                class="mt-4 flex flex-wrap gap-x-6 gap-y-3 text-sm"
             >
                 <div class="grid gap-0.5">
                     <dt class="text-saldo-foreground/75">Receitas</dt>
@@ -140,15 +164,17 @@ function comSinal(valor: number): string {
                     </dd>
                 </div>
                 <div class="grid gap-0.5">
-                    <dt class="text-saldo-foreground/75">Resultado do mês</dt>
+                    <dt class="text-saldo-foreground/75">
+                        Movimentação realizada no mês
+                    </dt>
                     <dd class="font-medium tabular-nums">
-                        {{ formatarMoeda(saldos.mes.estimado) }}
-                    </dd>
-                    <dd class="text-xs text-saldo-foreground/75 tabular-nums">
-                        atual {{ formatarMoeda(saldos.mes.atual) }}
+                        {{ formatarMoeda(saldos.mes.atual) }}
                     </dd>
                 </div>
             </dl>
+            <p class="mt-3 text-sm text-saldo-foreground/75">
+                Receitas e despesas incluem lançamentos pendentes.
+            </p>
         </template>
     </section>
 </template>

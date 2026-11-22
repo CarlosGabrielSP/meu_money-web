@@ -3,8 +3,13 @@ import VisAxis from '@unovis/vue/components/axis';
 import VisGroupedBar from '@unovis/vue/components/grouped-bar';
 import VisLine from '@unovis/vue/components/line';
 import VisXYContainer from '@unovis/vue/containers/xy-container';
+import { computed } from 'vue';
 import { mesCurto, nomeDoMes } from '@/lib/datas';
-import { formatarMoeda } from '@/lib/dinheiro';
+import {
+    formatarMoeda,
+    usePrivacidadeDosValores,
+    VALOR_OCULTO,
+} from '@/lib/dinheiro';
 import type { MesEvolucao, VisaoRelatorio } from '@/types';
 
 const props = withDefaults(
@@ -47,9 +52,12 @@ const formatoCompacto = new Intl.NumberFormat('pt-BR', {
     maximumFractionDigits: 1,
 });
 
-function rotuloDoValor(valor: number | Date): string {
-    return formatoCompacto.format(Number(valor));
-}
+const valoresOcultos = usePrivacidadeDosValores();
+const rotuloDoValor = computed(() =>
+    valoresOcultos.value
+        ? () => VALOR_OCULTO
+        : (valor: number | Date) => formatoCompacto.format(Number(valor)),
+);
 </script>
 
 <template>

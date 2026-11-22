@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { Head, router } from '@inertiajs/vue3';
 import { computed } from 'vue';
+import BotaoPrivacidade from '@/components/BotaoPrivacidade.vue';
 import CampoSelecao from '@/components/CampoSelecao.vue';
 import CarteiraIcone from '@/components/carteiras/CarteiraIcone.vue';
 import BlocoRelatorio from '@/components/relatorio/BlocoRelatorio.vue';
@@ -123,12 +124,15 @@ const ehCartao = computed(() => props.carteira.tipo === 'cartao');
     <Head title="Relatório" />
 
     <div class="mx-auto flex w-full max-w-6xl flex-col gap-4 p-4 md:gap-6">
-        <header class="flex flex-wrap items-center gap-x-4 gap-y-3">
+        <header
+            class="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-4 gap-y-3 md:grid-cols-[auto_minmax(0,1fr)_auto]"
+        >
             <h1 class="font-display text-2xl font-semibold tracking-tight">
                 Relatório
             </h1>
+            <BotaoPrivacidade class="col-start-2 row-start-1 md:col-start-3" />
             <div
-                class="flex min-w-0 flex-1 flex-wrap items-center gap-2 md:justify-end"
+                class="col-span-2 flex min-w-0 flex-wrap items-center gap-2 md:col-span-1 md:col-start-2 md:row-start-1 md:justify-end"
             >
                 <!-- The simple mode has only the period selector (RN-188). -->
                 <span
@@ -276,7 +280,7 @@ const ehCartao = computed(() => props.carteira.tipo === 'cartao');
             >
                 <BlocoRelatorio
                     titulo="Saldo por carteira"
-                    descricao="Saldo atual e previsto para o fim do mês"
+                    descricao="Saldo atual e estimado para o fim do mês"
                 >
                     <SaldosCarteiras
                         :carteiras="carteiras"

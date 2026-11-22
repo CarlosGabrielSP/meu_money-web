@@ -39,6 +39,7 @@ function responder(modoSimples: boolean): void {
         },
     );
 }
+import { formatarMoeda } from '@/lib/dinheiro';
 </script>
 
 <template>
@@ -57,7 +58,9 @@ function responder(modoSimples: boolean): void {
             >
                 <div class="flex justify-between">
                     <span>Saldo atual</span>
-                    <span class="font-semibold">R$ 7.000,00</span>
+                    <span class="font-semibold">{{
+                        formatarMoeda(700000)
+                    }}</span>
                 </div>
                 <div
                     class="flex items-center gap-3 rounded-md border bg-card p-3"
@@ -67,7 +70,9 @@ function responder(modoSimples: boolean): void {
                     </span>
                     <span>
                         Mercado
-                        <span class="block font-semibold">R$ 200,00</span>
+                        <span class="block font-semibold">{{
+                            formatarMoeda(20000)
+                        }}</span>
                     </span>
                 </div>
             </div>

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { Link, router, usePage } from '@inertiajs/vue3';
 import {
+    Calculator,
     ChartPie,
     House,
     Inbox,
@@ -27,13 +28,13 @@ import {
 } from '@/components/ui/sidebar';
 import { useModoSimples } from '@/composables/useModoSimples';
 import { useNovoLancamento } from '@/composables/useNovoLancamento';
-import { home, relatorio } from '@/routes';
+import { home, relatorio, simulacoes } from '@/routes';
 import { index as usuariosIndex } from '@/routes/admin/usuarios';
 import { index as carteirasIndex } from '@/routes/carteiras';
 import { index as categoriasIndex } from '@/routes/categorias';
 import { index as contatosIndex } from '@/routes/contatos';
 import { index as recebidasIndex } from '@/routes/recebidas';
-import type { NavItem } from '@/types';
+import type { CarteiraResumo, NavItem } from '@/types';
 
 const page = usePage();
 const modoSimples = useModoSimples();
@@ -64,9 +65,23 @@ const administracao = computed<NavItem[]>(() =>
         : [],
 );
 
+const itemSimulacoes = computed<NavItem>(() => {
+    const carteira = page.props.carteira as CarteiraResumo | undefined;
+
+    return {
+        title: 'Simulações',
+        href: simulacoes(
+            page.component === 'Inicio' && carteira?.tipo === 'comum'
+                ? { query: { carteira: carteira.id } }
+                : undefined,
+        ),
+        icon: Calculator,
+    };
+});
+
 /**
  * The simple mode keeps only Início, Adicionar, Relatório, Carteiras (to create a card, DEC-087) and
- * Recebidas; the other pages stay reachable by address. Configurações is in the user menu, as in the
+ * Recebidas and Simulações; the other pages stay reachable by address. Configurações is in the user menu, as in the
  * full mode (RN-163, DEC-075).
  */
 const navSimples = computed<NavItem[]>(() => [
@@ -86,6 +101,7 @@ const navSimples = computed<NavItem[]>(() => [
         href: relatorio(),
         icon: ChartPie,
     },
+    itemSimulacoes.value,
     {
         title: 'Carteiras',
         href: carteirasIndex(),
@@ -113,6 +129,7 @@ const navCompleta = computed<NavItem[]>(() => [
         href: relatorio(),
         icon: ChartPie,
     },
+    itemSimulacoes.value,
     {
         title: 'Carteiras',
         href: carteirasIndex(),

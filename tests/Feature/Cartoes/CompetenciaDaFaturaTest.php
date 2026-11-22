@@ -65,7 +65,7 @@ it('CA-177.2 shows the invoice of the competence month and walks invoice by invo
 it('CA-177.3 opens the card on the competence of the open invoice', function () {
     telaDaCompetencia($this->nubank)->assertInertia(fn (Assert $page) => $page
         ->where('mes', '2026-11')
-        ->where('mesHoje', '2026-11')
+        ->missing('mesHoje')
         ->where('fatura.estado', 'aberta')
         ->where('fatura.vencimento', '2026-12-10'));
 });

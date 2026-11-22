@@ -182,7 +182,7 @@ it('CA-084.2 CA-084.3 combines category, status and shared filters and echoes th
             ->where('filtros', ['tipo' => null, ...$filtros]));
 });
 
-it('CA-082.1 CA-082.2 CA-082.3 CA-082.4 shows the data of the month in the URL', function (string $mes, string $data) {
+it('CA-082.1 CA-082.2 CA-082.4 shows the data of the month in the URL', function (string $mes, string $data) {
     lancamentoComCota($this->user, $this->carteira, $this->categoria, ['data' => $data, 'descricao' => 'Do mês']);
     lancamentoComCota($this->user, $this->carteira, $this->categoria, ['data' => '2026-11-14', 'descricao' => 'Novembro']);
 
@@ -194,9 +194,16 @@ it('CA-082.1 CA-082.2 CA-082.3 CA-082.4 shows the data of the month in the URL',
     'seguinte' => ['2026-12', '2026-12-03'],
     'anterior' => ['2026-10', '2026-10-03'],
     'virada de ano' => ['2027-01', '2027-01-03'],
-    'hoje' => ['2026-11', '2026-11-03'],
+    'mês atual selecionado' => ['2026-11', '2026-11-03'],
     'seletor' => ['2030-03', '2030-03-03'],
 ]);
+
+it('RN-340 opens the current month without sending a Hoje navigation target', function () {
+    $this->actingAs($this->user)->get(route('home', ['carteira' => $this->carteira->id]))
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('mes', '2026-11')
+            ->missing('mesHoje'));
+});
 
 it('CA-085.2 sends what the form needs for its defaults', function () {
     $receita = Categoria::factory()->for($this->user)->create(['tipo' => TipoCategoria::Receita]);

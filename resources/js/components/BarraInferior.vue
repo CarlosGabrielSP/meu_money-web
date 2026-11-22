@@ -1,13 +1,13 @@
 <script setup lang="ts">
 import { Link, usePage } from '@inertiajs/vue3';
-import { ChartPie, House, Inbox, Menu, Plus } from '@lucide/vue';
+import { ChartPie, House, Menu, Plus, Wallet } from '@lucide/vue';
 import { computed } from 'vue';
 import { useSidebar } from '@/components/ui/sidebar';
 import { useCurrentUrl } from '@/composables/useCurrentUrl';
 import { useModoSimples } from '@/composables/useModoSimples';
 import { useNovoLancamento } from '@/composables/useNovoLancamento';
 import { home, relatorio } from '@/routes';
-import { index as recebidasIndex } from '@/routes/recebidas';
+import { index as carteirasIndex } from '@/routes/carteiras';
 
 const page = usePage();
 const { setOpenMobile } = useSidebar();
@@ -15,27 +15,23 @@ const { adicionar } = useNovoLancamento();
 const modoSimples = useModoSimples();
 const { isCurrentUrl } = useCurrentUrl();
 
-/**
- * "Mais" counts contact invitations (full mode only, RN-163) and member invitations (both modes,
- * nota 07, RN-271).
- */
-const convitesDoMais = computed(
+const pendenciasDoMais = computed(
     () =>
-        (modoSimples.value ? 0 : page.props.contadores.convites) +
-        page.props.contadores.membros,
+        page.props.contadores.recebidas +
+        (modoSimples.value ? 0 : page.props.contadores.convites),
 );
 
 /**
  * The item of the current page, by URL path (wallet and month parameters do not count); any page
  * outside the three main ones marks "Mais" (DEC-096).
  */
-const atual = computed<'inicio' | 'recebidas' | 'relatorio' | 'mais'>(() => {
+const atual = computed<'inicio' | 'carteiras' | 'relatorio' | 'mais'>(() => {
     if (isCurrentUrl(home())) {
         return 'inicio';
     }
 
-    if (isCurrentUrl(recebidasIndex())) {
-        return 'recebidas';
+    if (isCurrentUrl(carteirasIndex())) {
+        return 'carteiras';
     }
 
     if (isCurrentUrl(relatorio())) {
@@ -59,9 +55,7 @@ function classeDoIcone(item: string): string {
 </script>
 
 <template>
-    <!-- Same bar in both modes (RN-163, RN-189, DEC-075): Início, Recebidas, (+), Relatório and
-         Mais; Contatos is in "Mais", whose badge counts the pending invitations. The simple menu
-         has no Contatos, so it shows no badge there. Frosted glass over the page (DEC-076). -->
+    <!-- Same bar in both modes (RN-336). Recebidas stays in the menu opened by "Mais". -->
     <nav
         class="fixed inset-x-3 bottom-[max(0.75rem,env(safe-area-inset-bottom))] z-20 grid grid-cols-5 rounded-2xl border border-white/40 bg-card/60 shadow-lg ring-1 shadow-black/10 ring-black/5 backdrop-blur-xl backdrop-saturate-150 md:hidden dark:border-white/10 dark:bg-card/55 dark:ring-white/5"
         aria-label="Navegação principal"
@@ -82,23 +76,22 @@ function classeDoIcone(item: string): string {
             Início
         </Link>
         <Link
-            :href="recebidasIndex()"
+            :href="carteirasIndex()"
             class="relative flex flex-col items-center gap-0.5 py-2 text-xs"
-            :class="classeDoItem('recebidas')"
-            :aria-current="atual === 'recebidas' ? 'page' : undefined"
-            data-tutorial="recebidas"
+            :class="classeDoItem('carteiras')"
+            :aria-current="atual === 'carteiras' ? 'page' : undefined"
         >
             <span
                 class="flex h-7 w-12 items-center justify-center rounded-full transition-colors"
-                :class="classeDoIcone('recebidas')"
-                ><Inbox class="size-5"
+                :class="classeDoIcone('carteiras')"
+                ><Wallet class="size-5"
             /></span>
-            Recebidas
+            Carteiras
             <span
-                v-if="page.props.contadores.recebidas > 0"
+                v-if="page.props.contadores.membros > 0"
                 class="absolute top-1 right-1/4 rounded-full bg-destaque px-1.5 text-[10px] text-destaque-foreground simples:text-xs"
-                :aria-label="`${page.props.contadores.recebidas} recebidas novas`"
-                >{{ page.props.contadores.recebidas }}</span
+                :aria-label="`${page.props.contadores.membros} convites de membro pendentes`"
+                >{{ page.props.contadores.membros }}</span
             >
         </Link>
         <button
@@ -143,10 +136,10 @@ function classeDoIcone(item: string): string {
             /></span>
             Mais
             <span
-                v-if="convitesDoMais > 0"
+                v-if="pendenciasDoMais > 0"
                 class="absolute top-1 right-1/4 rounded-full bg-destaque px-1.5 text-[10px] text-destaque-foreground"
-                :aria-label="`${convitesDoMais} convites pendentes`"
-                >{{ convitesDoMais }}</span
+                :aria-label="`${pendenciasDoMais} notificações pendentes`"
+                >{{ pendenciasDoMais }}</span
             >
         </button>
     </nav>

@@ -244,6 +244,8 @@ export type Subsecoes = {
     grupos: GrupoLinha[];
 };
 
+export type VisaoSaldos = 'acumulado' | 'mes';
+
 export type Saldo = { estimado: number; atual: number };
 
 /** Balances of the main card (RN-092, RN-169). */

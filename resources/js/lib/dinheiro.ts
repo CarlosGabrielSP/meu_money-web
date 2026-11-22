@@ -1,3 +1,13 @@
+import { createGlobalState, useLocalStorage } from '@vueuse/core';
+
+export const VALOR_OCULTO = 'R$ ••••';
+
+export const usePrivacidadeDosValores = createGlobalState(() =>
+    useLocalStorage('meu-money:ocultar-valores', false, {
+        writeDefaults: false,
+    }),
+);
+
 const formatador = new Intl.NumberFormat('pt-BR', {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
@@ -19,6 +29,10 @@ const formatadorMoeda = new Intl.NumberFormat('pt-BR', {
  * Format an amount in cents as BRL currency ("R$ 1.234,56", RNF-004).
  */
 export function formatarMoeda(centavos: number): string {
+    if (usePrivacidadeDosValores().value) {
+        return VALOR_OCULTO;
+    }
+
     return formatadorMoeda.format(centavos / 100);
 }
 

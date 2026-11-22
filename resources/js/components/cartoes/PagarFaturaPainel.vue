@@ -21,9 +21,13 @@ import {
     formatarCentavos,
     formatarMoeda,
     mascararValor,
+    usePrivacidadeDosValores,
+    VALOR_OCULTO,
 } from '@/lib/dinheiro';
 import { pagar } from '@/routes/faturas';
 import type { FaturaDoMes } from '@/types';
+
+const valoresOcultos = usePrivacidadeDosValores();
 
 const props = defineProps<{
     cartaoId: number;
@@ -140,7 +144,12 @@ function enviar(): void {
                         />
                         <span class="flex-1">{{ parte.nome }}</span>
                         <span class="text-muted-foreground tabular-nums">
-                            {{ formatarCentavos(parte.aberto) }} em aberto
+                            {{
+                                valoresOcultos
+                                    ? VALOR_OCULTO
+                                    : formatarCentavos(parte.aberto)
+                            }}
+                            em aberto
                         </span>
                     </label>
                     <p class="text-sm">

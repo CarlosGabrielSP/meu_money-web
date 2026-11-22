@@ -4,6 +4,7 @@ import { ArrowLeft } from '@lucide/vue';
 import { computed } from 'vue';
 import { coresCarteira } from '@/components/carteiras/aparencia';
 import { iconesCategoria } from '@/components/categorias/icones';
+import BotaoPrivacidade from '@/components/BotaoPrivacidade.vue';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { dataCompleta } from '@/lib/datas';
@@ -86,6 +87,7 @@ function numeroDaParcela(parcela: ParcelaRastreada): string {
                 >
                     {{ serie.descricao }}
                 </h1>
+                <BotaoPrivacidade class="ml-auto" />
             </div>
             <div class="flex flex-wrap gap-2">
                 <Badge variant="outline">{{

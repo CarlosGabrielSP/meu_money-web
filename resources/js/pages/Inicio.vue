@@ -10,6 +10,7 @@ import {
 } from '@lucide/vue';
 import { useIntersectionObserver } from '@vueuse/core';
 import { computed, onMounted, ref, useTemplateRef, watch } from 'vue';
+import BotaoPrivacidade from '@/components/BotaoPrivacidade.vue';
 import CampoSelecao from '@/components/CampoSelecao.vue';
 import CardFatura from '@/components/cartoes/CardFatura.vue';
 import PagamentosFatura from '@/components/cartoes/PagamentosFatura.vue';
@@ -60,6 +61,7 @@ import type {
     SerieDaParcela,
     Subsecoes,
     TipoLancamento,
+    VisaoSaldos,
 } from '@/types';
 
 type Filtros = {
@@ -78,8 +80,6 @@ const props = defineProps<{
     contatos: ContatoOpcao[];
     grupos: GrupoOpcao[];
     mes: string;
-    /** Month of "Hoje": the current one, or the due month of the open invoice of a card (R3). */
-    mesHoje: string;
     hoje: string;
     filtros: Filtros;
     /** Null on a card, which shows its invoice instead (RN-223). */
@@ -378,6 +378,7 @@ watch(
  * The main card turns into the compact strip while it is off the screen (RN-170).
  */
 const card = useTemplateRef<HTMLElement>('card');
+const visaoSaldos = ref<VisaoSaldos>('acumulado');
 const cardVisivel = ref(true);
 
 useIntersectionObserver(card, ([entrada]) => {
@@ -451,6 +452,7 @@ onMounted(() => {
 
     <div class="flex flex-col">
         <FaixaSaldos
+            v-model="visaoSaldos"
             :visivel="!cardVisivel"
             :carteira="
                 delegacao
@@ -525,21 +527,21 @@ onMounted(() => {
                         "
                     />
                 </div>
-                <Button
-                    class="ml-auto hidden shrink-0 md:inline-flex"
-                    data-test="adicionar-lancamento"
-                    data-tutorial="adicionar"
-                    @click="abrirNovo"
-                >
-                    <Plus /> Adicionar
-                </Button>
+                <div class="ml-auto flex shrink-0 items-center gap-2">
+                    <Button
+                        class="hidden md:inline-flex"
+                        data-test="adicionar-lancamento"
+                        data-tutorial="adicionar"
+                        @click="abrirNovo"
+                    >
+                        <Plus /> Adicionar
+                    </Button>
+                    <BotaoPrivacidade :class="{ invisible: !cardVisivel }" />
+                </div>
             </div>
 
-            <div class="flex flex-wrap items-center gap-2">
-                <div
-                    class="flex flex-wrap items-center gap-2"
-                    data-tutorial="mes"
-                >
+            <div class="flex flex-wrap items-center gap-2" data-tutorial="mes">
+                <div class="flex flex-wrap items-center gap-2">
                     <Button
                         variant="ghost"
                         size="icon"
@@ -560,14 +562,6 @@ onMounted(() => {
                         @click="navegar({ mes: deslocarMes(mes, 1) })"
                     >
                         <ChevronRight />
-                    </Button>
-                    <Button
-                        variant="outline"
-                        size="sm"
-                        :disabled="mes === mesHoje"
-                        @click="navegar({ mes: mesHoje })"
-                    >
-                        Hoje
                     </Button>
                 </div>
                 <div class="ml-auto flex items-center gap-1">
@@ -626,6 +620,7 @@ onMounted(() => {
                     />
                     <CardSaldos
                         v-else-if="saldos"
+                        v-model="visaoSaldos"
                         :saldos="saldos"
                         :simples="modoSimples"
                     />
