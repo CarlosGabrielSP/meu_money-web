@@ -60,7 +60,31 @@ it('CA-021.3 rejects an empty or too long name', function (string $nome) {
     $this->actingAs($this->user)
         ->post(route('carteiras.store'), ['nome' => $nome])
         ->assertSessionHasErrors('nome');
-})->with(['vazio' => '', '101 caracteres' => str_repeat('a', 101)]);
+})->with(['vazio' => '', '21 caracteres' => str_repeat('a', 21)]);
+
+it('accepts a wallet name with exactly 20 characters', function () {
+    $nome = str_repeat('á', 20);
+
+    $this->actingAs($this->user)
+        ->post(route('carteiras.store'), ['nome' => $nome])
+        ->assertSessionHasNoErrors();
+
+    $this->assertDatabaseHas('carteiras', ['user_id' => $this->user->id, 'nome' => $nome]);
+});
+
+it('keeps a legacy wallet name when editing other options and rejects a new long name', function () {
+    $nome = str_repeat('a', 40);
+    $carteira = Carteira::factory()->for($this->user)->create(['nome' => $nome]);
+
+    $this->actingAs($this->user)
+        ->put(route('carteiras.update', $carteira), ['nome' => $nome, 'cor' => 'green'])
+        ->assertSessionHasNoErrors();
+
+    $this->put(route('carteiras.update', $carteira), ['nome' => str_repeat('b', 21)])
+        ->assertSessionHasErrors('nome');
+
+    expect($carteira->fresh())->nome->toBe($nome)->cor->toBe(CorCarteira::Green);
+});
 
 it('CA-022.1 updates name, color and icon', function () {
     $this->actingAs($this->user)

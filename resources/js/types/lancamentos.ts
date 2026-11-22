@@ -116,6 +116,13 @@ export type CategoriaOpcao = {
     tipo: TipoLancamento | 'ambos';
 };
 
+export type AtalhoLancamento = {
+    id: number;
+    nome: string;
+    tipo: TipoLancamento;
+    icone: string;
+};
+
 export type LancamentoEdicao = {
     tipo: TipoLancamento;
     descricao: string;

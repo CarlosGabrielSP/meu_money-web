@@ -32,6 +32,8 @@ class Carteira extends Model
     /** @use HasFactory<CarteiraFactory> */
     use HasFactory;
 
+    public const int LIMITE_NOME = 20;
+
     /**
      * Defaults matching the database, so a wallet built in memory is a common one (RN-190).
      *

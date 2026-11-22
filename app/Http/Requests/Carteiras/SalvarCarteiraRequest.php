@@ -37,10 +37,14 @@ class SalvarCarteiraRequest extends FormRequest
     public function rules(): array
     {
         $cartao = $this->isCartao() ? [] : ['exclude'];
+        $nomeAtual = $this->carteiraAtual()?->nome;
+        $nomeManteve = $nomeAtual !== null && $this->input('nome') === $nomeAtual;
+        $limiteNome = $nomeManteve ? max(Carteira::LIMITE_NOME, mb_strlen($nomeAtual)) : Carteira::LIMITE_NOME;
+        $nome = ['required', 'string', 'max:'.$limiteNome];
 
         if ($this->autorDoEspelho() !== null) {
             return [
-                'nome' => ['required', 'string', 'max:100'],
+                'nome' => $nome,
                 'cor' => ['nullable', Rule::enum(CorCarteira::class)],
                 'icone' => ['nullable', Rule::enum(IconeCarteira::class)],
                 'tipo' => ['exclude'],
@@ -58,7 +62,7 @@ class SalvarCarteiraRequest extends FormRequest
         }
 
         return [
-            'nome' => ['required', 'string', 'max:100'],
+            'nome' => $nome,
             'cor' => ['nullable', Rule::enum(CorCarteira::class)],
             'icone' => ['nullable', Rule::enum(IconeCarteira::class)],
             'tipo' => $this->carteiraAtual() === null ? ['nullable', Rule::enum(TipoCarteira::class)] : ['exclude'],

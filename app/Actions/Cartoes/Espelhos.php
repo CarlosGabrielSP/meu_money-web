@@ -80,7 +80,7 @@ class Espelhos
 
         $autor = $cartao->user()->value('name');
         $espelho = new Carteira([
-            'nome' => mb_substr("{$cartao->nome} · {$autor}", 0, 100),
+            'nome' => mb_substr("{$cartao->nome} · {$autor}", 0, Carteira::LIMITE_NOME),
             'tipo' => TipoCarteira::Cartao,
             'padrao' => false,
             'cor' => CorCarteira::Blue,

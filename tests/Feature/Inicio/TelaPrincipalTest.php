@@ -266,3 +266,57 @@ it('CA-135.5 sends the icon of the share category in plain and grouped items', f
             ->where('lancamentos.despesa.avista.0.categoriaIcone', 'shopping-cart')
             ->where('lancamentos.despesa.grupos.0.itens.0.categoriaIcone', 'shopping-cart'));
 });
+
+it('ranks the user’s five most frequent one-off categories across wallets and months', function () {
+    $categorias = Categoria::factory()->for($this->user)->count(6)->create(['tipo' => TipoCategoria::Ambos]);
+    $serie = Parcelamento::factory()->for($this->user)->create();
+    $outroUsuario = User::factory()->create();
+    $outraCarteira = Carteira::factory()->for($outroUsuario)->create();
+    $categoriaGlobal = Categoria::factory()->global()->create(['tipo' => TipoCategoria::Ambos]);
+
+    foreach ($categorias as $indice => $categoria) {
+        lancamentoComCota($this->user, $this->principal, $categoria, ['data' => '2026-10-10']);
+
+        if ($indice > 0) {
+            lancamentoComCota($this->user, $this->carteira, $categoria, [
+                'data' => $indice === 5 ? '2026-10-12' : '2026-11-12',
+                'tipo' => TipoLancamento::Receita,
+            ]);
+        }
+    }
+
+    lancamentoComCota($this->user, $this->principal, $categorias[0], ['parcelamento_id' => $serie->id]);
+    lancamentoComCota($outroUsuario, $outraCarteira, $categoriaGlobal);
+    lancamentoComCota($outroUsuario, $outraCarteira, $categoriaGlobal);
+
+    $this->actingAs($this->user)->get(route('home', ['carteira' => $this->principal->id]))
+        ->assertInertia(fn (Assert $page) => $page
+            ->has('atalhosLancamento', 5)
+            ->where('atalhosLancamento', fn ($atalhos) => collect($atalhos)->pluck('id')->all() === array_values($categorias->slice(1)->modelKeys()))
+            ->where('atalhosLancamento.0.nome', $categorias[1]->nome)
+            ->where('atalhosLancamento.0.tipo', 'receita'));
+});
+
+it('saves a quick entry in the selected wallet with the edited description and amount', function () {
+    $inicio = route('home', ['carteira' => $this->carteira->id]);
+
+    $this->actingAs($this->user)->from($inicio)->post(route('lancamentos.store'), [
+        'tipo' => 'despesa',
+        'descricao' => 'Almoço de sábado',
+        'valor' => '60,50',
+        'data' => '2026-11-14',
+        'categoria_id' => $this->categoria->id,
+        'carteira_id' => $this->carteira->id,
+    ])->assertRedirect($inicio)->assertSessionHasNoErrors();
+
+    $lancamento = Lancamento::query()->where('descricao', 'Almoço de sábado')->sole();
+    expect($lancamento->parcelamento_id)->toBeNull();
+    $this->assertDatabaseHas('cotas', [
+        'lancamento_id' => $lancamento->id,
+        'user_id' => $this->user->id,
+        'carteira_id' => $this->carteira->id,
+        'categoria_id' => $this->categoria->id,
+        'valor' => 6050,
+        'executado' => false,
+    ]);
+});

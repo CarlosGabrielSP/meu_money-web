@@ -6,6 +6,7 @@ use App\Actions\Cartoes\CalcularFaturas;
 use App\Actions\Cartoes\CartoesDoFormulario;
 use App\Actions\Cartoes\FaturaDoMes;
 use App\Actions\Cartoes\SaldosVinculados;
+use App\Actions\Inicio\AtalhosLancamento;
 use App\Actions\Inicio\CalcularSaldos;
 use App\Actions\Inicio\GastosDoMes;
 use App\Actions\Inicio\ListarLancamentosDoMes;
@@ -47,6 +48,7 @@ class InicioController extends Controller
      */
     public function __invoke(
         InicioRequest $request,
+        AtalhosLancamento $atalhosLancamento,
         CalcularSaldos $calcularSaldos,
         ListarLancamentosDoMes $listarLancamentos,
         SaldosDasCarteiras $saldosDasCarteiras,
@@ -124,6 +126,7 @@ class InicioController extends Controller
             'filtros' => $filtros,
             'saldos' => $noCartao ? null : $calcularSaldos->handle($dono, $carteira, $mes, $vinculados),
             'fatura' => $fatura,
+            'atalhosLancamento' => fn (): array => $delegada || $carteira->isEspelho() ? [] : $atalhosLancamento->handle($user),
             'lancamentos' => $user->modo_simples
                 ? $listarLancamentos->semSubsecoes($dono, $carteira, $mes, $hoje, $fatura['id'] ?? null)
                 : $listarLancamentos->handle($dono, $carteira, $mes, $filtros, $hoje, $fatura['id'] ?? null),

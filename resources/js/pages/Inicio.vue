@@ -19,6 +19,7 @@ import AReceberItem from '@/components/cartoes/AReceberItem.vue';
 import FaturaVinculadaItem from '@/components/cartoes/FaturaVinculadaItem.vue';
 import type { OpcaoSelecao } from '@/components/CampoSelecao.vue';
 import CarteiraIcone from '@/components/carteiras/CarteiraIcone.vue';
+import AtalhosLancamento from '@/components/inicio/AtalhosLancamento.vue';
 import AvisosPendencias from '@/components/inicio/AvisosPendencias.vue';
 import CardSaldos from '@/components/inicio/CardSaldos.vue';
 import CartoesCarteira from '@/components/inicio/CartoesCarteira.vue';
@@ -43,6 +44,7 @@ import { passosModoCompleto, passosModoSimples } from '@/lib/tutorial';
 import { home, tutorialVisto } from '@/routes';
 import { desagrupar } from '@/routes/grupos';
 import type {
+    AtalhoLancamento,
     CartaoDoFormulario,
     CarteiraResumo,
     CategoriaOpcao,
@@ -84,6 +86,7 @@ const props = defineProps<{
     filtros: Filtros;
     /** Null on a card, which shows its invoice instead (RN-223). */
     saldos: SaldosInicio | null;
+    atalhosLancamento: AtalhoLancamento[];
     fatura: FaturaDoMes | null;
     /** Invoices this wallet pays, due in the month (RN-219). */
     faturasVinculadas: FaturaVinculada[];
@@ -465,8 +468,8 @@ onMounted(() => {
             :simples="modoSimples"
         />
 
-        <div class="grid gap-4 p-4 md:gap-5 md:p-6">
-            <div class="flex items-center gap-3">
+        <div class="grid grid-cols-1 gap-4 p-4 md:gap-5 md:p-6">
+            <div class="flex min-w-0 items-center gap-3">
                 <!-- A delegated wallet or card shows the owner's band instead of the wallet cards and
                      the selector, in both modes (RN-279, RN-319, nota 07). -->
                 <div
@@ -600,29 +603,37 @@ onMounted(() => {
             </div>
 
             <div
-                class="grid items-start gap-4"
+                class="grid grid-cols-1 items-start gap-4"
                 :class="
                     destaques
                         ? 'md:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]'
                         : 'md:max-w-xl'
                 "
             >
-                <div ref="card" class="grid gap-4">
-                    <CardFatura
-                        v-if="fatura"
-                        :cartao-id="carteira.id"
-                        :cartao-nome="carteira.nome"
-                        :autor-do-espelho="carteira.autorDoEspelho ?? null"
-                        :fatura="fatura"
-                        :hoje="hoje"
-                        :simples="modoSimples"
-                        :membro="delegacao !== null"
-                    />
-                    <CardSaldos
-                        v-else-if="saldos"
-                        v-model="visaoSaldos"
-                        :saldos="saldos"
-                        :simples="modoSimples"
+                <div class="grid gap-4">
+                    <div ref="card">
+                        <CardFatura
+                            v-if="fatura"
+                            :cartao-id="carteira.id"
+                            :cartao-nome="carteira.nome"
+                            :autor-do-espelho="carteira.autorDoEspelho ?? null"
+                            :fatura="fatura"
+                            :hoje="hoje"
+                            :simples="modoSimples"
+                            :membro="delegacao !== null"
+                        />
+                        <CardSaldos
+                            v-else-if="saldos"
+                            v-model="visaoSaldos"
+                            :saldos="saldos"
+                            :simples="modoSimples"
+                        />
+                    </div>
+                    <AtalhosLancamento
+                        :atalhos="atalhosLancamento"
+                        :carteira-id="carteira.id"
+                        :carteira-nome="carteira.nome"
+                        :data-padrao="dataPadrao"
                     />
                 </div>
                 <div v-if="destaques" class="grid gap-4">
@@ -645,6 +656,7 @@ onMounted(() => {
                         "
                         :carteira-id="carteira.id"
                         :titulo="ehCartao ? 'Gastos da fatura' : undefined"
+                        :recolhivel-no-mobile="!ehCartao"
                         :sem-relatorio="delegacao !== null"
                     />
                 </div>

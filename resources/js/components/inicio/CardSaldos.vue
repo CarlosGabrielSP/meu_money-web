@@ -61,7 +61,7 @@ function comSinal(valor: number): string {
                 {{ visao === 'mes' ? 'Resultado do mês' : 'Saldo atual' }}
             </p>
             <p
-                class="font-display text-[clamp(1.5rem,10cqi,3rem)] leading-none font-semibold tracking-tight tabular-nums"
+                class="font-display text-[clamp(1.5rem,7.5cqi,3rem)] leading-none font-semibold tracking-tight tabular-nums"
             >
                 {{
                     formatarMoeda(
@@ -93,9 +93,8 @@ function comSinal(valor: number): string {
                 <span class="text-sm text-saldo-foreground/75"
                     >Saldo estimado</span
                 >
-                <!-- Secondary information: same size, softer tone (75%, at least 5.94:1, DEC-077). -->
                 <span
-                    class="font-display text-[clamp(1.5rem,7.5cqi,3rem)] leading-none font-medium tracking-tight text-saldo-foreground/75 tabular-nums"
+                    class="font-display text-[clamp(1.5rem,7.5cqi,3rem)] leading-none font-semibold tracking-tight tabular-nums"
                     >{{ formatarMoeda(previsto) }}</span
                 >
             </p>

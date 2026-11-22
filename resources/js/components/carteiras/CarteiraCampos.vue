@@ -99,7 +99,7 @@ watch(tipoEscolhido, (tipo) => {
                 id="nome"
                 name="nome"
                 :default-value="nome"
-                maxlength="100"
+                maxlength="20"
                 required
             />
             <InputError :message="errors.nome" />
