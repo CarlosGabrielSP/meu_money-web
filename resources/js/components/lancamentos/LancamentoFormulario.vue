@@ -478,23 +478,6 @@ function removerAnexo(): void {
                     class="grid gap-4 px-4 pb-6"
                     @submit.prevent="salvar(false)"
                 >
-                    <div v-if="mostrarCarteira" class="grid gap-2">
-                        <Label for="carteira_id">Carteira</Label>
-                        <CampoSelecao
-                            id="carteira_id"
-                            v-model="form.carteira_id"
-                            :disabled="faturaFechada"
-                            :opcoes="
-                                carteiras
-                                    .filter((carteira) => !carteira.espelho)
-                                    .map((carteira) => ({
-                                        valor: carteira.id,
-                                        rotulo: carteira.nome,
-                                    }))
-                            "
-                        />
-                        <InputError :message="form.errors.carteira_id" />
-                    </div>
 
                     <ToggleGroupRoot
                         type="single"
@@ -541,9 +524,14 @@ function removerAnexo(): void {
                     />
 
                     <div class="grid gap-2">
-                        <Label for="descricao">Descrição</Label>
+                        <Label for="descricao" class="sr-only">Descrição</Label>
                         <Input
                             id="descricao"
+                            :placeholder="
+                                form.tipo === 'receita'
+                                    ? 'Descrição (ex.: Salário)'
+                                    : 'Descrição (ex.: Almoço)'
+                            "
                             v-model="form.descricao"
                             maxlength="255"
                             required
@@ -850,6 +838,24 @@ function removerAnexo(): void {
                             "
                         />
                         <InputError :message="form.errors.categoria_id" />
+                    </div>
+
+                    <div v-if="mostrarCarteira" class="grid gap-2">
+                        <Label for="carteira_id">Carteira</Label>
+                        <CampoSelecao
+                            id="carteira_id"
+                            v-model="form.carteira_id"
+                            :disabled="faturaFechada"
+                            :opcoes="
+                                carteiras
+                                    .filter((carteira) => !carteira.espelho)
+                                    .map((carteira) => ({
+                                        valor: carteira.id,
+                                        rotulo: carteira.nome,
+                                    }))
+                            "
+                        />
+                        <InputError :message="form.errors.carteira_id" />
                     </div>
 
                     <div v-if="mostrarObservacao" class="grid gap-2">
